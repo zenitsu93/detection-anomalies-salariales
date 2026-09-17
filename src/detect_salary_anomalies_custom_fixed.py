@@ -136,7 +136,11 @@ def main():
     df = ml_anomaly(df, rule_params)
     df = apply_ml_strong_signal(df, rule_params)
     df = aggregate_risk(df, rule_params)
-    df = recommendations(df)
+    # Pourquoi rule_params est passé ici (correction) : avant, recommendations() utilisait des
+    # seuils CompaRatio écrits en dur (0.85 / 1.15). Si le rulebook définissait d'autres seuils,
+    # la détection et les recommandations ne suivaient pas les mêmes règles. Les deux lisent
+    # maintenant les mêmes valeurs (compa_ratio_low / compa_ratio_high).
+    df = recommendations(df, rule_params)
 
     # Les flags accumulés commencent chacun par ";" (";OUT_OF_BAND;COMPA_RATIO...") : on retire
     # le séparateur de tête une fois tous les flags posés.

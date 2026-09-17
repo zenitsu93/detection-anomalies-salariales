@@ -145,7 +145,11 @@ def main():
     df, reg_model = regression_anomaly(df, rule_params)
     df = apply_ml_strong_signal(df, rule_params)
     df = aggregate_risk_with_regression(df, rule_params)
-    df = recommendations(df)
+    # Pourquoi rule_params est passé ici (correction) : avant, recommendations() utilisait des
+    # seuils CompaRatio écrits en dur (0.85 / 1.15). Si le rulebook définissait d'autres seuils,
+    # la détection et les recommandations ne suivaient pas les mêmes règles. Les deux lisent
+    # maintenant les mêmes valeurs (compa_ratio_low / compa_ratio_high).
+    df = recommendations(df, rule_params)
 
     df["Rule_Flags"] = df["Rule_Flags"].astype(str).str.lstrip(";")
 
