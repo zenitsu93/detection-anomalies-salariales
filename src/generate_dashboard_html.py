@@ -268,15 +268,382 @@ def table_html(rows):
 
 
 def build_html(data):
-    """Première restitution autonome : graphiques agrégés et tables."""
-    payload = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\u003c")
-    sections = "".join("<h2>" + escape(name) + "</h2>" + table_html(rows) for name, rows in data["tables"].items())
-    return ('<!doctype html><html lang="fr"><meta charset="utf-8">'
-            '<title>Anomalies salariales</title><h1>Anomalies salariales</h1>'
-            '<div style="max-width:1000px"><canvas id="severity"></canvas><canvas id="job"></canvas></div>'
-            + sections + '<script src="' + CHARTJS_URL + '"></script><script>const data='
-            + payload + ';new Chart(document.getElementById("severity"),{type:"bar",data:data.severity});'
-            + 'new Chart(document.getElementById("job"),{type:"bar",data:{labels:data.job.labels,datasets:[{label:"Anomalies",data:data.job.data}]}});</script></html>')
+    kpis = data["kpis"]
+    # Un libellé contenant </script> doit rester du texte dans les données embarquées.
+    data_json = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+
+    tables_html = "".join(
+        f'<details class="data-toggle"><summary>{title}</summary>{table_html(rows)}</details>'
+        for title, rows in [
+            ("Répartition par sévérité", data["tables"]["severity"]),
+            ("Anomalies par pôle", data["tables"]["entite_severity"]),
+            ("Top métiers", data["tables"]["job_family"]),
+            ("Coût par pôle", data["tables"]["cost_entite"]),
+            ("Signaux déclencheurs", data["tables"]["flags"]),
+            ("Distribution RiskScore", data["tables"]["riskscore_dist"]),
+            ("Écarts de rémunération H/F", data["tables"]["gender_gap_top"]),
+        ]
+    )
+
+    html = f"""<title>Anomalies Salariales</title>
+<script src="{CHARTJS_URL}"></script>
+<style>
+:root {{
+  color-scheme: light;
+  --page-bg: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --border: rgba(11,11,11,0.10);
+}}
+@media (prefers-color-scheme: dark) {{
+  :root:where(:not([data-theme="light"])) {{
+    color-scheme: dark;
+    --page-bg: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --border: rgba(255,255,255,0.10);
+  }}
+}}
+:root[data-theme="dark"] {{
+  color-scheme: dark;
+  --page-bg: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --border: rgba(255,255,255,0.10);
+}}
+
+* {{ box-sizing: border-box; }}
+body {{
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 20px 16px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+}}
+header h1 {{ font-size: 22px; margin: 0 0 4px; }}
+header p {{ color: var(--text-secondary); margin: 0 0 24px; font-size: 14px; }}
+
+.kpi-row {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }}
+.kpi-tile {{
+  flex: 1 1 150px; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}}
+.kpi-tile .value {{ font-size: 24px; font-weight: 600; }}
+.kpi-tile .label {{ font-size: 12px; color: var(--text-secondary); margin-top: 2px; }}
+
+.grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 16px; }}
+.card {{
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; min-width: 0;
+}}
+.card.full {{ grid-column: 1 / -1; }}
+.card h2 {{ font-size: 15px; margin: 0 0 14px; }}
+.card .note {{ font-size: 12px; color: var(--text-muted); margin-top: 10px; }}
+.chart-box {{ position: relative; width: 100%; }}
+.h-sm {{ height: 220px; }}
+.h-md {{ height: 300px; }}
+.h-lg {{ height: 380px; }}
+
+details.data-toggle {{ margin: 6px 0; font-size: 12px; }}
+details.data-toggle summary {{ cursor: pointer; color: var(--text-secondary); padding: 6px 0; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 14px; }}
+th, td {{ text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }}
+th {{ color: var(--text-muted); font-weight: 600; }}
+td {{ font-variant-numeric: tabular-nums; }}
+
+.card .hint {{ font-size: 11px; color: var(--text-muted); margin-top: 8px; }}
+
+.overlay {{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 5vh 16px; z-index: 50;
+}}
+.overlay[hidden] {{ display: none; }}
+.panel {{
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  width: 100%; max-width: 900px; max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}}
+.panel-head {{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--gridline);
+}}
+.panel-head h3 {{ margin: 0; font-size: 15px; }}
+.panel-head .sub {{ font-size: 12px; color: var(--text-muted); margin-top: 2px; }}
+.panel-close {{
+  background: none; border: 1px solid var(--border); color: var(--text-secondary);
+  border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 14px; flex: 0 0 auto;
+}}
+.panel-body {{ overflow: auto; padding: 8px 20px 20px; }}
+.panel-body table {{ margin: 0; }}
+.panel-body th {{ position: sticky; top: 0; background: var(--surface-1); }}
+
+footer {{ margin-top: 32px; font-size: 11px; color: var(--text-muted); }}
+</style>
+
+<header>
+  <h1>Détection des anomalies salariales — Tableau de bord</h1>
+  <p>{fmt_int(kpis['effectif_total'])} salariés analysés — {fmt_int(kpis['n_critical'] + kpis['n_major'])} anomalies Critical/Major, {fmt_int(kpis['n_minor'])} Minor</p>
+</header>
+
+<div class="kpi-row">
+  <div class="kpi-tile"><div class="value">{fmt_int(kpis['effectif_total'])}</div><div class="label">Effectif analysé</div></div>
+  <div class="kpi-tile"><div class="value">{fmt_int(kpis['n_critical'])}</div><div class="label">Anomalies Critical</div></div>
+  <div class="kpi-tile"><div class="value">{fmt_int(kpis['n_major'])}</div><div class="label">Anomalies Major</div></div>
+  <div class="kpi-tile"><div class="value">{fmt_int(kpis['n_minor'])}</div><div class="label">Anomalies Minor</div></div>
+  <div class="kpi-tile"><div class="value">{fmt_pct(kpis['pct_action'])}</div><div class="label">% effectif à traiter</div></div>
+  <div class="kpi-tile"><div class="value">{fmt_int(kpis['total_cost'])}</div><div class="label">Coût d'ajustement total (unité source)</div></div>
+</div>
+
+<div class="grid">
+  <div class="card full">
+    <h2>Répartition des anomalies par sévérité et par pôle</h2>
+    <div class="chart-box h-md"><canvas id="chart-severity"></canvas></div>
+    <div class="note">{fmt_int(kpis['n_critical'])} anomalie(s) « Critical » sur cet effectif. Cliquez sur la légende pour isoler une sévérité.</div>
+    <div class="hint">Cliquez une barre pour voir la liste des salariés concernés.</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Top 10 métiers les plus concernés par une anomalie</h2>
+    <div class="chart-box h-lg"><canvas id="chart-job"></canvas></div>
+    <div class="hint">Cliquez une barre pour voir la liste des salariés concernés.</div>
+  </div>
+  <div class="card">
+    <h2>Coût d'ajustement recommandé par pôle (unité source)</h2>
+    <div class="chart-box h-lg"><canvas id="chart-cost"></canvas></div>
+    <div class="hint">Cliquez une barre pour voir la liste des salariés concernés.</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Signaux déclencheurs les plus fréquents</h2>
+    <div class="chart-box h-md"><canvas id="chart-flags"></canvas></div>
+    <div class="hint">Cliquez une barre pour voir la liste des salariés concernés.</div>
+  </div>
+  <div class="card">
+    <h2>Distribution du score de risque (RiskScore)</h2>
+    <div class="chart-box h-md"><canvas id="chart-risk"></canvas></div>
+    <div class="hint">Cliquez une barre pour voir la liste des salariés concernés.</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card full">
+    <h2>Top 10 écarts de rémunération Hommes/Femmes (métier x grade)</h2>
+    <div class="chart-box h-lg"><canvas id="chart-gap"></canvas></div>
+    <div class="note">Écart en % du salaire médian de l'autre sexe, sur la combinaison métier × grade. Bleu = hommes mieux payés, magenta = femmes mieux payées.</div>
+    <div class="hint">Cliquez une barre pour voir la population du métier × grade concerné.</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card full">
+    <h2>Données détaillées (vue table)</h2>
+    {tables_html}
+  </div>
+</div>
+
+<footer>Généré automatiquement à partir de anomalies.csv et gender_gap.csv — aucun recalcul, restitution des résultats du moteur de détection.</footer>
+
+<div class="overlay" id="panel-overlay" hidden>
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h3 id="panel-title">—</h3>
+        <div class="sub" id="panel-sub"></div>
+      </div>
+      <button class="panel-close" id="panel-close" aria-label="Fermer">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </div>
+</div>
+
+<script>
+const DATA = {data_json};
+
+// ---- Panneau "population concernée" (clic sur un graphe) --------------------------
+const RCOLS = DATA.records.cols;
+const RIDX = {{}};
+RCOLS.forEach((c, i) => RIDX[c] = i);
+const RROWS = DATA.records.rows;
+const MAX_ROWS_SHOWN = 300;
+
+const overlay = document.getElementById('panel-overlay');
+const panelTitle = document.getElementById('panel-title');
+const panelSub = document.getElementById('panel-sub');
+const panelBody = document.getElementById('panel-body');
+document.getElementById('panel-close').addEventListener('click', closePanel);
+overlay.addEventListener('click', e => {{ if (e.target === overlay) closePanel(); }});
+document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closePanel(); }});
+
+function closePanel() {{ overlay.hidden = true; }}
+
+function escapeText(value) {{
+  const cell = document.createElement('span');
+  cell.textContent = value === null ? '' : String(value);
+  return cell.innerHTML;
+}}
+
+function showPopulation(title, predicate) {{
+  const matches = RROWS.filter(predicate);
+  panelTitle.textContent = title;
+  panelSub.textContent = matches.length + ' salarié(s) concerné(s)'
+    + (matches.length > MAX_ROWS_SHOWN ? ' — ' + MAX_ROWS_SHOWN + ' premiers affichés' : '');
+  if (!matches.length) {{
+    panelBody.innerHTML = '<p>Aucun salarié ne correspond à cette sélection.</p>';
+  }} else {{
+    const shown = matches.slice(0, MAX_ROWS_SHOWN);
+    const head = RCOLS.map(c => '<th>' + escapeText(c) + '</th>').join('');
+    const body = shown.map(r => '<tr>' + r.map(v => '<td>' + escapeText(v) + '</td>').join('') + '</tr>').join('');
+    panelBody.innerHTML = '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>';
+  }}
+  overlay.hidden = false;
+}}
+
+function themeColors() {{
+  const cs = getComputedStyle(document.documentElement);
+  return {{
+    text: cs.getPropertyValue('--text-secondary').trim(),
+    grid: cs.getPropertyValue('--gridline').trim(),
+  }};
+}}
+
+function baseOptions(extra) {{
+  const t = themeColors();
+  Chart.defaults.color = t.text;
+  Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+  Chart.defaults.font.size = 12;
+  const opts = {{
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: {{ duration: 500, easing: 'easeOutQuart' }},
+    onHover: (evt, els) => {{ evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }},
+    plugins: {{
+      legend: {{ display: false, labels: {{ boxWidth: 10, usePointStyle: true }} }},
+      tooltip: {{
+        backgroundColor: t.text, titleColor: '#fff', bodyColor: '#fff',
+        padding: 10, cornerRadius: 6, displayColors: true,
+      }},
+    }},
+    scales: {{
+      x: {{ grid: {{ color: t.grid }}, ticks: {{ color: t.text }} }},
+      y: {{ grid: {{ color: t.grid }}, ticks: {{ color: t.text }} }},
+    }},
+  }};
+  return Object.assign(opts, extra);
+}}
+
+new Chart(document.getElementById('chart-severity'), {{
+  type: 'bar',
+  data: {{
+    labels: DATA.severity.labels,
+    datasets: DATA.severity.datasets.map(d => ({{
+      label: d.label, data: d.data, backgroundColor: d.backgroundColor,
+      borderRadius: 4, maxBarThickness: 24,
+    }})),
+  }},
+  options: baseOptions({{
+    indexAxis: 'y',
+    plugins: {{ legend: {{ display: true, position: 'top' }}, tooltip: {{}} }},
+    scales: {{ x: {{ stacked: true, grid: {{ color: themeColors().grid }} }}, y: {{ stacked: true, grid: {{ display: false }} }} }},
+    onClick: (evt, els, chart) => {{
+      if (!els.length) return;
+      const el = els[0];
+      const pole = DATA.severity.labels[el.index];
+      const sev = chart.data.datasets[el.datasetIndex].label;
+      const title = pole === 'Ensemble' ? 'Sévérité : ' + sev : pole + ' — ' + sev;
+      const pred = pole === 'Ensemble'
+        ? r => r[RIDX.Severity] === sev
+        : r => r[RIDX.Entite_N1] === pole && r[RIDX.Severity] === sev;
+      showPopulation(title, pred);
+    }},
+  }}),
+}});
+
+new Chart(document.getElementById('chart-job'), {{
+  type: 'bar',
+  data: {{ labels: DATA.job.labels, datasets: [{{ data: DATA.job.data, backgroundColor: '{BLUE}', borderRadius: 4, maxBarThickness: 20 }}] }},
+  options: baseOptions({{
+    indexAxis: 'y', scales: {{ y: {{ grid: {{ display: false }} }} }},
+    onClick: (evt, els) => {{
+      if (!els.length) return;
+      const label = DATA.job.labels[els[0].index];
+      showPopulation('Métier : ' + label, r => r[RIDX.Job_Family] === label && r[RIDX.Severity] !== 'Info');
+    }},
+  }}),
+}});
+
+new Chart(document.getElementById('chart-cost'), {{
+  type: 'bar',
+  data: {{ labels: DATA.cost.labels, datasets: [{{ data: DATA.cost.data, backgroundColor: '{ORANGE}', borderRadius: 4, maxBarThickness: 48 }}] }},
+  options: baseOptions({{
+    plugins: {{ tooltip: {{ callbacks: {{ label: c => c.parsed.y.toLocaleString('fr-FR') + ' (unité source)' }} }} }},
+    scales: {{ x: {{ grid: {{ display: false }} }} }},
+    onClick: (evt, els) => {{
+      if (!els.length) return;
+      const label = DATA.cost.labels[els[0].index];
+      showPopulation("Coût d'ajustement : " + label, r => r[RIDX.Entite_N1] === label && r[RIDX.Cout_Ajustement] > 0);
+    }},
+  }}),
+}});
+
+new Chart(document.getElementById('chart-flags'), {{
+  type: 'bar',
+  data: {{ labels: DATA.flags.labels, datasets: [{{ data: DATA.flags.data, backgroundColor: '{AQUA}', borderRadius: 4, maxBarThickness: 20 }}] }},
+  options: baseOptions({{
+    indexAxis: 'y', scales: {{ y: {{ grid: {{ display: false }} }} }},
+    onClick: (evt, els) => {{
+      if (!els.length) return;
+      const label = DATA.flags.labels[els[0].index];
+      showPopulation('Signal : ' + label, r => (r[RIDX.Rule_Flags] || '').split(';').includes(label));
+    }},
+  }}),
+}});
+
+new Chart(document.getElementById('chart-risk'), {{
+  type: 'bar',
+  data: {{ labels: DATA.riskscore.labels, datasets: [{{ data: DATA.riskscore.data, backgroundColor: DATA.riskscore.colors, borderRadius: 4, maxBarThickness: 40 }}] }},
+  options: baseOptions({{
+    scales: {{ x: {{ grid: {{ display: false }}, title: {{ display: true, text: 'Score de risque', color: themeColors().text }} }} }},
+    onClick: (evt, els) => {{
+      if (!els.length) return;
+      const i = els[0].index;
+      const [lo, hi] = DATA.riskscore.bounds[i];
+      showPopulation('Score de risque ' + DATA.riskscore.labels[i], r => r[RIDX.RiskScore] > (lo === 0 ? -1 : lo) && r[RIDX.RiskScore] <= hi);
+    }},
+  }}),
+}});
+
+new Chart(document.getElementById('chart-gap'), {{
+  type: 'bar',
+  data: {{ labels: DATA.gap.labels, datasets: [{{ data: DATA.gap.data, backgroundColor: DATA.gap.colors, borderRadius: 4, maxBarThickness: 20 }}] }},
+  options: baseOptions({{
+    indexAxis: 'y',
+    plugins: {{ tooltip: {{ callbacks: {{ label: c => (c.parsed.x > 0 ? '+' : '') + c.parsed.x + '%' }} }} }},
+    scales: {{ x: {{ grid: {{ color: themeColors().grid }}, title: {{ display: true, text: 'Écart en % (positif = hommes mieux payés)', color: themeColors().text }} }}, y: {{ grid: {{ display: false }} }} }},
+    onClick: (evt, els) => {{
+      if (!els.length) return;
+      const meta = DATA.gap.meta[els[0].index];
+      showPopulation(DATA.gap.labels[els[0].index], r => r[RIDX.Job_Family] === meta.job_family && r[RIDX.Grade] === meta.grade);
+    }},
+  }}),
+}});
+</script>
+"""
+    return html
 
 
 def generate_dashboard(df=None, gg=None, anomalies_csv=None, gender_csv=None, out_html=None):
