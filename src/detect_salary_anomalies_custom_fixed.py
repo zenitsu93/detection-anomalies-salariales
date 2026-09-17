@@ -675,6 +675,52 @@ def _read_csv_guess_sep(path: str) -> pd.DataFrame:
     return pd.read_csv(path, sep=None, encoding="cp1252", engine="python")
 
 
+EXPECTED_RULE_KEYS = {
+    "severity_weights": {
+        "out_of_band": 30,
+        "compa_ratio": 20,
+        "market_gap": 15,
+        "peer_outlier": 15,
+    },
+    "range_penetration_low_buffer": -0.05,
+    "range_penetration_high_buffer": 0.05,
+    "compa_ratio_low": 0.85,
+    "compa_ratio_high": 1.15,
+    "market_low": 0.90,
+    "market_high": 1.20,
+    "cohort_min_size": 5,
+    "cohort_widening_steps": ["Grade|Job_Family|Anciennete_Bucket", "Grade|Job_Family", "Grade"],
+    "peer_z_threshold_minor": 2.0,
+    "peer_z_threshold_major": 3.0,
+    "rule_weight": 0.7,
+    "ml_weight": 0.3,
+    "prioritization_buckets": {"Critical": [70, 100], "Major": [50, 69], "Minor": [30, 49], "Info": [0, 29]},
+}
+
+
+def validate_rule_params(rule_params: dict) -> None:
+    """Vérifie que les clés attendues sous ``rules:`` sont présentes dans le rulebook chargé et
+    avertit explicitement (stderr) pour chacune de celles qui manquent.
+
+    Le script continue de fonctionner avec les valeurs par défaut (comportement inchangé), mais
+    un rulebook mal structuré ou obsolète ne doit plus passer inaperçu : avant cette vérification,
+    une clé absente ou mal nommée était silencieusement remplacée par un défaut, sans aucun signal.
+    """
+    for key, default in EXPECTED_RULE_KEYS.items():
+        if key not in rule_params:
+            print(f"[WARN][RULEBOOK] Clé 'rules.{key}' absente - valeur par défaut utilisée: {default}", file=sys.stderr)
+            continue
+        if isinstance(default, dict):
+            sub_params = rule_params.get(key) or {}
+            for sub_key, sub_default in default.items():
+                if sub_key not in sub_params:
+                    print(
+                        f"[WARN][RULEBOOK] Clé 'rules.{key}.{sub_key}' absente - valeur par défaut utilisée: {sub_default}",
+                        file=sys.stderr,
+                    )
+
+
+
 def main():
     ap = argparse.ArgumentParser(description="Detection des incohérences de rémunération fixe (custom).")
     ap.add_argument("--employees", required=True, help="Fichier CSV des employés (cp1252, séparateur ';')")
@@ -703,6 +749,7 @@ def main():
     with open(args.rulebook, "r", encoding="utf-8") as f:
         rulebook = yaml.safe_load(f) or {}
     rule_params = rulebook.get("rules", {})
+    validate_rule_params(rule_params)
 
     # Calcul des métriques et des scores
     df = compute_features(emp, bands, market)
