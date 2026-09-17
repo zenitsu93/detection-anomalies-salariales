@@ -124,7 +124,7 @@ def main():
     df = ml_anomaly(df, rule_params)
     df = apply_ml_strong_signal(df, rule_params)
     df = aggregate_risk(df, rule_params)
-    df = recommendations(df)
+    df = recommendations(df, rule_params)
 
     # Les flags accumulés commencent chacun par ";" (";OUT_OF_BAND;COMPA_RATIO...") : on retire
     # le séparateur de tête une fois tous les flags posés.

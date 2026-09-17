@@ -133,7 +133,7 @@ def main():
     df, reg_model = regression_anomaly(df, rule_params)
     df = apply_ml_strong_signal(df, rule_params)
     df = aggregate_risk_with_regression(df, rule_params)
-    df = recommendations(df)
+    df = recommendations(df, rule_params)
 
     df["Rule_Flags"] = df["Rule_Flags"].astype(str).str.lstrip(";")
 

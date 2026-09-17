@@ -508,10 +508,11 @@ def recommendations(df: pd.DataFrame, rule_params: dict = None) -> pd.DataFrame:
 
     Les recommandations sont basées sur la fourchette interne (Min/Mid/Max) et la position actuelle du salarié.
     Version vectorisée (remplace l'ancienne boucle ``for _, row in df.iterrows()``).
+    Les seuils CompaRatio suivent le même rulebook que la détection.
     """
     rule_params = rule_params or {}
-    compa_lo = 0.85
-    compa_hi = 1.15
+    compa_lo = float(rule_params.get("compa_ratio_low", 0.85))
+    compa_hi = float(rule_params.get("compa_ratio_high", 1.15))
     fix = pd.to_numeric(df.get("Fixe_Annuel_MAD"), errors="coerce")
     mn = pd.to_numeric(df.get("Min"), errors="coerce")
     md = pd.to_numeric(df.get("Mid"), errors="coerce")
@@ -536,6 +537,7 @@ def recommendations(df: pd.DataFrame, rule_params: dict = None) -> pd.DataFrame:
         default=0.0,
     )
     return df
+
 
 
 

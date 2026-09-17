@@ -42,3 +42,11 @@ def test_ia_sans_donnee_exploitable_reste_indisponible(capsys):
     assert result.ML_AnomalyScore.isna().all()
     assert "[WARN]" in capsys.readouterr().err
 
+
+def test_recommandations_suivent_les_seuils_configures():
+    df = pd.DataFrame({"Fixe_Annuel_MAD": [88., 112.], "Min": [70., 70.],
+                       "Mid": [100., 100.], "Max": [140., 140.], "CompaRatio": [.88, 1.12]})
+    result = recommendations(df, {"compa_ratio_low": .9, "compa_ratio_high": 1.1})
+    assert result.Reco.tolist() == ["Ajuster vers MID", "Compa élevée: Revue"]
+    assert result.Cout_Ajustement.tolist() == [12., 0.]
+
