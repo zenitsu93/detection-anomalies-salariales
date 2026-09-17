@@ -127,9 +127,9 @@ def remove_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
 def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.DataFrame) -> pd.DataFrame:
     """Calcule les ratios internes et externes nécessaires à l'analyse.
 
-    Cette version prépare la tranche d'ancienneté pour chaque collaborateur (``Anciennete_Bucket``),
-    ignore la dimension pays dans la jointure et rattache les employés à leurs bandes internes via
-    ``Job_Family`` et ``Grade`` uniquement. Après la jointure, les ratios internes et externes sont calculés.
+    Cette version prépare la tranche d'ancienneté pour chaque collaborateur (``Anciennete_Bucket``)
+    et rattache les employés à leurs bandes internes via ``Job_Family`` et ``Grade`` uniquement.
+    Après la jointure, les ratios internes et externes sont calculés.
 
     Args:
         employees: DataFrame contenant les informations des employés.
@@ -146,7 +146,9 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
     else:
         employees["Anciennete_Bucket"] = "NA"
 
-    # Clés de jointure (on ignore désormais le pays)
+    # (Ce commentaire précisait "on ignore désormais le pays" : la colonne Pays est maintenant
+    # retirée dès le chargement des fichiers, la précision n'avait plus lieu d'être ici.)
+    # Clés de jointure
     ref_cols = []
     if "Job_Family" in employees.columns and "Job_Family" in bands.columns:
         ref_cols.append("Job_Family")
@@ -154,48 +156,105 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
         ref_cols.append("Grade")
     if not ref_cols:
         raise KeyError("Les colonnes 'Job_Family' et/ou 'Grade' manquent pour effectuer la jointure.")
-
-    # Vérification des colonnes nécessaires dans bands
-    need_cols = ref_cols + [c for c in ["Min", "Mid", "Max"] if c in bands.columns]
-    missing_cols = [c for c in need_cols if c not in bands.columns]
+    # Pourquoi (correction) : l'ancien contrôle ne gardait Min/Mid/Max que s'ils étaient DÉJÀ
+    # présents dans le fichier des fourchettes : il ne pouvait donc jamais signaler qu'une de ces
+    # colonnes manquait, et le script plantait plus loin avec une erreur peu claire. Il vérifie
+    # maintenant vraiment les trois colonnes et affiche un message explicite.
+    required_band_cols = ["Min", "Mid", "Max"]
+    missing_cols = [c for c in required_band_cols if c not in bands.columns]
     if missing_cols:
         raise KeyError(f"[BANDS] Colonnes manquantes: {', '.join(missing_cols)}. Vérifiez votre fichier de fourchettes.")
+    need_cols = ref_cols + required_band_cols
 
-    # Jointure interne sur Job_Family et Grade
-    merged = employees.merge(
-        bands[need_cols],
-        on=ref_cols,
-        how="left"
-    )
+    bands_ref = bands[need_cols]
+    # Pourquoi : si la grille contenait deux fois la même famille + grade, la jointure dupliquait
+    # les employés concernés (ils apparaissaient deux fois dans les résultats et les totaux).
+    # On ne garde plus que la première ligne et on prévient l'utilisateur.
+    dup_bands_mask = bands_ref.duplicated(subset=ref_cols)
+    if dup_bands_mask.any():
+        print(
+            f"[WARN] {int(dup_bands_mask.sum())} ligne(s) dupliquée(s) dans bands pour {ref_cols} - "
+            "seule la première occurrence est conservée pour éviter de dupliquer les employés lors de la jointure.",
+            file=sys.stderr,
+        )
+        bands_ref = bands_ref.drop_duplicates(subset=ref_cols, keep="first")
 
-    # Jointure avec le benchmark marché si disponible
+    n_before = len(employees)
+    merged = employees.merge(bands_ref, on=ref_cols, how="left")
+    if len(merged) != n_before:
+        print(
+            f"[WARN] La jointure avec bands a changé le nombre de lignes ({n_before} -> {len(merged)}); "
+            "vérifiez l'unicité de Job_Family/Grade dans bands.",
+            file=sys.stderr,
+        )
+
+    # Pourquoi : un employé dont la famille/grade n'existe pas dans la grille n'avait aucun ratio
+    # interne, sans que personne ne soit prévenu. On le signale désormais.
+    unmatched = merged["Mid"].isna() if "Mid" in merged.columns else pd.Series(False, index=merged.index)
+    if unmatched.any():
+        print(
+            f"[WARN] {int(unmatched.sum())} employé(s) sans correspondance dans bands pour {ref_cols} "
+            "ou avec Mid manquant - les ratios internes peuvent être indisponibles ; "
+            "les comparaisons marché et pairs restent possibles si leurs données sont présentes.",
+            file=sys.stderr,
+        )
+
     if market is not None and "Median" in market.columns:
         market_cols = ref_cols + ["Median"]
-        merged = merged.merge(
-            market[market_cols].rename(columns={"Median": "Market_Median"}),
-            on=ref_cols,
-            how="left"
-        )
+        market_ref = market[market_cols].rename(columns={"Median": "Market_Median"})
+        # Pourquoi : même problème que pour la grille interne (employés dupliqués par la jointure).
+        dup_market_mask = market_ref.duplicated(subset=ref_cols)
+        if dup_market_mask.any():
+            print(
+                f"[WARN] {int(dup_market_mask.sum())} ligne(s) dupliquée(s) dans market pour {ref_cols} - "
+                "seule la première occurrence est conservée pour éviter de dupliquer les employés.",
+                file=sys.stderr,
+            )
+            market_ref = market_ref.drop_duplicates(subset=ref_cols, keep="first")
+
+        n_before_m = len(merged)
+        merged = merged.merge(market_ref, on=ref_cols, how="left")
+        if len(merged) != n_before_m:
+            print(
+                f"[WARN] La jointure avec market a changé le nombre de lignes ({n_before_m} -> {len(merged)}); "
+                "vérifiez l'unicité de Job_Family/Grade dans market.",
+                file=sys.stderr,
+            )
 
     # Pourquoi (correction) : l'ancien nettoyage des montants supprimait tous les points (".").
     # Un salaire écrit "12345.67" devenait donc 1234567, soit 100 fois trop. Les montants sont
     # maintenant convertis directement en nombres, sans toucher au point décimal.
-    # Les montants doivent être préparés ; préserver les points décimaux.
-    for col in ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median"]:
-        if col in merged:
-            merged[col] = pd.to_numeric(merged[col], errors="coerce")
+    amount_cols = [c for c in ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median"] if c in merged.columns]
+    for _col in amount_cols:
+        if not pd.api.types.is_numeric_dtype(merged[_col]):
+            # Pourquoi : une valeur illisible (ex. "abc") devenait vide sans aucun message. On compte
+            # maintenant ces valeurs et on les signale, pour que le fichier puisse être corrigé.
+            n_bad = merged[_col].notna().sum() - pd.to_numeric(merged[_col], errors="coerce").notna().sum()
+            if n_bad > 0:
+                print(
+                    f"[WARN] {int(n_bad)} valeur(s) non numérique(s) dans la colonne '{_col}' - "
+                    "traitées comme manquantes (NaN).",
+                    file=sys.stderr,
+                )
+            merged[_col] = pd.to_numeric(merged[_col], errors="coerce")
 
     # Calcul des ratios
-    merged["CompaRatio"] = merged["Fixe_Annuel_MAD"] / merged["Mid"]
+    # Pourquoi (correction) : un Mid (ou une médiane marché) à 0 provoquait une division par zéro
+    # et un ratio "infini" qui faussait les règles. Un 0 est maintenant traité comme une valeur
+    # manquante : le ratio reste vide.
+    mid_safe = merged["Mid"].replace(0, np.nan)
+    merged["CompaRatio"] = merged["Fixe_Annuel_MAD"] / mid_safe
     rng = (merged["Max"] - merged["Min"]).replace(0, np.nan)
     merged["RangePenetration"] = (merged["Fixe_Annuel_MAD"] - merged["Min"]) / rng
 
     if "Market_Median" in merged.columns:
-        merged["MarketRatio"] = merged["Fixe_Annuel_MAD"] / merged["Market_Median"]
+        market_safe = merged["Market_Median"].replace(0, np.nan)
+        merged["MarketRatio"] = merged["Fixe_Annuel_MAD"] / market_safe
     else:
         merged["MarketRatio"] = np.nan
 
     return merged
+
 
 
 def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
