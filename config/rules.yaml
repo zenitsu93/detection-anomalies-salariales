@@ -1,49 +1,95 @@
+# Nouveau rulebook - aligné avec les clés réellement lues par detect_salary_anomalies_custom_fixed.py
+# (rule_params = rulebook["rules"], lu via rule_params.get(...) dans apply_rulebook,
+#  cohort_stats_and_peers_nv et aggregate_risk)
+
 rules:
+  # AJOUTÉ : l'ancien rulebook.yaml définissait ses poids/seuils règle par règle, dans une
+  # structure imbriquée (out_of_band: {...}, compa_ratio: {...}, etc.) qui ne correspondait pas
+  # aux clés lues par le code (rule_params.get(...)). Tout le bloc "rules:" ci-dessous a donc été
+  # réécrit à plat pour correspondre exactement à ce que le script attend. Seuls
+  # cohort_min_size et cohort_widening_steps (plus bas) sont repris tels quels de l'ancien fichier.
+
+  # AJOUTÉ : poids appliqués au score de règles (Rule_Score) quand une règle est déclenchée
+  # (dans l'ancien fichier, chaque règle avait son propre "weight:" au lieu d'un dict commun)
   severity_weights:
-    out_of_band: 30
-    compa_ratio: 20
-    market_gap: 15
-    peer_outlier: 15
-  range_penetration_low_buffer: -0.05
-  range_penetration_high_buffer: 0.05
-  compa_ratio_low: 0.85
-  compa_ratio_high: 1.15
-  market_low: 0.9
-  market_high: 1.2
-  cohort_min_size: 5
-  cohort_widening_steps:
-  - Grade|Job_Family|Anciennete_Bucket
-  - Grade|Job_Family
-  - Grade
-  peer_z_threshold_minor: 2.0
-  peer_z_threshold_major: 3.0
-  rule_weight: 0.7
-  ml_weight: 0.3
-  prioritization_buckets:
-    Critical:
-    - 70
-    - 100
-    Major:
-    - 50
-    - 69
-    Minor:
-    - 30
-    - 49
-    Info:
-    - 0
-    - 29
+    out_of_band: 30        # hors des bornes Min/Max internes (RangePenetration)
+    compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
+    market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
+    peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
+
+  # AJOUTÉ (deuxième relecture) : réglages de l'IsolationForest (ml_anomaly), auparavant codés en
+  # dur dans le script. Valeurs ci-dessous = celles utilisées jusqu'ici (aucun changement de
+  # comportement tant qu'on ne les modifie pas).
+  # - ml_contamination : règle le seuil de classification interne de l'IsolationForest.
+  #   Ce moteur utilise score_samples, pas predict : ce paramètre ne fixe donc pas
+  #   la proportion d'alertes finales. Leur priorité dépend des scores, poids et seuils.
+  # - ml_n_estimators : nombre d'arbres utilisés par le modèle (plus élevé = résultat plus stable
+  #   d'une exécution à l'autre, mais un peu plus lent). 200 est déjà une valeur confortable.
   ml_contamination: 0.05
   ml_n_estimators: 200
+
+  # AJOUTÉ : règle "hors bande" (RangePenetration) - tolérance en dessous de 0 et au-dessus de 1
+  # (remplace minor_buffer/critical_buffer de l'ancien fichier, qui n'étaient pas lus par le code)
+  range_penetration_low_buffer: -0.05
+  range_penetration_high_buffer: 0.05
+
+  # AJOUTÉ : règle CompaRatio (Fixe_Annuel_MAD / Mid) - mêmes valeurs que low_threshold/high_threshold
+  # de l'ancien fichier, mais sous les noms que le code lit réellement
+  compa_ratio_low: 0.85
+  compa_ratio_high: 1.15
+
+  # AJOUTÉ : règle marché (Fixe_Annuel_MAD / Market_Median) - idem, renommé depuis low_threshold/high_threshold
+  market_low: 0.90
+  market_high: 1.20
+
+  # CONSERVÉ : valeurs identiques à l'ancien rulebook.yaml (cohort_min_size et cohort_widening_steps
+  # existaient déjà sous ces noms et sont bien lues par le code)
+  cohort_min_size: 5
+  cohort_widening_steps:
+    - "Grade|Job_Family|Anciennete_Bucket"
+    - "Grade|Job_Family"
+    - "Grade"
+
+  # AJOUTÉ : seuils du z-score robuste entre pairs (PeerZ) - remplace z_threshold_minor/z_threshold_major
+  # de l'ancien fichier (qui étaient dans peer_outlier: {...} et non lus par le code)
+  peer_z_threshold_minor: 2.0   # au-delà : flag PEER_OUTLIER (sans impact sur le score)
+  peer_z_threshold_major: 3.0   # au-delà : impact sur Rule_Score + Reason_Principale
+
+  # AJOUTÉ : pondération du score final : RiskScore = rule_weight * Rule_Score + ml_weight * ML_AnomalyScore
+  # (n'existait pas du tout dans l'ancien fichier ; le code utilisait déjà ces defaults en silence)
+  rule_weight: 0.7
+  ml_weight: 0.3
+
+  # AJOUTÉ : buckets de priorisation (Severity), basés sur RiskScore (0-100)
+  # -> remplace l'ancien "score_thresholds" (Critical/Major/Minor), repris ici avec les mêmes seuils
+  prioritization_buckets:
+    Critical: [70, 100]
+    Major: [50, 69]
+    Minor: [30, 49]
+    Info: [0, 29]
+
+# -----------------------------------------------------------------------------
+# Conservé depuis l'ancien rulebook.yaml, à titre de référence/documentation.
+# Ces clés ne sont pas lues par le script actuel (listes codées en dur dans le code)
+# mais sont conservées si elles doivent resservir plus tard.
+# -----------------------------------------------------------------------------
+
+# Variables exploitées par le modèle IsolationForest (informatif ; ml_anomaly() utilise en dur :
+# Fixe_Annuel_MAD, CompaRatio, RangePenetration, MarketRatio, Age, Anciennete,
+# + Competence_N1 / Positionnement_9BOX / Hot_job si présentes)
 ml_features:
-- Fixe_Annuel_MAD
-- CompaRatio
-- RangePenetration
-- MarketRatio
-- Age
-- Anciennete
-- Competence_N1
-- Positionnement_9BOX
-- Hot_job
+  - Fixe_Annuel_MAD
+  - CompaRatio
+  - RangePenetration
+  - MarketRatio
+  - Age
+  - Anciennete
+  - Competence_N1
+  - Positionnement_9BOX
+  - Hot_job
+
+# Convertisseur FX -> MAD (non utilisé actuellement : le nettoyage/conversion des montants
+# a été retiré du script, les montants sont supposés déjà propres et en MAD)
 fx_to_mad:
   MAD: 1.0
   EUR: 10.8
