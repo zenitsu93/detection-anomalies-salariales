@@ -1,0 +1,11 @@
+Matricule,Grade,Job_Family,Anciennete_Bucket,Fixe_Annuel_MAD,Rule_Flags,Rule_Score,Reason_Principale
+A1,1,X,0-2,99.0,,0.0,
+A2,1,X,0-2,100.0,,0.0,
+A3,1,X,0-2,101.0,,0.0,
+B1,1,X,3-5,102.0,,0.0,
+B2,1,X,3-5,500.0,,0.0,
+C1,1,Y,0-2,200.0,,0.0,
+C2,1,Y,0-2,201.0,,0.0,
+C3,1,Y,0-2,199.0,,0.0,
+C4,1,Y,0-2,200.0,,0.0,
+C5,1,Y,0-2,202.0,,0.0,
