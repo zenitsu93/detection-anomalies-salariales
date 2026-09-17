@@ -80,8 +80,16 @@ def robust_zscore(values: pd.Series) -> pd.Series:
     med = x.median()
     mad = (x - med).abs().median()
     if mad == 0 or np.isnan(mad):
-        return pd.Series(np.zeros(len(x)), index=x.index, dtype=float)
+        # Pourquoi (correction) : quand plus de la moitié d'un groupe a exactement le même salaire
+        # (fréquent avec des grilles), l'écart médian (MAD) vaut 0. L'ancien code renvoyait alors 0
+        # pour tout le monde : un salaire très différent des autres n'était jamais repéré. On se
+        # rabat maintenant sur l'écart-type classique.
+        std = x.std()
+        if pd.notna(std) and std > 0:
+            return (x - x.mean()) / std
+        return pd.Series(0.0, index=x.index)
     return 0.6745 * (x - med) / mad
+
 
 # -----------------------------------------------------------------------------
 # Anciennete bucketing
@@ -319,17 +327,14 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     return df
 
 def cohort_stats_and_peers_nv(df, rule_params):
-    """
-    UPDATE_AC_V1 :
-    Calcule les statistiques de cohorte pour le calcul du z-score robuste et la détection des anomalies par cohorte.
+    """Calcule les statistiques de cohorte pour le calcul du z-score robuste et la détection des anomalies par cohorte.
+
     Intègre un élargissement ciblé : seules les petites cohortes sont élargies à chaque étape.
     """
-    # --- Paramètres YAML ---
-    step = 0
-    # Définir les étapes d'élargissement.  
-    # On ignore désormais le pays et on inclut l'ancienneté (via Anciennete_Bucket) dans la définition des cohortes.  
-    # La première étape utilise Grade × Job_Family × tranche d'ancienneté ;  
-    # puis on élargit à Grade × Job_Family puis uniquement au grade si la cohorte est trop petite.  
+    # Définir les étapes d'élargissement.
+    # On inclut l'ancienneté (via Anciennete_Bucket) dans la définition des cohortes.
+    # La première étape utilise Grade × Job_Family × tranche d'ancienneté ;
+    # puis on élargit à Grade × Job_Family puis uniquement au grade si la cohorte est trop petite.
     default_steps = [
         "Grade|Job_Family|Anciennete_Bucket",
         "Grade|Job_Family",
@@ -337,42 +342,42 @@ def cohort_stats_and_peers_nv(df, rule_params):
     ]
     steps = rule_params.get("cohort_widening_steps", default_steps)
     min_size = rule_params.get("cohort_min_size", 5)
- 
+
     # --- Construction initiale de la cohorte ---
     def widen(step):
         step = min(step, len(steps) - 1)
         col_key = steps[step].split("|")
         key = df[col_key].astype(str).agg("|".join, axis=1)
         return col_key, key
- 
+
     step = 0
-    col_key, cohort_key = widen(step)
+    _, cohort_key = widen(step)
     df["Cohort_Key"] = cohort_key
- 
+
     max_step = len(steps) - 1
     progress = True
- 
+
     # --- Boucle d'élargissement ciblé ---
     while progress and step < max_step:
         sizes = df.groupby("Cohort_Key")["Matricule"].transform("count")
         small_mask = sizes < min_size
- 
+
         if not small_mask.any():
             break  # plus aucune petite cohorte, on sort
- 
+
         step += 1
         _, wider_key = widen(step)
- 
+
         # Élargissement ciblé : on ne change la clé que pour les cohortes trop petites
         df.loc[small_mask, "Cohort_Key"] = wider_key[small_mask]
- 
+
         # Vérifie si des petites cohortes subsistent
         sizes_new = df.groupby("Cohort_Key")["Matricule"].transform("count")
         progress = (sizes_new < min_size).any()
- 
+
     # --- Taille finale des cohortes ---
     df["Cohort_Size"] = df.groupby("Cohort_Key")["Matricule"].transform("count")
- 
+
     # --- Statistiques de cohorte ---
     cohort_stats = (
         df.groupby("Cohort_Key")
@@ -382,20 +387,14 @@ def cohort_stats_and_peers_nv(df, rule_params):
             Cohort_STD=("Fixe_Annuel_MAD", "std"),
             Cohort_P25=("Fixe_Annuel_MAD", lambda x: np.nanpercentile(x, 25)),
             Cohort_P75=("Fixe_Annuel_MAD", lambda x: np.nanpercentile(x, 75)),
-            Cohort_Size=("Fixe_Annuel_MAD", "count") # répétition
         )
         .reset_index()
     )
- 
+
+    # Pourquoi Cohort_Size n'est plus recalculée dans cohort_stats : elle existe déjà (plus haut).
+    # La recalculer créait deux colonnes en double à la fusion (Cohort_Size_x / Cohort_Size_y).
+    # L'indicateur "Cohort_ZScore", calculé mais jamais utilisé, a aussi été retiré.
     df = df.merge(cohort_stats, on="Cohort_Key", how="left")
- 
-    # --- Calcul du z-score robuste (basé sur la médiane absolue) --- qui nest pas utilisé
-    def robust_z(x):
-        median = np.nanmedian(x)
-        mad = np.nanmedian(np.abs(x - median))
-        return 0 if mad == 0 else (x - median) / (1.4826 * mad)
- 
-    df["Cohort_ZScore"] = df.groupby("Cohort_Key")["Fixe_Annuel_MAD"].transform(robust_z)
 
     # --- Peer-level robust z-score (per-cohort peers) and peer outlier flags ---
     # compute PeerZ using the main robust_zscore helper so the behavior matches
@@ -429,6 +428,7 @@ def cohort_stats_and_peers_nv(df, rule_params):
     )
 
     return df
+
  
 
 
