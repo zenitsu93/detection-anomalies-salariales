@@ -16,6 +16,11 @@ rules:
     compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
     market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
     peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
+    ml_strong_signal: 15   # AJOUTÉ (suite au rapport de test) : score ML très élevé sans règle déclenchée
+
+  # AJOUTÉ (suite au rapport de test) : percentile du score ML (sur ce run) au-delà duquel un
+  # profil sans aucun flag de règle reçoit quand même le bonus ml_strong_signal.
+  ml_strong_signal_percentile: 0.95
 
   # AJOUTÉ (deuxième relecture) : réglages de l'IsolationForest (ml_anomaly), auparavant codés en
   # dur dans le script. Valeurs ci-dessous = celles utilisées jusqu'ici (aucun changement de

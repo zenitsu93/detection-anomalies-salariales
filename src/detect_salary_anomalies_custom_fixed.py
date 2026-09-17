@@ -723,14 +723,16 @@ def _read_csv_guess_sep(path: str) -> pd.DataFrame:
 
 
 EXPECTED_RULE_KEYS = {
-    "ml_contamination": 0.05,
-    "ml_n_estimators": 200,
     "severity_weights": {
         "out_of_band": 30,
         "compa_ratio": 20,
         "market_gap": 15,
         "peer_outlier": 15,
+        "ml_strong_signal": 15,
     },
+    "ml_strong_signal_percentile": 0.95,
+    "ml_contamination": 0.05,
+    "ml_n_estimators": 200,
     "range_penetration_low_buffer": -0.05,
     "range_penetration_high_buffer": 0.05,
     "compa_ratio_low": 0.85,
@@ -767,6 +769,45 @@ def validate_rule_params(rule_params: dict) -> None:
                         f"[WARN][RULEBOOK] Clé 'rules.{key}.{sub_key}' absente - valeur par défaut utilisée: {sub_default}",
                         file=sys.stderr,
                     )
+
+
+
+def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+    """Fait remonter un signal ML très fort dans Rule_Score même quand aucune règle déterministe
+    ne s'est déclenchée, pour les cas où le salaire est conforme à la bande/aux pairs mais où
+    l'IsolationForest détecte une combinaison de facteurs inhabituelle (ex: âge/ancienneté très
+    atypique pour le grade). Sans ce correctif, un tel cas peut atteindre un score ML proche du
+    maximum (mesuré à 89/100 en test) et rester malgré tout classé "Info" une fois agrégé avec
+    rule_weight/ml_weight (0.7/0.3 par défaut)
+
+    Le seuil est un percentile du score ML DE CE RUN (et non une valeur absolue) car
+    ML_AnomalyScore est renormalisé en 0-100 à chaque exécution (min-max sur le lot traité) : un
+    seuil absolu n'aurait pas le même sens d'un jeu de données à l'autre.
+    """
+    weights = rule_params.get("severity_weights", {})
+    percentile = float(rule_params.get("ml_strong_signal_percentile", 0.95))
+    if df["ML_AnomalyScore"].notna().sum() < 20:
+        return df  # percentile peu significatif sur un trop petit échantillon
+
+    cutoff = df["ML_AnomalyScore"].quantile(percentile)
+    no_rule_flag = df["Rule_Flags"].astype(str).str.len() == 0
+    strong_ml = (df["ML_AnomalyScore"] >= cutoff) & no_rule_flag
+
+    if not strong_ml.any():
+        return df
+
+    df.loc[strong_ml, "Rule_Flags"] = df.loc[strong_ml, "Rule_Flags"].astype(str) + ";ML_STRONG_SIGNAL"
+    df.loc[strong_ml, "Rule_Score"] = (
+        df.loc[strong_ml, "Rule_Score"].fillna(0) + weights.get("ml_strong_signal", 15)
+    )
+    has_reason = df["Reason_Principale"].astype(str).str.len() > 0
+    sep = pd.Series(" & ", index=df.index).where(has_reason, "")
+    df.loc[strong_ml, "Reason_Principale"] = (
+        df.loc[strong_ml, "Reason_Principale"].astype(str)
+        + sep[strong_ml]
+        + "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
+    )
+    return df
 
 
 
@@ -811,6 +852,7 @@ def main():
     df = apply_rulebook(df, rule_params)
     df = cohort_stats_and_peers_nv(df, rule_params)
     df = ml_anomaly(df, rule_params)
+    df = apply_ml_strong_signal(df, rule_params)
     df = aggregate_risk(df, rule_params)
     df = recommendations(df)
 
