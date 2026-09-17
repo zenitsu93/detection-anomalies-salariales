@@ -50,3 +50,43 @@ def test_recommandations_suivent_les_seuils_configures():
     assert result.Reco.tolist() == ["Ajuster vers MID", "Compa élevée: Revue"]
     assert result.Cout_Ajustement.tolist() == [12., 0.]
 
+
+def test_tableau_affiche_les_libelles_comme_du_texte():
+    result = table_html([{"Metier": "<Audit & Risques>"}])
+    assert "&lt;Audit &amp; Risques&gt;" in result
+    assert "<Audit" not in result
+
+
+def test_dashboard_ne_change_pas_unite_et_protege_les_donnees_embarquees():
+    label = '</script><script>alert(1)</script>'
+    df = pd.DataFrame({"Matricule": ["1"], "Entite_N1": [label], "Job_Family": ["IT"],
+                       "Severity": ["Minor"], "RiskScore": [35.],
+                       "Cout_Ajustement": [1500.], "Rule_Flags": ["COMPA_RATIO"]})
+    data = build_data(df, pd.DataFrame())
+    result = build_html(data)
+    assert data["kpis"]["total_cost"] == 1500.
+    assert "K MAD" not in result
+    assert label not in result
+
+
+def test_excel_conserve_les_nombres_les_totaux_et_l_ordre_des_priorites(tmp_path):
+    from openpyxl import load_workbook
+
+    df = pd.DataFrame({"Matricule": ["a", "b", "c", "d"],
+                       "Severity": ["Info", "Minor", "Major", "Critical"],
+                       "RiskScore": [10., 35., 55., 75.],
+                       "Cout_Ajustement": [1234.56, 100., 0., 5.],
+                       "Entite_N1": ["IT"] * 4})
+    path = tmp_path / "resultat.xlsx"
+    to_excel_colored(df, path)
+    wb = load_workbook(path)
+    rows = list(wb["All"].values)
+    assert [r[1] for r in rows[1:]] == ["Critical", "Major", "Minor", "Info"]
+    assert all(isinstance(r[3], (int, float)) for r in rows[1:])
+    stats = dict(list(wb["Statistics"].values)[1:])
+    assert stats["Total salariés analysés"] == 4
+    assert stats["Total adjustment cost"] == pytest.approx(1339.56)
+    assert list(wb["Budget_Synthese"].values)[-1][-1] == pytest.approx(1339.56)
+    assert wb["Statistics"]._charts[0].series[0].val.numRef.f.endswith("$B$3:$B$6")
+    wb.close()
+
