@@ -113,97 +113,6 @@ def bucket_anciennete(x: object) -> str:
         return "13-20"
     return ">20"
 
-# -----------------------------------------------------------------------------
-# Canonical name mappings
-#
-# Ces dictionnaires servent à uniformiser les noms de colonnes avant traitement.
-# Chaque clé correspond au nom canonique souhaité. Les listes associées
-# recensent les différentes variantes possibles dans les fichiers sources.
-
-"""EMPLOYEE_CANON = {
-    "Matricule": ["matricule", "id", "employee_id", "emp_id"],
-    "Nom": ["nom", "name", "employee_name"],
-    "Entite_N1": ["entite_n1", "entity_n1", "division", "department", "dept"],
-    "Entite_N2": ["entite_n2", "entity_n2", "region", "subdivision", "team"],
-    "Pays": ["pays", "country"],
-    # La colonne Ville est conservée dans le mappage pour permettre la renomme, mais elle sera
-    # explicitement supprimée plus loin pour les besoins métier.
-    "Ville": ["ville", "city", "site", "location", "localite", "localité"],
-    "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
-    "Job_Title": ["job_title", "titre_poste", "title", "poste"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
-    "Fixe_Annuel_MAD": ["fixe_annuel_mad", "salaire_annuel_mad", "salaire_fixe", "fixed_salary_mad", "annual_fixed_mad"],
-    "Age": ["age"],
-    "Anciennete": ["anciennete", "ancienneté", "seniority", "tenure"],
-    # Nouvelles variables intégrées
-    "Competence_N1": ["niveau_competences", "niveau_competences_n_1", "competence_n1", "niveau_n1", "competence_n_1"],
-    "Positionnement_9BOX": ["positionnement_9box", "positionnement", "pos9box", "pos_9box", "ninebox", "9box"],
-    "Hot_job": ["hot_job", "hotjob", "hot_role", "hotrole", "critical_role"],
-    "Sexe": ["sexe", "gender", "sexe_biologique"],
-    "FTE": ["fte", "taux_activite", "work_fraction"],
-    "Devise": ["devise", "currency"],
-    "Date_Effet_Paie": ["date_effet_paie", "date_effet", "pay_effective_date"]
-}
-
-BANDS_CANON = {
-    # La ville est conservée pour le renommage mais sera supprimée ensuite
-    "Ville": ["ville", "city", "site", "location", "localite", "localité"],
-    "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
-    "Min": ["min", "minimum"],
-    "Mid": ["mid", "median", "midpoint"],
-    "Max": ["max", "maximum"],
-    # Normalisation du pays sur l'intitulé « Pays » pour permettre une jointure avec la colonne éponyme des employés
-    "Pays": ["country", "pays"],
-    # Normalisation de la devise sur l'intitulé « Devise »
-    "Devise": ["currency", "devise"]
-}
-
-MARKET_CANON = {
-    # La Ville est renommée mais sera éliminée
-    "Ville": ["ville", "city", "site", "location", "localite", "localité"],
-    "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
-    "Median": ["median", "market_median", "mid", "midpoint"],
-    # Normalisation sur le champ Pays
-    "Pays": ["country", "pays"],
-    # Devise renommée en Devise
-    "Devise": ["currency", "devise"],
-    "P25": ["p25", "percentile25"],
-    "P75": ["p75", "percentile75"]
-}
-"""
-
-def _standardize(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
-    """Renomme les colonnes d'un DataFrame selon un mapping canonique.
-
-    Args:
-        df: DataFrame à renommer.
-        mapping: dictionnaire {nom_canonique: [aliases...]}
-
-    Returns:
-        Une copie du DataFrame avec les colonnes renommées et la liste des colonnes manquantes.
-    """
-    cols = {c.lower().strip(): c for c in df.columns}
-    new_cols = {}
-    missing = []
-    for canon, aliases in mapping.items():
-        # inclure le canon dans la liste des alias pour reconnaitre une colonne déjà bien nommée
-        candidates = [canon] + aliases
-        found = None
-        for cand in candidates:
-            cand_l = cand.lower()
-            if cand_l in cols:
-                found = cols[cand_l]
-                break
-        if found is None:
-            missing.append(canon)
-        else:
-            new_cols[found] = canon
-    df = df.rename(columns=new_cols)
-    return df, missing
-
-
 def remove_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Supprime les colonnes dupliquées en ne conservant que la première occurrence.
 
@@ -268,19 +177,13 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
             how="left"
         )
 
-    # Nettoyage et conversion des montants pas besoin
-    for _col in ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median"]:
-        if _col in merged.columns:
-            merged[_col] = (
-                merged[_col]
-                    .astype(str)
-                    .str.replace("\u00A0", "", regex=False)  # NBSP
-                    .str.replace(" ", "", regex=False)
-                    .str.replace(r"(?i)mad|dhs?|dh|moroccan\s*dirham", "", regex=True)
-                    .str.replace(".", "", regex=False)
-                    .str.replace(",", ".", regex=False)
-            )
-            merged[_col] = pd.to_numeric(merged[_col], errors="coerce")
+    # Pourquoi (correction) : l'ancien nettoyage des montants supprimait tous les points (".").
+    # Un salaire écrit "12345.67" devenait donc 1234567, soit 100 fois trop. Les montants sont
+    # maintenant convertis directement en nombres, sans toucher au point décimal.
+    # Les montants doivent être préparés ; préserver les points décimaux.
+    for col in ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median"]:
+        if col in merged:
+            merged[col] = pd.to_numeric(merged[col], errors="coerce")
 
     # Calcul des ratios
     merged["CompaRatio"] = merged["Fixe_Annuel_MAD"] / merged["Mid"]
@@ -720,29 +623,6 @@ def to_excel_colored(df: pd.DataFrame, path_xlsx: str) -> None:
     wb.save(path_xlsx)
 
 
-def standardize_all(emp: pd.DataFrame, bands: pd.DataFrame, market: pd.DataFrame) -> tuple:
-    """Uniformise les noms de colonnes pour les trois DataFrames.
-
-    Après renommage, les colonnes "Ville" sont supprimées car jugées non pertinentes pour l'analyse.
-    """
-    emp2, miss_e = _standardize(emp, EMPLOYEE_CANON)
-    bands2, miss_b = _standardize(bands, BANDS_CANON)
-    market2 = None
-    miss_m = []
-    if market is not None:
-        market2, miss_m = _standardize(market, MARKET_CANON)
-    # Log des colonnes manquantes (affiché sur stderr)
-    if miss_e:
-        print("[WARN] Colonnes employees non trouvées et nécessaires (si utilisées plus loin):", ", ".join(miss_e), file=sys.stderr)
-    if miss_b:
-        print("[WARN] Colonnes bands non trouvées:", ", ".join(miss_b), file=sys.stderr)
-    if market is not None and miss_m:
-        print("[WARN] Colonnes marché non trouvées:", ", ".join(miss_m), file=sys.stderr)
-    # Suppression des colonnes Ville qui ne sont pas pertinentes dans ce contexte
-    for df in [emp2, bands2, market2]:
-        if df is not None and "Ville" in df.columns:
-            df.drop(columns=["Ville"], inplace=True)
-    return emp2, bands2, market2
 
 
 def format_numeric_fields(out: pd.DataFrame) -> pd.DataFrame:
@@ -861,8 +741,14 @@ def main():
 
     # Suppression des colonnes dupliquées sur les employés (ex: double colonne Matricule)
     emp = remove_duplicate_columns(emp)
-    # Renommage canonique et suppression de la colonne Ville
-    emp, bands, market = standardize_all(emp, bands, market)
+    # Pourquoi (correction) : l'ancienne étape de renommage des colonnes (standardize_all) utilisait
+    # des dictionnaires désactivés (placés entre guillemets), ce qui faisait planter le script. Elle a
+    # été retirée : les fichiers utilisent déjà les bons noms de colonnes. À la place, on retire
+    # seulement la colonne Pays, identique pour tout le monde.
+    # Le périmètre couvre un seul pays : aucune clé géographique supplémentaire.
+    for table in (emp, bands, market):
+        if table is not None and "Pays" in table.columns:
+            table.drop(columns=["Pays"], inplace=True)
 
     # Lecture du rulebook
     with open(args.rulebook, "r", encoding="utf-8") as f:
