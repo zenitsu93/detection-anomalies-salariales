@@ -16,6 +16,7 @@ import pandas as pd
 
 from anomaly_regression import (
     regression_anomaly,
+    regression_gender_gap_report,
     aggregate_risk_with_regression,
 )
 
@@ -129,9 +130,22 @@ def test_une_modalite_tres_rare_est_regroupee_sans_faire_planter_patsy():
     assert resultat["Reg_AnomalyScore"].notna().all()
 
 
+def test_ecart_homme_femme_ajuste_est_positif_quand_les_hommes_sont_mieux_payes_a_profil_egal():
+    """Quand on construit artificiellement les hommes +10% mieux payes que les femmes, a profil
+    de poste/carriere identique, le rapport d'ecart ajuste doit retrouver un pct_gap positif."""
+    df = jeu_de_donnees(n=400, ecart_type_bruit=0.02, coef_sexe_log=np.log(1.10))
+    _, model = regression_anomaly(df, rule_params={})
+    rapport = regression_gender_gap_report(model, rule_params={})
+    assert rapport["available"] is True
+    assert rapport["pct_gap"] > 0
+    assert rapport["reference_level"] == "F"
 
 
-
+def test_rapport_genre_indisponible_si_aucun_modele():
+    """Si le garde-fou de taille d'echantillon a desactive la regression (model=None), le rapport
+    d'ecart de genre doit le signaler explicitement plutot que de planter."""
+    rapport = regression_gender_gap_report(None, rule_params={})
+    assert rapport["available"] is False
 
 
 def test_aggregate_risk_with_regression_combine_bien_les_3_signaux():
@@ -146,4 +160,3 @@ def test_aggregate_risk_with_regression_combine_bien_les_3_signaux():
     resultat = aggregate_risk_with_regression(df, rule_params)
     attendu_ligne_0 = 0.5 * 40.0 + 0.3 * 50.0 + 0.2 * 60.0
     assert resultat["RiskScore"].iloc[0] == attendu_ligne_0
-
