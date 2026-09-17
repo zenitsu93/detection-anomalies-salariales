@@ -316,6 +316,41 @@ def aggregate_risk_with_regression(df: pd.DataFrame, rule_params: dict) -> pd.Da
 # Rapport d'ecart Homme/Femme "ajuste"
 # -----------------------------------------------------------------------------
 
+def regression_gender_gap_report(model, rule_params: dict) -> dict:
+    """Extrait le coefficient du terme Sexe du modele ajuste et le convertit en un ecart en %
+    interpretable ("toutes choses egales par ailleurs", une fois les facteurs de poste et de
+    carriere controles) - un complement statistique a gender_gap_analysis (anomaly_core.py), qui
+    ne compare que des medianes brutes par Job_Family/Grade.
+
+    Ne leve jamais d'exception : retourne toujours un dict, avec available=False et une raison
+    si le rapport n'est pas calculable (pas de modele, ou Sexe absent du modele)."""
+    if model is None:
+        return {"available": False, "reason": "Aucun modele de regression ajuste (garde-fou de taille d'echantillon)."}
+
+    # Ne pas présenter un coefficient M/Autre ou Autre/F comme un écart M/F.
+    terme = 'C(Sexe, Treatment(reference="F"))[T.M]'
+    if terme not in model.params.index:
+        return {"available": False, "reason": "Comparaison M/F indisponible après préparation des catégories."}
+    reference_level = "F"
+
+    coef = model.params[terme]
+    pvalue = model.pvalues[terme]
+    ci_lo, ci_hi = model.conf_int().loc[terme]
+
+    def en_pourcentage(x_log):
+        return (np.exp(x_log) - 1) * 100
+
+    return {
+        "available": True,
+        "reference_level": reference_level,
+        "coef_log": float(coef),
+        "pct_gap": float(en_pourcentage(coef)),
+        "pvalue": float(pvalue),
+        "ci95_pct_low": float(en_pourcentage(ci_lo)),
+        "ci95_pct_high": float(en_pourcentage(ci_hi)),
+        "n_obs": int(model.nobs),
+        "significant": bool(pvalue < 0.05),
+    }
 
 
 # -----------------------------------------------------------------------------

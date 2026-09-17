@@ -66,6 +66,7 @@ from anomaly_io import (
 from anomaly_regression import (
     regression_anomaly,
     aggregate_risk_with_regression,
+    regression_gender_gap_report,
     validate_regression_params,
 )
 from generate_dashboard_html import generate_dashboard
@@ -82,12 +83,14 @@ def main():
     ap.add_argument("--output", required=True, help="Fichier CSV de sortie (anomalies)")
     ap.add_argument("--excel-output", required=False, default=None, help="Fichier Excel de sortie (optionnel)")
     ap.add_argument("--gender-output", required=False, default=None, help="Fichier CSV de synthèse des écarts par sexe")
+    ap.add_argument("--reg-gender-output", required=False, default=None,
+                     help="Fichier CSV du rapport d'écart Homme/Femme ajusté par la régression (optionnel)")
     ap.add_argument("--html-output", required=False, default=None,
                      help="Fichier HTML du dashboard interactif (par défaut: dashboard_anomalies_regression.html à côté de --output)")
     ap.add_argument("--no-html", action="store_true", help="Ne pas générer le dashboard HTML")
     args = ap.parse_args()
     for output_path in (args.output, args.excel_output, args.gender_output,
-                        args.html_output):
+                        args.reg_gender_output, args.html_output):
         if output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -164,6 +167,25 @@ def main():
     if args.gender_output:
         gender_df.to_csv(args.gender_output, index=False, encoding="utf-8")
         print(f"[OK] Export Gender Gap: {args.gender_output}")
+
+    # Rapport d'écart Homme/Femme "ajusté" (coefficient du Sexe une fois les facteurs de poste
+    # et de carrière contrôlés) - complément statistique à gender_df ci-dessus, qui ne compare
+    # que des médianes brutes.
+    reg_gender_report = regression_gender_gap_report(reg_model, rule_params)
+    if reg_gender_report.get("available"):
+        print(
+            "[INFO][REGRESSION] Ecart Homme/Femme ajuste (toutes choses egales par ailleurs) : "
+            f"{reg_gender_report['pct_gap']:+.1f}% (p={reg_gender_report['pvalue']:.3f}, "
+            f"IC95%=[{reg_gender_report['ci95_pct_low']:+.1f}%, {reg_gender_report['ci95_pct_high']:+.1f}%], "
+            f"n={reg_gender_report['n_obs']})",
+            file=sys.stderr,
+        )
+    else:
+        print(f"[WARN][REGRESSION] Ecart Homme/Femme ajuste indisponible : {reg_gender_report.get('reason')}", file=sys.stderr)
+
+    if args.reg_gender_output:
+        pd.DataFrame([reg_gender_report]).to_csv(args.reg_gender_output, index=False, encoding="utf-8")
+        print(f"[OK] Export Regression Gender Gap: {args.reg_gender_output}")
 
     if not args.no_html:
         html_path = args.html_output or str(Path(args.output).with_name("dashboard_anomalies_regression.html"))
