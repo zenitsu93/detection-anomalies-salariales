@@ -1,0 +1,49 @@
+# Paramètres réellement lus par le moteur.
+rules:
+  severity_weights:
+    out_of_band: 30
+    compa_ratio: 20
+    market_gap: 15
+    peer_outlier: 15
+  range_penetration_low_buffer: -0.05
+  range_penetration_high_buffer: 0.05
+  compa_ratio_low: 0.85
+  compa_ratio_high: 1.15
+  market_low: 0.9
+  market_high: 1.2
+  cohort_min_size: 5
+  cohort_widening_steps:
+  - Grade|Job_Family|Anciennete_Bucket
+  - Grade|Job_Family
+  - Grade
+  peer_z_threshold_minor: 2.0
+  peer_z_threshold_major: 3.0
+  rule_weight: 0.7
+  ml_weight: 0.3
+  prioritization_buckets:
+    Critical:
+    - 70
+    - 100
+    Major:
+    - 50
+    - 69
+    Minor:
+    - 30
+    - 49
+    Info:
+    - 0
+    - 29
+ml_features:
+- Fixe_Annuel_MAD
+- CompaRatio
+- RangePenetration
+- MarketRatio
+- Age
+- Anciennete
+- Competence_N1
+- Positionnement_9BOX
+- Hot_job
+fx_to_mad:
+  MAD: 1.0
+  EUR: 10.8
+  USD: 10.0
