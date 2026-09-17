@@ -278,6 +278,38 @@ def regression_anomaly(df: pd.DataFrame, rule_params: dict):
 # Agregation du risque (replique locale de anomaly_core.aggregate_risk, avec un 3e signal)
 # -----------------------------------------------------------------------------
 
+def aggregate_risk_with_regression(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+    """Variante de anomaly_core.aggregate_risk qui combine 3 signaux (regles, IsolationForest,
+    regression) au lieu de 2. Duplique intentionnellement la logique de buckets de severite
+    (identique a anomaly_core.aggregate_risk) plutot que de modifier ce fichier partage, pour
+    que le pipeline existant (detect_salary_anomalies_custom_fixed.py) reste inchange."""
+    rule_w = float(rule_params.get("rule_weight", 0.6))
+    ml_w = float(rule_params.get("ml_weight", 0.25))
+    reg_w = float(rule_params.get("reg_weight", 0.15))
+
+    reg_score = df["Reg_AnomalyScore"] if "Reg_AnomalyScore" in df.columns else pd.Series(0.0, index=df.index)
+    df["RiskScore"] = (
+        rule_w * df["Rule_Score"].fillna(0)
+        + ml_w * df["ML_AnomalyScore"].fillna(0)
+        + reg_w * reg_score.fillna(0)
+    )
+
+    buckets = rule_params.get("prioritization_buckets", {
+        "Critical": [70, 100],
+        "Major": [50, 69],
+        "Minor": [30, 49],
+        "Info": [0, 29],
+    })
+    categories_par_severite_decroissante = sorted(buckets.items(), key=lambda item: item[1][0], reverse=True)
+
+    def sev(x):
+        for name, (lo, _hi) in categories_par_severite_decroissante:
+            if x >= lo:
+                return name
+        return "Info"
+
+    df["Severity"] = df["RiskScore"].apply(sev)
+    return df
 
 
 # -----------------------------------------------------------------------------
@@ -300,3 +332,12 @@ EXPECTED_REGRESSION_KEYS = {
 }
 
 
+def validate_regression_params(rule_params: dict) -> None:
+    """Equivalent local de anomaly_core.validate_rule_params, mais uniquement pour les clefs
+    propres a ce module. anomaly_core.validate_rule_params ne connait pas ces clefs (reg_weight,
+    reg_min_*) et produirait un faux avertissement "cle absente" a chaque run si on l'appelait
+    telle quelle sur un rulebook qui les definit ; ce module a donc sa propre validation, plutot
+    que d'etendre EXPECTED_RULE_KEYS dans anomaly_core.py."""
+    for key, default in EXPECTED_REGRESSION_KEYS.items():
+        if key not in rule_params:
+            print(f"[WARN][RULEBOOK][REGRESSION] Cle 'rules.{key}' absente - valeur par defaut utilisee: {default}", file=sys.stderr)
