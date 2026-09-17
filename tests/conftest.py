@@ -16,7 +16,3 @@ from pathlib import Path
 CODES_DIR = Path(__file__).resolve().parent.parent / "src"
 if str(CODES_DIR) not in sys.path:
     sys.path.insert(0, str(CODES_DIR))
-
-# Adaptateur temporaire : le moteur est encore monolithique.
-import detect_salary_anomalies_custom_fixed as _engine
-sys.modules["anomaly_core"] = _engine
