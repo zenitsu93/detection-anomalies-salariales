@@ -462,7 +462,7 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
 def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Agrège le score de règles et le score d'IA pour produire un score de risque global.
 
-    Le poids attribué à chaque composante est configurable via le rulebook (defaults : 0,7 pour les règles et 0,3
+    Le poids attribué à chaque composante est configurable via le rulebook (defaults : 0,7 pour les règles et 0,3
     pour l'IA). La sévérité est ensuite dérivée selon des seuils définis dans le rulebook.
     """
     rule_w = float(rule_params.get("rule_weight", 0.7))
@@ -477,13 +477,28 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         "Info": [0, 29]
     })
 
+    # Les bornes "hi" (ex: Major va jusqu'a 69, Critical commence a 70) laissaient un trou entre
+    # deux categories des que RiskScore n'est pas un nombre entier (ex: 69.9 ou 49.9), ce qui est
+    # le cas courant puisque RiskScore est une moyenne ponderee de scores continus. Un score de
+    # 69.9 ne satisfaisait ni "x <= 69" (Major) ni "x >= 70" (Critical) : il retombait dans le cas
+    # par defaut "Info", la categorie la MOINS grave, alors qu'il aurait du etre classe "Major".
+    # Sur un fichier de plusieurs milliers de salaries, ce trou (large d'environ 1 point a chaque
+    # frontiere) reclassait ainsi en "Info" un nombre non negligeable de cas pourtant a surveiller.
+    #
+    # Correction : on cherche desormais la categorie dont la borne basse ("lo") est la plus haute
+    # tout en restant <= au score, en parcourant les categories de la plus severe a la moins
+    # severe. Les bornes hautes ne servent plus qu'a titre indicatif dans le rulebook ; il n'y a
+    # ainsi plus aucun trou possible entre deux categories.
+    categories_par_severite_decroissante = sorted(buckets.items(), key=lambda item: item[1][0], reverse=True)
+
     def sev(x):
-        for name, (lo, hi) in buckets.items():
-            if x >= lo and x <= hi:
+        for name, (lo, _hi) in categories_par_severite_decroissante:
+            if x >= lo:
                 return name
         return "Info"
     df["Severity"] = df["RiskScore"].apply(sev)
     return df
+
 
 
 def recommendations(df: pd.DataFrame) -> pd.DataFrame:
