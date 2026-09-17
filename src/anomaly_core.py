@@ -54,8 +54,11 @@ def robust_zscore(values: pd.Series) -> pd.Series:
         std = x.std()
         if pd.notna(std) and std > 0:
             return (x - x.mean()) / std
-        return pd.Series(0.0, index=x.index)
+        # Pourquoi .where(x.notna()) : un salarié sans salaire recevait un écart de 0, c'est-à-dire
+        # "parfaitement dans la norme". Il reste maintenant vide ("inconnu").
+        return pd.Series(0.0, index=x.index).where(x.notna())
     return 0.6745 * (x - med) / mad
+
 
 
 
@@ -73,6 +76,10 @@ def bucket_anciennete(x: object) -> str:
         val = float(x)
     except Exception:
         return "NA"
+    # Pourquoi (correction) : une ancienneté négative (ex. -3) était classée "0-2" et une valeur
+    # infinie ">20". Ces valeurs impossibles sont maintenant marquées "NA" (inconnue).
+    if not np.isfinite(val) or val < 0:
+        return "NA"
     if val <= 2:
         return "0-2"
     if val <= 5:
@@ -82,6 +89,7 @@ def bucket_anciennete(x: object) -> str:
     if val <= 20:
         return "13-20"
     return ">20"
+
 
 
 
@@ -295,6 +303,8 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     percentile = float(rule_params.get("ml_strong_signal_percentile", 0.95))
     if df["ML_AnomalyScore"].notna().sum() < 20:
         return df  # percentile peu significatif sur un trop petit échantillon
+    if df["ML_AnomalyScore"].nunique() < 2:
+        return df  # des scores identiques ne distinguent aucun profil atypique
 
     cutoff = df["ML_AnomalyScore"].quantile(percentile)
     no_rule_flag = df["Rule_Flags"].astype(str).str.len() == 0
@@ -315,6 +325,7 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         + "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
     )
     return df
+
 
 
 
@@ -442,7 +453,15 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
     # Une colonne entièrement vide (ex: MarketRatio sans --market) n'a pas de médiane : l'imputation
     # ne comble rien et laisse du NaN jusque dans l'IsolationForest. On exclut ces colonnes plutôt
     # que de les imputer dans le vide.
-    feats = [c for c in feats if pd.to_numeric(df[c], errors="coerce").notna().any()]
+    # Pourquoi (correction) : si une colonne comme Age ou Anciennete manquait, ou si aucune donnée
+    # numérique n'était exploitable (fichier vide...), le modèle d'IA plantait. On ignore les
+    # colonnes absentes et, s'il ne reste rien, on prévient et on laisse le score IA vide.
+    feats = [c for c in feats if c in df.columns
+             and pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan).notna().any()]
+    if df.empty or not feats:
+        print("[WARN] Aucune donnée numérique exploitable pour le modèle ML - score indisponible.", file=sys.stderr)
+        df["ML_AnomalyScore"] = np.nan
+        return df
     X = df[feats].copy()
     for c in feats:
         # La médiane d'imputation doit être calculée sur la série déjà convertie en numérique,
@@ -472,6 +491,7 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
         score_norm = 50.0
     df["ML_AnomalyScore"] = score_norm
     return df
+
 
 
 
