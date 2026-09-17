@@ -431,73 +431,6 @@ def cohort_stats_and_peers_nv(df, rule_params):
     return df
  
 
-def cohort_stats_and_peers(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
-    """Calcule des statistiques par cohorte et détecte les outliers entre pairs.
-
-    Les cohortes sont générées selon des niveaux d'agrégation définis dans le rulebook. Si la taille minimale
-    n'est pas atteinte à un niveau, on passe au niveau suivant (widening) jusqu'à atteindre la taille requise.
-    """
-    min_size = int(rule_params.get("cohort_min_size", 5))
-    step = 0
-    # Définir les étapes d'élargissement.  
-    # On ignore désormais le pays et on inclut l'ancienneté (via Anciennete_Bucket) dans la définition des cohortes.  
-    # La première étape utilise Grade × Job_Family × tranche d'ancienneté ;  
-    # puis on élargit à Grade × Job_Family puis uniquement au grade si la cohorte est trop petite.  
-    default_steps = [
-        "Grade|Job_Family|Anciennete_Bucket",
-        "Grade|Job_Family",
-        "Grade"
-    ]
-    steps = rule_params.get("cohort_widening_steps", default_steps)
-
-    def widen(step_idx):
-        pattern = steps[step_idx] if step_idx < len(steps) else steps[-1]
-        parts = pattern.split("|")
-        keys = []
-        for col in parts:
-            if col in df.columns:
-                keys.append(df[col].astype(str))
-            else:
-                keys.append(pd.Series(["NA"] * len(df), index=df.index))
-        return pattern, keys[0].str.cat(keys[1:], sep="|") if len(keys) > 1 else keys[0]
-
-    col_key, cohort_key = widen(step)
-    df["Cohort_Key"] = cohort_key
-    # élargir si nécessaire
-    while True:
-        sizes = df.groupby("Cohort_Key")["Matricule"].transform("count")
-        if (sizes >= min_size).all() or step >= len(steps) - 1:
-            break
-        step += 1
-        col_key, cohort_key = widen(step)
-        df["Cohort_Key"] = cohort_key
-
-    # Calcul du z-score robuste par cohorte
-    df["PeerZ"] = (
-        df.groupby("Cohort_Key", group_keys=False)["Fixe_Annuel_MAD"]
-          .apply(lambda x: robust_zscore(x))
-          .reset_index(level=0, drop=True)
-    )
-
-    z_minor = float(rule_params.get("peer_z_threshold_minor", 1.0))
-    z_major = float(rule_params.get("peer_z_threshold_major", 2.0))
-    weights = rule_params.get("severity_weights", {})
-
-    df["Peer_Flag"] = ""
-    df["Rule_Flags"] = df["Rule_Flags"].astype(str)
-
-    minor_mask = df["PeerZ"].abs() >= z_minor
-    major_mask = df["PeerZ"].abs() >= z_major
-    # z_minor: only set flags
-    df.loc[minor_mask, "Peer_Flag"] = "PEER_OUTLIER"
-    df.loc[minor_mask, "Rule_Flags"] = df["Rule_Flags"] + ";PEER_OUTLIER"
-    # z_major: increment score and update reason
-    df.loc[major_mask, "Rule_Score"] += weights.get("peer_outlier", 15)
-    df.loc[major_mask, "Reason_Principale"] = (
-        (df["Reason_Principale"].fillna("").astype(str) + " & " +
-         ("Outlier vs pairs (|Z|> ou = {:.1f})".format(z_major))).str.strip(" & ")
-    )
-    return df
 
 
 def ml_anomaly(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
@@ -705,25 +638,6 @@ def format_numeric_fields(out: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def format_numeric_fields_anc(out: pd.DataFrame) -> pd.DataFrame:
-    """Formate certaines colonnes numériques avec un séparateur de milliers pour améliorer la lisibilité.
-
-    Les champs concernés incluent les salaires (Fixe_Annuel_MAD, Min, Mid, Max, Market_Median) et le coût
-    d'ajustement. Les NaN sont laissés vides.
-    """
-    def fmt(x):
-        if pd.isna(x):
-            return ""
-        try:
-            # Arrondi à l'unité la plus proche et séparateur d'espaces pour les milliers
-            return f"{int(round(float(x))):,}".replace(",", " ")
-        except Exception:
-            return str(x)
-    num_cols = ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median", "Cout_Ajustement"]
-    for col in num_cols:
-        if col in out.columns:
-            out[col] = out[col].apply(fmt)
-    return out
 
 
 def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
