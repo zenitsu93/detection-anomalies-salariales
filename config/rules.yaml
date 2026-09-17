@@ -1,4 +1,3 @@
-# Paramètres réellement lus par le moteur.
 rules:
   severity_weights:
     out_of_band: 30
@@ -33,6 +32,8 @@ rules:
     Info:
     - 0
     - 29
+  ml_contamination: 0.05
+  ml_n_estimators: 200
 ml_features:
 - Fixe_Annuel_MAD
 - CompaRatio

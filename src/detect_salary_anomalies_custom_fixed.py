@@ -51,6 +51,7 @@ except ImportError as e:
     raise SystemExit("PyYAML est requis. Installez-le via: pip install pyyaml") from e
 
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 try:
     import openpyxl
@@ -433,30 +434,56 @@ def cohort_stats_and_peers_nv(df, rule_params):
 
 
 
-def ml_anomaly(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
+def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> pd.DataFrame:
     """Calcule un score d'anomalie non supervisé via IsolationForest.
 
     Les variables utilisées incluent désormais les nouvelles caractéristiques RH (niveau de compétences N‑1,
     positionnement 9Box et hot job) lorsque celles‑ci sont présentes. Les valeurs manquantes sont remplacées
     par la médiane de chaque colonne.
+
+    contamination (proportion d'anomalies attendue) et n_estimators étaient auparavant codés en dur
+    (0.05 / 200) alors que tous les autres seuils du script se règlent via le rulebook YAML sans
+    toucher au code. Ils sont désormais lus dans rule_params, avec ces mêmes valeurs par défaut :
+    le comportement ne change pas tant que le rulebook ne définit pas ml_contamination/ml_n_estimators.
     """
     # Liste des colonnes numériques potentielles
     base_feats = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio", "Age", "Anciennete"]
     extra_feats = [c for c in ["Competence_N1", "Positionnement_9BOX", "Hot_job"] if c in df.columns]
     feats = base_feats + extra_feats
+    # Une colonne entièrement vide (ex: MarketRatio sans --market) n'a pas de médiane : l'imputation
+    # ne comble rien et laisse du NaN jusque dans l'IsolationForest. On exclut ces colonnes plutôt
+    # que de les imputer dans le vide.
+    feats = [c for c in feats if pd.to_numeric(df[c], errors="coerce").notna().any()]
     X = df[feats].copy()
     for c in feats:
-        X[c] = pd.to_numeric(X[c], errors="coerce").fillna(X[c].median())
-    iso = IsolationForest(n_estimators=200, contamination=0.05, random_state=random_state)
-    iso.fit(X)
-    score = -iso.score_samples(X)
+        # La médiane d'imputation doit être calculée sur la série déjà convertie en numérique,
+        # sinon elle porte sur les valeurs brutes (potentiellement non numériques) de la colonne.
+        coerced = pd.to_numeric(X[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+        X[c] = coerced.fillna(coerced.median())
+
+    # Standardisation conservée dans la préparation. Aucun gain de détection n'est
+    # établi ici par cette transformation seule.
+    X_scaled = StandardScaler().fit_transform(X)
+
+    contamination = float(rule_params.get("ml_contamination", 0.05))
+    n_estimators = int(rule_params.get("ml_n_estimators", 200))
+    iso = IsolationForest(n_estimators=n_estimators, contamination=contamination, random_state=random_state)
+    iso.fit(X_scaled)
+    score = -iso.score_samples(X_scaled)
     s_min, s_max = float(score.min()), float(score.max())
     if s_max > s_min:
         score_norm = 100 * (score - s_min) / (s_max - s_min)
+        # L'element au score maximal devrait valoir exactement 100 (ratio = 1), mais l'arrondi en
+        # virgule flottante peut donner une valeur infime au-dessus (ex: 100.00000000000001) :
+        # sans consequence pratique (l'export CSV/Excel arrondit a 2 decimales), mais on la
+        # ramene dans l'intervalle annonce [0, 100] pour que ce soit vrai exactement, pas
+        # seulement "vrai a l'epsilon flottant pres".
+        score_norm = np.clip(score_norm, 0, 100)
     else:
         score_norm = 50.0
     df["ML_AnomalyScore"] = score_norm
     return df
+
 
 
 def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
@@ -696,6 +723,8 @@ def _read_csv_guess_sep(path: str) -> pd.DataFrame:
 
 
 EXPECTED_RULE_KEYS = {
+    "ml_contamination": 0.05,
+    "ml_n_estimators": 200,
     "severity_weights": {
         "out_of_band": 30,
         "compa_ratio": 20,
@@ -781,7 +810,7 @@ def main():
     df = compute_features(emp, bands, market)
     df = apply_rulebook(df, rule_params)
     df = cohort_stats_and_peers_nv(df, rule_params)
-    df = ml_anomaly(df)
+    df = ml_anomaly(df, rule_params)
     df = aggregate_risk(df, rule_params)
     df = recommendations(df)
 
