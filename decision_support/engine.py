@@ -160,7 +160,7 @@ class DecisionEngine:
         if not isinstance(payload, dict):
             raise ValueError("Le profil doit être un objet.")
         mode = payload.get("mode", "evaluate")
-        if mode != "evaluate":
+        if mode not in {"evaluate", "propose"}:
             raise ValueError("Mode inconnu.")
         job, grade = key(payload.get("job_family", "")), key(payload.get("grade", ""))
         if not job or not grade:
@@ -177,7 +177,7 @@ class DecisionEngine:
         peers = self._peers(profile, warnings)
         if band and market and math.isclose(band["Mid"], market["Median"]):
             warnings.append("Le milieu de grille et la médiane marché sont identiques : ce ne sont pas deux repères indépendants.")
-        proposal = {"low": None, "high": None, "target": None, "reason": "not_implemented", "basis": []}
+        proposal = self._proposal(band, market, peers)
         checks = self._checks(salary, band, market, peers) if salary is not None else []
         if salary is not None:
             status = "review" if any(c["status"] == "review" for c in checks) else (
@@ -197,6 +197,37 @@ class DecisionEngine:
                 "limits": "Repères de comparaison pour une revue RH. La proposition n'est ni un salaire optimal démontré ni une validation automatique.",
                 "provenance": self.provenance}
 
+    def _proposal(self, band, market, peers):
+        if not band:
+            return {"low": None, "high": None, "target": None, "reason": "missing_band", "basis": []}
+        low = max(band["Min"], band["Mid"] * self.rules["compa_ratio_low"])
+        high = min(band["Max"], band["Mid"] * self.rules["compa_ratio_high"])
+        basis = ["Grille interne et seuils CompaRatio"]
+        if market:
+            low = max(low, market["Median"] * self.rules["market_low"])
+            high = min(high, market["Median"] * self.rules["market_high"])
+            basis.append("Tolérances marché")
+        if peers["available"]:
+            low, high = max(low, peers["q25"]), min(high, peers["q75"])
+            basis.append("Moitié centrale des salaires des pairs (P25–P75)")
+            if peers["scale"] > 0:
+                # Le seuil d'alerte est inclusif : la proposition doit rester à l'intérieur.
+                margin = (self.peer_threshold - 1e-9) * peers["scale"]
+                low = max(low, peers["center"] - margin)
+                high = min(high, peers["center"] + margin)
+                basis.append("Absence d'alerte statistique entre pairs")
+            else:
+                low, high = max(low, peers["median"]), min(high, peers["median"])
+        # Montants saisissables avec deux décimales ; arrondir les bornes vers l'intérieur.
+        low = math.ceil((low - 1e-10) * 100) / 100
+        high = math.floor((high + 1e-10) * 100) / 100
+        if low > high:
+            return {"low": None, "high": None, "target": None, "reason": "conflict", "basis": basis}
+        target = peers["median"] if peers["available"] else band["Mid"]
+        target = min(high, max(low, round(target, 2)))
+        if any(c["status"] == "review" for c in self._checks(target, band, market, peers)):
+            return {"low": None, "high": None, "target": None, "reason": "conflict", "basis": basis}
+        return {"low": low, "high": high, "target": target, "reason": "available", "basis": basis}
 
     def _checks(self, salary, band, market, peers):
         checks = []
