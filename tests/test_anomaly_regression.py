@@ -16,6 +16,7 @@ import pandas as pd
 
 from anomaly_regression import (
     regression_anomaly,
+    aggregate_risk_with_regression,
 )
 
 
@@ -131,4 +132,18 @@ def test_une_modalite_tres_rare_est_regroupee_sans_faire_planter_patsy():
 
 
 
+
+
+def test_aggregate_risk_with_regression_combine_bien_les_3_signaux():
+    """RiskScore doit etre la moyenne ponderee explicite des 3 signaux (regles, IsolationForest,
+    regression), avec les poids lus dans le rulebook."""
+    df = pd.DataFrame({
+        "Rule_Score": [40.0, 0.0],
+        "ML_AnomalyScore": [50.0, 10.0],
+        "Reg_AnomalyScore": [60.0, 5.0],
+    })
+    rule_params = {"rule_weight": 0.5, "ml_weight": 0.3, "reg_weight": 0.2}
+    resultat = aggregate_risk_with_regression(df, rule_params)
+    attendu_ligne_0 = 0.5 * 40.0 + 0.3 * 50.0 + 0.2 * 60.0
+    assert resultat["RiskScore"].iloc[0] == attendu_ligne_0
 
