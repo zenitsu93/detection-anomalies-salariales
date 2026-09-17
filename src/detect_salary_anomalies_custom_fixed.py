@@ -65,6 +65,7 @@ from anomaly_io import (
     format_numeric_fields,
     to_excel_colored,
 )
+from generate_dashboard_html import generate_dashboard
 
 
 def main():
@@ -76,8 +77,11 @@ def main():
     ap.add_argument("--output", required=True, help="Fichier CSV de sortie (anomalies)")
     ap.add_argument("--excel-output", required=False, default=None, help="Fichier Excel de sortie (optionnel)")
     ap.add_argument("--gender-output", required=False, default=None, help="Fichier CSV de synthèse des écarts par sexe")
+    ap.add_argument("--html-output", required=False, default=None,
+                     help="Fichier HTML du dashboard interactif (par défaut: dashboard_anomalies.html à côté de --output)")
+    ap.add_argument("--no-html", action="store_true", help="Ne pas générer le dashboard HTML")
     args = ap.parse_args()
-    for output_path in (args.output, args.excel_output, args.gender_output):
+    for output_path in (args.output, args.excel_output, args.gender_output, args.html_output):
         if output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -162,6 +166,12 @@ def main():
         gender_df.to_csv(args.gender_output, index=False, encoding="utf-8")
         print(f"[OK] Export Gender Gap: {args.gender_output}")
 
+    # Dashboard HTML (graphiques interactifs) : lit directement les résultats déjà calculés
+    # ci-dessus (out_numeric, gender_df), sans repasser par le disque.
+    if not args.no_html:
+        html_path = args.html_output or str(Path(args.output).with_name("dashboard_anomalies.html"))
+        generate_dashboard(df=out_numeric, gg=gender_df, out_html=html_path)
+        print(f"[OK] Export Dashboard HTML: {html_path}")
 
 if __name__ == "__main__":
     main()
