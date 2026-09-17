@@ -51,6 +51,36 @@ def test_recommandations_suivent_les_seuils_configures():
     assert result.Cout_Ajustement.tolist() == [12., 0.]
 
 
+@pytest.mark.parametrize("salary", [0., -100., np.inf])
+def test_regression_exclut_un_salaire_inexploitable_sans_perdre_les_autres(salary):
+    df = jeu_de_donnees()
+    df.loc[0, "Fixe_Annuel_MAD"] = salary
+    result, model = regression_anomaly(df, {})
+    assert model is not None
+    assert pd.isna(result.loc[0, "Reg_AnomalyScore"])
+    assert np.isfinite(result.loc[1:, "Reg_AnomalyScore"]).all()
+    assert model.nobs == len(df) - 1
+
+
+def test_rapport_hf_ne_compare_pas_hommes_et_categorie_autre():
+    df = jeu_de_donnees()
+    df["Sexe"] = "M"
+    df.loc[:4, "Sexe"] = "F"
+    _, model = regression_anomaly(df, {})
+    assert model is not None
+    assert regression_gender_gap_report(model, {})["available"] is False
+
+
+def test_rapport_hf_selectionne_m_meme_si_une_autre_modalite_existe():
+    df = jeu_de_donnees(n=400, coef_sexe_log=np.log(1.1))
+    df.loc[:29, "Sexe"] = "Autre"
+    _, model = regression_anomaly(df, {})
+    report = regression_gender_gap_report(model, {})
+    expected = model.params['C(Sexe, Treatment(reference="F"))[T.M]']
+    assert report["available"] is True
+    assert report["coef_log"] == pytest.approx(expected)
+
+
 def test_tableau_affiche_les_libelles_comme_du_texte():
     result = table_html([{"Metier": "<Audit & Risques>"}])
     assert "&lt;Audit &amp; Risques&gt;" in result
@@ -89,4 +119,3 @@ def test_excel_conserve_les_nombres_les_totaux_et_l_ordre_des_priorites(tmp_path
     assert list(wb["Budget_Synthese"].values)[-1][-1] == pytest.approx(1339.56)
     assert wb["Statistics"]._charts[0].series[0].val.numRef.f.endswith("$B$3:$B$6")
     wb.close()
-
