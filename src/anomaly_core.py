@@ -2,64 +2,30 @@
 # -*- coding: utf-8 -*-
 
 """
-Script de détection des incohérences de rémunération fixe (version personnalisée).
+Logique de detection des incoherences de remuneration fixe.
 
-Cette version est adaptée pour les besoins spécifiques du client :
+Ce fichier regroupe tout ce qui touche au calcul lui-meme : les ratios internes/marche, les
+regles deterministes du rulebook, les statistiques de cohorte et le z-score robuste entre pairs,
+le score d'anomalie par intelligence artificielle (IsolationForest), l'agregation en un score de
+risque global et les recommandations d'ajustement.
 
-- Suppression de la colonne « Ville » des fichiers et de la logique de jointure. Le rattachement géographique se fait
-  désormais au niveau du pays uniquement (ou s'appuie sur les seules colonnes grade/famille de poste si aucune
-  information géographique pertinente n'est disponible).
-- Suppression de tout doublon de colonne « Matricule » présent dans le fichier des employés. Seule la première
-  occurrence est conservée.
-- Intégration de nouveaux champs RH (niveau de compétences N‑1, positionnement 9Box et indicateur hot job) dans
-  l'analyse et dans la détection d'anomalies. Ces variables sont prises en compte par le modèle statistique.
-- Possibilité de générer un fichier d'analyse des écarts de rémunération par sexe (optionnel).
-- Mise en forme des colonnes numériques avec séparateur de milliers pour améliorer la lisibilité du fichier de sortie.
+Rien ici ne lit un fichier CSV ni n'ecrit de fichier Excel : cette partie se trouve dans
+anomaly_io.py. Ce fichier est importe par detect_salary_anomalies_custom_fixed.py, qui reste le
+point d'entree en ligne de commande.
 
-En entrée, les fichiers CSV doivent être encodés en cp1252 et utiliser un séparateur point‑virgule (« ; »).
-Le fichier de règles YAML doit contenir les paramètres de détection (poids, seuils, etc.).
-
-Utilisation :
-
-```
-py detect_salary_anomalies_custom.py --employees employes.csv --bands bands.csv --market market.csv --rulebook rulebook.yaml --output anomalies.csv [--excel-output anomalies.xlsx] [--gender-output gender_gap_analysis.csv]
-
-python detect_salary_anomalies_custom.py \
-  --employees chemin/vers/employes.csv \
-  --bands chemin/vers/bands.csv \
-  --market chemin/vers/market.csv \
-  --rulebook chemin/vers/rulebook.yaml \
-  --output chemin/vers/anomalies.csv \
-  [--excel-output chemin/vers/anomalies.xlsx] \
-  [--gender-output chemin/vers/gender_gap_analysis.csv]
-```
-
-La structure des colonnes d'entrée est décrite dans les fichiers « STRUCTURE EMP.csv », « STRUCTURE BANDS.csv »
-et « STRUCTURE MARKET.csv » fournis par le client.
-
+Ce decoupage en plusieurs fichiers est une reorganisation du code pour le rendre plus facile a
+relire et a maintenir : il ne change rien au comportement du script (memes calculs, memes
+resultats). Voir corrections.txt et explication_simple.txt pour l'historique des corrections
+apportees au fil des relectures precedentes.
 """
 
-import argparse
 import sys
-from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
-try:
-    import yaml
-except ImportError as e:
-    raise SystemExit("PyYAML est requis. Installez-le via: pip install pyyaml") from e
-
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
-
-try:
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
-    from openpyxl.formatting.rule import ColorScaleRule
-
-except ImportError as e:
-    raise SystemExit("openpyxl est requis pour l'export Excel. Installez-le via: pip install openpyxl") from e
 
 # -----------------------------------------------------------------------------
 # Fonctions utilitaires
@@ -92,12 +58,7 @@ def robust_zscore(values: pd.Series) -> pd.Series:
     return 0.6745 * (x - med) / mad
 
 
-# -----------------------------------------------------------------------------
-# Anciennete bucketing
-#
-# Pour pouvoir intégrer l'ancienneté dans la définition des cohortes, on crée
-# une fonction qui transforme une valeur numérique d'ancienneté en une tranche
-# textuelle. Les bornes proposées sont 0–2 ans, 3–5 ans, 6–10 ans et >10 ans.
+
 def bucket_anciennete(x: object) -> str:
     """Regroupe l'ancienneté en tranches standardisées.
 
@@ -122,15 +83,6 @@ def bucket_anciennete(x: object) -> str:
         return "13-20"
     return ">20"
 
-def remove_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Supprime les colonnes dupliquées en ne conservant que la première occurrence.
-
-    Lorsque pandas lit un CSV avec des en-têtes dupliqués, il crée des noms identiques. Cette fonction
-    supprime les duplicats afin d'éviter d'avoir deux colonnes « Matricule » ou similaires.
-    """
-    if df.columns.duplicated().any():
-        return df.loc[:, ~df.columns.duplicated()]
-    return df
 
 
 def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.DataFrame) -> pd.DataFrame:
@@ -327,6 +279,49 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df["Reason_Principale"] = df.apply(reason, axis=1)
     return df
 
+
+
+
+
+def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+    """Fait remonter un signal ML très fort dans Rule_Score même quand aucune règle déterministe
+    ne s'est déclenchée, pour les cas où le salaire est conforme à la bande/aux pairs mais où
+    l'IsolationForest détecte une combinaison de facteurs inhabituelle (ex: âge/ancienneté très
+    atypique pour le grade). Sans ce correctif, un tel cas peut atteindre un score ML proche du
+    maximum (mesuré à 89/100 en test) et rester malgré tout classé "Info" une fois agrégé avec
+    rule_weight/ml_weight (0.7/0.3 par défaut)
+
+    Le seuil est un percentile du score ML DE CE RUN (et non une valeur absolue) car
+    ML_AnomalyScore est renormalisé en 0-100 à chaque exécution (min-max sur le lot traité) : un
+    seuil absolu n'aurait pas le même sens d'un jeu de données à l'autre.
+    """
+    weights = rule_params.get("severity_weights", {})
+    percentile = float(rule_params.get("ml_strong_signal_percentile", 0.95))
+    if df["ML_AnomalyScore"].notna().sum() < 20:
+        return df  # percentile peu significatif sur un trop petit échantillon
+
+    cutoff = df["ML_AnomalyScore"].quantile(percentile)
+    no_rule_flag = df["Rule_Flags"].astype(str).str.len() == 0
+    strong_ml = (df["ML_AnomalyScore"] >= cutoff) & no_rule_flag
+
+    if not strong_ml.any():
+        return df
+
+    df.loc[strong_ml, "Rule_Flags"] = df.loc[strong_ml, "Rule_Flags"].astype(str) + ";ML_STRONG_SIGNAL"
+    df.loc[strong_ml, "Rule_Score"] = (
+        df.loc[strong_ml, "Rule_Score"].fillna(0) + weights.get("ml_strong_signal", 15)
+    )
+    has_reason = df["Reason_Principale"].astype(str).str.len() > 0
+    sep = pd.Series(" & ", index=df.index).where(has_reason, "")
+    df.loc[strong_ml, "Reason_Principale"] = (
+        df.loc[strong_ml, "Reason_Principale"].astype(str)
+        + sep[strong_ml]
+        + "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
+    )
+    return df
+
+
+
 def cohort_stats_and_peers_nv(df, rule_params):
     """Calcule les statistiques de cohorte pour le calcul du z-score robuste et la détection des anomalies par cohorte.
 
@@ -429,8 +424,6 @@ def cohort_stats_and_peers_nv(df, rule_params):
     )
 
     return df
-
- 
 
 
 
@@ -562,123 +555,6 @@ def recommendations(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def to_excel_colored(df: pd.DataFrame, path_xlsx: str) -> None:
-    """Exporte le DataFrame complet dans un fichier Excel avec onglets, filtres et coloration du RiskScore.
-
-    Des feuilles séparées sont créées pour chaque niveau de sévérité, ainsi qu'un onglet de synthèse budgétaire.
-    """
-    import openpyxl
-    from openpyxl.chart import PieChart, Reference
-    path_xlsx = Path(path_xlsx)
-    with pd.ExcelWriter(path_xlsx, engine="openpyxl") as xw:
-        df_sorted = df.sort_values(["Severity", "RiskScore"], ascending=[True, False])
-        df_sorted.to_excel(xw, sheet_name="All", index=False)
-        for sev in ["Critical", "Major", "Minor", "Info"]:
-            sub = df[df["Severity"] == sev].sort_values("RiskScore", ascending=False)
-            if sub.empty:
-                sub = df.head(0).copy()
-            sub.to_excel(xw, sheet_name=sev, index=False)
-        # Synthèse budgétaire (Cout_Ajustement par Entite_N1 et Severity)
-
-        if "Cout_Ajustement" in df.columns:
-            grp_cols = [c for c in ["Severity", "Entite_N1"] if c in df.columns]
-            import locale
-            try:
-                locale.setlocale(locale.LC_ALL, '')
-            except Exception:
-                locale.setlocale(locale.LC_ALL, locale.getdefaultlocale()[0])
-            df["Cout_Ajustement_num"] = pd.to_numeric(df["Cout_Ajustement"].str.replace(" ", ""), errors="coerce")
-            synth = (df.groupby(grp_cols, dropna=False)["Cout_Ajustement_num"]
-                     .sum()
-                     .reset_index()
-                     .sort_values(["Severity", "Cout_Ajustement_num"], ascending=[True, False]))
-            # Add total row
-            total = synth["Cout_Ajustement_num"].sum()
-            if len(grp_cols) == 2:
-                synth.loc[len(synth)] = ["TOTAL", "", total]
-            else:
-                synth.loc[len(synth)] = ["TOTAL", total]
-            # Format numbers with locale
-            if "Cout_Ajustement_num" in synth.columns:
-                synth["Cout_Ajustement_num"] = synth["Cout_Ajustement_num"].apply(lambda x: locale.format_string('%.2f', x, grouping=True) if pd.notna(x) else "")
-                synth = synth.rename(columns={"Cout_Ajustement_num": "Cout_Ajustement"})
-            synth.to_excel(xw, sheet_name="Budget_Synthese", index=False)
-
-        # Statistiques globales
-        stats = {
-            "Total anomalies": len(df),
-            "Critical": (df["Severity"] == "Critical").sum(),
-            "Major": (df["Severity"] == "Major").sum(),
-            "Minor": (df["Severity"] == "Minor").sum(),
-            "Info": (df["Severity"] == "Info").sum(),
-            "Total adjustment cost": df["Cout_Ajustement"].apply(pd.to_numeric, errors="coerce").sum()
-        }
-        stats_df = pd.DataFrame(list(stats.items()), columns=["Metric", "Value"])
-        stats_df.to_excel(xw, sheet_name="Statistics", index=False)
-
-    wb = openpyxl.load_workbook(path_xlsx)
-    # Formatting and charts
-    for ws_name in ["All", "Critical", "Major", "Minor", "Info"]:
-        if ws_name not in wb.sheetnames:
-            continue
-        ws = wb[ws_name]
-        ws.freeze_panes = "A2"
-        max_col = ws.max_column
-        max_row = ws.max_row
-        ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(max_col)}{max_row}"
-        # Entêtes en gras et couleur de fond
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill(start_color="FFF2F2F2", end_color="FFF2F2F2", fill_type="solid")
-            cell.alignment = Alignment(vertical="center")
-        header = [c.value for c in ws[1]]
-        # Coloration conditionnelle sur RiskScore
-        if "RiskScore" in header:
-            col_idx = header.index("RiskScore") + 1
-            rng = openpyxl.utils.get_column_letter(col_idx) + "2:" + openpyxl.utils.get_column_letter(col_idx) + str(max_row)
-            rule = ColorScaleRule(start_type="num", start_value=0, start_color="63BE7B",
-                                  mid_type="num", mid_value=50, mid_color="FFEB84",
-                                  end_type="num", end_value=100, end_color="F8696B")
-            ws.conditional_formatting.add(rng, rule)
-        # Ajuster la largeur des colonnes
-        for i, name in enumerate(header, start=1):
-            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = min(40, max(12, len(str(name)) + 2))
-
-    # Add only severity breakdown pie chart to Statistics sheet
-    if "Statistics" in wb.sheetnames:
-        ws = wb["Statistics"]
-        pie = PieChart()
-        pie.title = "Severity Breakdown"
-        pie_data = Reference(ws, min_col=2, min_row=2, max_row=5)
-        pie_labels = Reference(ws, min_col=1, min_row=2, max_row=5)
-        pie.add_data(pie_data, titles_from_data=False)
-        pie.set_categories(pie_labels)
-        ws.add_chart(pie, "D2")
-    wb.save(path_xlsx)
-
-
-
-
-def format_numeric_fields(out: pd.DataFrame) -> pd.DataFrame:
-    """Formate les colonnes numériques selon la locale utilisateur (Windows)."""
-    import locale
-    try:
-        locale.setlocale(locale.LC_ALL, '')
-    except Exception:
-        locale.setlocale(locale.LC_ALL, locale.getdefaultlocale()[0])
-    def fmt(x):
-        if pd.isna(x):
-            return ""
-        try:
-            return locale.format_string('%.2f', float(x), grouping=True)
-        except Exception:
-            return str(x)
-    num_cols = ["Fixe_Annuel_MAD", "Min", "Mid", "Max", "Market_Median", "Cout_Ajustement"]
-    for col in num_cols:
-        if col in out.columns:
-            out[col] = out[col].apply(fmt)
-    return out
-
 
 
 
@@ -711,30 +587,6 @@ def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
     med = med.reset_index()
     return med
 
-
-def _read_csv_guess_sep(path: str) -> pd.DataFrame:
-    """Tente de lire un fichier CSV en détectant automatiquement le séparateur.
-
-    On tente successivement la virgule puis le point-virgule. Si le résultat
-    comporte plus d'une colonne, on le retourne. À défaut, pandas détecte
-    automatiquement le séparateur.
-
-    Args:
-        path: chemin vers le fichier CSV.
-
-    Returns:
-        DataFrame lu depuis le CSV.
-    """
-    for sep in [",", ";"]:
-        try:
-            df = pd.read_csv(path, sep=sep, encoding="cp1252", engine="python")
-            # S'il y a plus d'une colonne, on considère que le séparateur est correct
-            if df.shape[1] > 1:
-                return df
-        except Exception:
-            continue
-    # Dernier recours : détecter automatiquement
-    return pd.read_csv(path, sep=None, encoding="cp1252", engine="python")
 
 
 EXPECTED_RULE_KEYS = {
@@ -787,123 +639,3 @@ def validate_rule_params(rule_params: dict) -> None:
 
 
 
-def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
-    """Fait remonter un signal ML très fort dans Rule_Score même quand aucune règle déterministe
-    ne s'est déclenchée, pour les cas où le salaire est conforme à la bande/aux pairs mais où
-    l'IsolationForest détecte une combinaison de facteurs inhabituelle (ex: âge/ancienneté très
-    atypique pour le grade). Sans ce correctif, un tel cas peut atteindre un score ML proche du
-    maximum (mesuré à 89/100 en test) et rester malgré tout classé "Info" une fois agrégé avec
-    rule_weight/ml_weight (0.7/0.3 par défaut)
-
-    Le seuil est un percentile du score ML DE CE RUN (et non une valeur absolue) car
-    ML_AnomalyScore est renormalisé en 0-100 à chaque exécution (min-max sur le lot traité) : un
-    seuil absolu n'aurait pas le même sens d'un jeu de données à l'autre.
-    """
-    weights = rule_params.get("severity_weights", {})
-    percentile = float(rule_params.get("ml_strong_signal_percentile", 0.95))
-    if df["ML_AnomalyScore"].notna().sum() < 20:
-        return df  # percentile peu significatif sur un trop petit échantillon
-
-    cutoff = df["ML_AnomalyScore"].quantile(percentile)
-    no_rule_flag = df["Rule_Flags"].astype(str).str.len() == 0
-    strong_ml = (df["ML_AnomalyScore"] >= cutoff) & no_rule_flag
-
-    if not strong_ml.any():
-        return df
-
-    df.loc[strong_ml, "Rule_Flags"] = df.loc[strong_ml, "Rule_Flags"].astype(str) + ";ML_STRONG_SIGNAL"
-    df.loc[strong_ml, "Rule_Score"] = (
-        df.loc[strong_ml, "Rule_Score"].fillna(0) + weights.get("ml_strong_signal", 15)
-    )
-    has_reason = df["Reason_Principale"].astype(str).str.len() > 0
-    sep = pd.Series(" & ", index=df.index).where(has_reason, "")
-    df.loc[strong_ml, "Reason_Principale"] = (
-        df.loc[strong_ml, "Reason_Principale"].astype(str)
-        + sep[strong_ml]
-        + "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
-    )
-    return df
-
-
-
-def main():
-    ap = argparse.ArgumentParser(description="Detection des incohérences de rémunération fixe (custom).")
-    ap.add_argument("--employees", required=True, help="Fichier CSV des employés (cp1252, séparateur ';')")
-    ap.add_argument("--bands", required=True, help="Fichier CSV des fourchettes internes")
-    ap.add_argument("--market", required=False, default=None, help="Fichier CSV du benchmark marché")
-    ap.add_argument("--rulebook", required=True, help="Fichier YAML décrivant les règles et paramètres")
-    ap.add_argument("--output", required=True, help="Fichier CSV de sortie (anomalies)")
-    ap.add_argument("--excel-output", required=False, default=None, help="Fichier Excel de sortie (optionnel)")
-    ap.add_argument("--gender-output", required=False, default=None, help="Fichier CSV de synthèse des écarts par sexe")
-    args = ap.parse_args()
-
-    # Chargement des données
-    # Chargement avec détection du séparateur
-    emp = _read_csv_guess_sep(args.employees)
-    bands = _read_csv_guess_sep(args.bands)
-    market = _read_csv_guess_sep(args.market) if args.market else None
-
-    # Suppression des colonnes dupliquées sur les employés (ex: double colonne Matricule)
-    emp = remove_duplicate_columns(emp)
-    # Pourquoi (correction) : l'ancienne étape de renommage des colonnes (standardize_all) utilisait
-    # des dictionnaires désactivés (placés entre guillemets), ce qui faisait planter le script. Elle a
-    # été retirée : les fichiers utilisent déjà les bons noms de colonnes. À la place, on retire
-    # seulement la colonne Pays, identique pour tout le monde.
-    # Le périmètre couvre un seul pays : aucune clé géographique supplémentaire.
-    for table in (emp, bands, market):
-        if table is not None and "Pays" in table.columns:
-            table.drop(columns=["Pays"], inplace=True)
-
-    # Lecture du rulebook
-    with open(args.rulebook, "r", encoding="utf-8") as f:
-        rulebook = yaml.safe_load(f) or {}
-    rule_params = rulebook.get("rules", {})
-    # Pourquoi : avant, un paramètre absent ou mal nommé dans le fichier de règles était remplacé
-    # en silence par une valeur par défaut. On affiche maintenant un avertissement pour chacun.
-    validate_rule_params(rule_params)
-
-    # Calcul des métriques et des scores
-    df = compute_features(emp, bands, market)
-    df = apply_rulebook(df, rule_params)
-    df = cohort_stats_and_peers_nv(df, rule_params)
-    df = ml_anomaly(df, rule_params)
-    df = apply_ml_strong_signal(df, rule_params)
-    df = aggregate_risk(df, rule_params)
-    df = recommendations(df)
-
-    # Construction de la sortie organisée (front_cols) sans la colonne Ville (supprimée)
-    front_cols = [c for c in [
-        "Matricule", "Nom", "Entite_N1", "Entite_N2", "Pays", "Job_Family", "Job_Title", "Grade",
-        "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration", "Market_Median", "MarketRatio",
-        "PeerZ", "Rule_Flags", "Rule_Score", "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key",
-        "Reason_Principale", "Reco", "Cout_Ajustement"
-    ] if c in df.columns]
-    other_cols = [c for c in df.columns if c not in front_cols]
-    out = df[front_cols + other_cols].copy()
-
-    # Mise en forme des champs numériques (séparateur de milliers)
-    out = format_numeric_fields(out)
-
-    # Export CSV
-    out.to_csv(args.output, index=False, encoding="utf-8")
-    print(f"[OK] Export CSV: {args.output} - {len(out)} lignes")
-
-    # Export Excel si demandé
-    if args.excel_output:
-        to_excel_colored(out, args.excel_output)
-        print(f"[OK] Export Excel: {args.excel_output}")
-
-    # Analyse des écarts par sexe si demandé
-    if args.gender_output:
-        try:
-            gender_df = gender_gap_analysis(df)
-            # Mise en forme de la colonne du ratio M/F avec deux décimales
-            if "M_div_F" in gender_df.columns:
-                gender_df["M_div_F"] = gender_df["M_div_F"].apply(lambda x: round(x, 2) if pd.notna(x) else np.nan)
-            gender_df.to_csv(args.gender_output, index=False, encoding="utf-8")
-            print(f"[OK] Export Gender Gap: {args.gender_output}")
-        except Exception as e:
-            print(f"[WARN] Impossible de réaliser l'analyse des écarts par sexe: {e}", file=sys.stderr)
-
-if __name__ == "__main__":
-    main()
