@@ -1,0 +1,3 @@
+# Même unité que les CSV : aucune conversion implicite.
+salary_unit: "kMAD / an"
+# Les seuils métier et l'effectif minimal sont lus dans config/rules.yaml.
