@@ -566,6 +566,20 @@ def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
     # S'assurer de disposer des colonnes nécessaires
     if "Sexe" not in df.columns:
         raise ValueError("La colonne Sexe est requise pour réaliser l'analyse des écarts de rémunération par sexe.")
+
+    # Le ratio M_div_F calculé plus bas ne reconnaît que les codes exacts "M" et "F" (cohérent avec
+    # le reste du script, qui n'effectue aucune normalisation automatique des colonnes). Si la
+    # colonne Sexe utilise d'autres codes (ex: "Homme"/"Femme", minuscules, espaces...), les
+    # médianes par valeur sont quand même calculées mais la colonne M_div_F n'est jamais créée, sans
+    # aucun message : on avertit explicitement ici plutôt que de laisser le ratio disparaître en silence.
+    unexpected_codes = sorted(set(df["Sexe"].dropna().astype(str).unique()) - {"M", "F"})
+    if unexpected_codes:
+        print(
+            f"[WARN] Colonne 'Sexe' : valeur(s) inattendue(s) {unexpected_codes} (seuls les codes "
+            "'M' et 'F' sont reconnus) - le ratio M_div_F ne sera pas calculé pour ces lignes.",
+            file=sys.stderr,
+        )
+
     group_cols = []
     if "Job_Family" in df.columns:
         group_cols.append("Job_Family")
@@ -584,6 +598,7 @@ def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
         med["M_div_F"] = np.nan
     med = med.reset_index()
     return med
+
 
 
 

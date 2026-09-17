@@ -77,25 +77,44 @@ def main():
     ap.add_argument("--excel-output", required=False, default=None, help="Fichier Excel de sortie (optionnel)")
     ap.add_argument("--gender-output", required=False, default=None, help="Fichier CSV de synthèse des écarts par sexe")
     args = ap.parse_args()
+    # Pourquoi (correction) : si le dossier de sortie n'existait pas (ex. output/ absent juste
+    # après un clone), le script plantait à la toute fin, au moment d'écrire les fichiers.
+    # On crée donc les dossiers manquants dès le départ.
+    for output_path in (args.output, args.excel_output, args.gender_output):
+        if output_path:
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # Chargement des données
-    # Chargement avec détection du séparateur
+    # Chargement des données avec détection du séparateur
     emp = read_csv_guess_sep(args.employees)
     bands = read_csv_guess_sep(args.bands)
     market = read_csv_guess_sep(args.market) if args.market else None
 
     # Suppression des colonnes dupliquées sur les employés (ex: double colonne Matricule)
     emp = remove_duplicate_columns(emp)
+
     # Pourquoi (correction) : l'ancienne étape de renommage des colonnes (standardize_all) utilisait
     # des dictionnaires désactivés (placés entre guillemets), ce qui faisait planter le script. Elle a
     # été retirée : les fichiers utilisent déjà les bons noms de colonnes. À la place, on retire
     # seulement la colonne Pays, identique pour tout le monde.
-    # Le périmètre couvre un seul pays : aucune clé géographique supplémentaire.
-    for table in (emp, bands, market):
-        if table is not None and "Pays" in table.columns:
-            table.drop(columns=["Pays"], inplace=True)
+    # Le pays est fixe pour ce client : la colonne n'apporte aucune information et est retirée
+    for _df in (emp, bands, market):
+        if _df is not None and "Pays" in _df.columns:
+            _df.drop(columns=["Pays"], inplace=True)
 
-    # Lecture du rulebook
+    # remove_duplicate_columns ne traite que les colonnes dupliquées, pas les lignes : un même
+    # Matricule présent deux fois (saisie en double, export dupliqué...) passe silencieusement,
+    # et compte deux fois dans les cohortes, l'analyse de genre et les totaux budgétaires.
+    if "Matricule" in emp.columns:
+        dup_matricule = emp["Matricule"].duplicated(keep=False)
+        if dup_matricule.any():
+            n_dup = int(emp["Matricule"].duplicated(keep="first").sum())
+            print(
+                f"[WARN] {n_dup} Matricule(s) en double dans le fichier employés - ces lignes sont "
+                "conservées telles quelles (comptées plusieurs fois dans les cohortes et les totaux).",
+                file=sys.stderr,
+            )
+
+    # Lecture et validation du rulebook
     with open(args.rulebook, "r", encoding="utf-8") as f:
         rulebook = yaml.safe_load(f) or {}
     rule_params = rulebook.get("rules", {})
@@ -103,7 +122,7 @@ def main():
     # en silence par une valeur par défaut. On affiche maintenant un avertissement pour chacun.
     validate_rule_params(rule_params)
 
-    # Calcul des métriques et des scores
+    # Calcul des métriques et des scores (logique dans anomaly_core.py)
     df = compute_features(emp, bands, market)
     df = apply_rulebook(df, rule_params)
     df = cohort_stats_and_peers_nv(df, rule_params)
@@ -112,40 +131,55 @@ def main():
     df = aggregate_risk(df, rule_params)
     df = recommendations(df)
 
-    # Construction de la sortie organisée (front_cols) sans la colonne Ville (supprimée)
+    # Les flags accumulés commencent chacun par ";" (";OUT_OF_BAND;COMPA_RATIO...") : on retire
+    # le séparateur de tête une fois tous les flags posés.
+    df["Rule_Flags"] = df["Rule_Flags"].astype(str).str.lstrip(";")
+
+    # Pourquoi "Pays" n'est plus dans la liste ci-dessous : la colonne est supprimée plus haut
+    # (pays unique), la garder ici n'avait plus de sens.
+    # Construction de la sortie organisée (front_cols)
     front_cols = [c for c in [
-        "Matricule", "Nom", "Entite_N1", "Entite_N2", "Pays", "Job_Family", "Job_Title", "Grade",
+        "Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Grade",
         "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration", "Market_Median", "MarketRatio",
         "PeerZ", "Rule_Flags", "Rule_Score", "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key",
         "Reason_Principale", "Reco", "Cout_Ajustement"
     ] if c in df.columns]
     other_cols = [c for c in df.columns if c not in front_cols]
-    out = df[front_cols + other_cols].copy()
+    out_numeric = df[front_cols + other_cols].copy()
 
-    # Mise en forme des champs numériques (séparateur de milliers)
-    out = format_numeric_fields(out)
+    # Pourquoi deux tableaux (out_numeric / out_csv) : avant, la mise en forme des montants
+    # (format_numeric_fields) était appliquée à un seul tableau "out", réutilisé ensuite pour
+    # l'Excel. Les montants arrivaient donc dans Excel sous forme de texte ("12 345,00") :
+    # impossible de les additionner, trier ou filtrer, et la synthèse budgétaire ne pouvait pas
+    # les totaliser. Désormais le CSV reçoit une copie formatée, et l'Excel garde les vrais nombres.
+    # Export CSV : mise en forme lisible (séparateur de milliers, texte) sur une copie dédiée.
+    out_csv = format_numeric_fields(out_numeric.copy())
+    out_csv.to_csv(args.output, index=False, encoding="utf-8")
+    print(f"[OK] Export CSV: {args.output} - {len(out_csv)} lignes")
 
-    # Export CSV
-    out.to_csv(args.output, index=False, encoding="utf-8")
-    print(f"[OK] Export CSV: {args.output} - {len(out)} lignes")
-
-    # Export Excel si demandé
+    # Export Excel si demandé : à partir des valeurs numériques d'origine (pas de texte formaté),
+    # la mise en forme "milliers" est appliquée au niveau des cellules Excel.
     if args.excel_output:
-        to_excel_colored(out, args.excel_output)
+        to_excel_colored(out_numeric, args.excel_output)
         print(f"[OK] Export Excel: {args.excel_output}")
 
-    # Analyse des écarts par sexe si demandé
-    if args.gender_output:
-        try:
-            gender_df = gender_gap_analysis(df)
-            # Mise en forme de la colonne du ratio M/F avec deux décimales
-            if "M_div_F" in gender_df.columns:
-                gender_df["M_div_F"] = gender_df["M_div_F"].apply(lambda x: round(x, 2) if pd.notna(x) else np.nan)
-            gender_df.to_csv(args.gender_output, index=False, encoding="utf-8")
-            print(f"[OK] Export Gender Gap: {args.gender_output}")
-        except Exception as e:
-            print(f"[WARN] Impossible de réaliser l'analyse des écarts par sexe: {e}", file=sys.stderr)
+    # Analyse des écarts par sexe : toujours calculée (même sans --gender-output), car le
+    # dashboard HTML en a besoin pour son graphique des écarts hommes/femmes.
+    try:
+        gender_df = gender_gap_analysis(df)
+        # Mise en forme de la colonne du ratio M/F avec deux décimales
+        if "M_div_F" in gender_df.columns:
+            gender_df["M_div_F"] = gender_df["M_div_F"].apply(lambda x: round(x, 2) if pd.notna(x) else np.nan)
+    except Exception as e:
+        print(f"[WARN] Impossible de réaliser l'analyse des écarts par sexe: {e}", file=sys.stderr)
+        # Pourquoi ce tableau vide : gender_df est maintenant utilisé après ce bloc (export,
+        # dashboard). En cas d'échec de l'analyse, on le remplace par un tableau vide avec les
+        # bonnes colonnes pour que la suite du script ne plante pas.
+        gender_df = pd.DataFrame(columns=["Job_Family", "Grade", "Median_F", "Median_M", "M_div_F"])
 
+    if args.gender_output:
+        gender_df.to_csv(args.gender_output, index=False, encoding="utf-8")
+        print(f"[OK] Export Gender Gap: {args.gender_output}")
 
 
 if __name__ == "__main__":
