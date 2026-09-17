@@ -234,7 +234,6 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
     df["Rule_Flags"] = ""
     df["Rule_Score"] = 0.0
-    df["Reason_Principale"] = ""
 
     # Règles hors-bande (range penetration)
     cond_low = df["RangePenetration"] < low_buf
@@ -258,27 +257,24 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df.loc[mk_gap, "Rule_Flags"] = df["Rule_Flags"] + ";MARKET_GAP"
     df.loc[mk_gap, "Rule_Score"] += weights.get("market_gap", 15)
 
-    # Génération d'une raison principale lisible
-    def reason(row):
-        motifs = []
-        if row["RangePenetration"] < low_buf:
-            motifs.append("Salaire sous MIN interne")
-        elif row["RangePenetration"] > (1 + high_buf):
-            motifs.append("Salaire au-dessus du MAX interne")
-        if row["CompaRatio"] < compa_lo:
-            motifs.append(f"CompaRatio={row['CompaRatio']:.2f} (<{compa_lo})")
-        elif row["CompaRatio"] > compa_hi:
-            motifs.append(f"CompaRatio={row['CompaRatio']:.2f} (>{compa_hi})")
-        if pd.notna(row.get("MarketRatio", np.nan)):
-            if row["MarketRatio"] < market_lo:
-                motifs.append("Sous la mediane marche")
-            elif row["MarketRatio"] > market_hi:
-                motifs.append("Au-dessus de la mediane marche")
-        return " & ".join(motifs) if motifs else ""
+    # Génération vectorisée de la raison principale (remplace l'ancien df.apply(axis=1),
+    # coûteux en Python pur sur de gros volumes).
+    def _add(reason_parts: pd.Series, mask: pd.Series, text) -> pd.Series:
+        sep = pd.Series(" & ", index=df.index).where(reason_parts.str.len() > 0, "")
+        return reason_parts.mask(mask, reason_parts + sep + text)
 
-    df["Reason_Principale"] = df.apply(reason, axis=1)
+    reason_parts = pd.Series("", index=df.index, dtype=object)
+    reason_parts = _add(reason_parts, cond_low, "Salaire sous MIN interne")
+    reason_parts = _add(reason_parts, cond_high, "Salaire au-dessus du MAX interne")
+    compa_txt_lo = "CompaRatio=" + df["CompaRatio"].round(2).astype(str) + f" (<{compa_lo})"
+    compa_txt_hi = "CompaRatio=" + df["CompaRatio"].round(2).astype(str) + f" (>{compa_hi})"
+    reason_parts = _add(reason_parts, compa_low_flag, compa_txt_lo)
+    reason_parts = _add(reason_parts, compa_high_flag, compa_txt_hi)
+    reason_parts = _add(reason_parts, market_low_flag & has_market, "Sous la mediane marche")
+    reason_parts = _add(reason_parts, market_high_flag & has_market, "Au-dessus de la mediane marche")
+
+    df["Reason_Principale"] = reason_parts
     return df
-
 
 
 
@@ -521,39 +517,41 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
 
 
-def recommendations(df: pd.DataFrame) -> pd.DataFrame:
+def recommendations(df: pd.DataFrame, rule_params: dict = None) -> pd.DataFrame:
     """Génère des recommandations d'action et le coût d'ajustement pour chaque ligne.
 
     Les recommandations sont basées sur la fourchette interne (Min/Mid/Max) et la position actuelle du salarié.
+    Version vectorisée (remplace l'ancienne boucle ``for _, row in df.iterrows()``).
     """
-    reco = []
-    cost = []
-    for _, row in df.iterrows():
-        fix = row.get("Fixe_Annuel_MAD", np.nan)
-        mn, md, mx = row.get("Min", np.nan), row.get("Mid", np.nan), row.get("Max", np.nan)
-        compa = row.get("CompaRatio", np.nan)
+    rule_params = rule_params or {}
+    compa_lo = 0.85
+    compa_hi = 1.15
+    fix = pd.to_numeric(df.get("Fixe_Annuel_MAD"), errors="coerce")
+    mn = pd.to_numeric(df.get("Min"), errors="coerce")
+    md = pd.to_numeric(df.get("Mid"), errors="coerce")
+    mx = pd.to_numeric(df.get("Max"), errors="coerce")
+    compa = pd.to_numeric(df.get("CompaRatio"), errors="coerce")
 
-        msg = ""
-        delta = 0.0
-        if pd.notna(mn) and pd.notna(md) and pd.notna(mx) and pd.notna(fix):
-            if fix < mn:
-                msg = "Ajuster au MIN"
-                delta = max(0.0, mn - fix)
-            elif compa < 0.85 and fix < md:
-                msg = "Ajuster vers MID"
-                delta = max(0.0, md - fix)
-            elif fix > mx:
-                msg = "Au-dessus MAX: Revue"
-                delta = 0.0
-            elif compa > 1.15:
-                msg = "Compa élevée: Revue"
-                delta = 0.0
-        reco.append(msg)
-        cost.append(delta)
-    df["Reco"] = reco
-    df["Cout_Ajustement"] = cost
+    have_band = mn.notna() & md.notna() & mx.notna() & fix.notna()
+
+    # Les conditions "~below_min & ~to_mid..." reproduisent l'ordre de l'ancienne boucle
+    # (if / elif) : chaque salarié ne reçoit qu'une seule recommandation, la première qui s'applique.
+    below_min = have_band & (fix < mn)
+    to_mid = have_band & ~below_min & (compa < compa_lo) & (fix < md)
+    above_max = have_band & ~below_min & ~to_mid & (fix > mx)
+    high_compa = have_band & ~below_min & ~to_mid & ~above_max & (compa > compa_hi)
+
+    df["Reco"] = np.select(
+        [below_min, to_mid, above_max, high_compa],
+        ["Ajuster au MIN", "Ajuster vers MID", "Au-dessus MAX: Revue", "Compa élevée: Revue"],
+        default="",
+    )
+    df["Cout_Ajustement"] = np.select(
+        [below_min, to_mid],
+        [(mn - fix).clip(lower=0), (md - fix).clip(lower=0)],
+        default=0.0,
+    )
     return df
-
 
 
 
