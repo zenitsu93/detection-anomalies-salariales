@@ -7,7 +7,7 @@ Deux modes : **vérifier un salaire** et **obtenir une proposition**.
 Depuis la racine du projet, dans PowerShell :
 
 ```powershell
-.\venv\Scripts\python.exe -m decision_support.app
+.\.venv\Scripts\python.exe -m decision_support.app
 ```
 
 Ouvrir **http://127.0.0.1:8765**. Arrêter avec `Ctrl+C`.
@@ -58,5 +58,5 @@ L'application écoute uniquement sur l'ordinateur local. Elle n'est pas un servi
 ## Vérifier
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest tests/test_decision_support.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_decision_support.py -q
 ```

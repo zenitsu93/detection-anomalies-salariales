@@ -15,7 +15,7 @@ point d'entree en ligne de commande.
 
 Ce decoupage en plusieurs fichiers est une reorganisation du code pour le rendre plus facile a
 relire et a maintenir : il ne change rien au comportement du script (memes calculs, memes
-resultats). Voir corrections.txt et explication_simple.txt pour l'historique des corrections
+resultats). Voir docs/historique_reconstruit.md pour l'historique des corrections
 apportees au fil des relectures precedentes.
 """
 
@@ -60,8 +60,6 @@ def robust_zscore(values: pd.Series) -> pd.Series:
     return 0.6745 * (x - med) / mad
 
 
-
-
 def bucket_anciennete(x: object) -> str:
     """Regroupe l'ancienneté en tranches standardisées.
 
@@ -89,8 +87,6 @@ def bucket_anciennete(x: object) -> str:
     if val <= 20:
         return "13-20"
     return ">20"
-
-
 
 
 def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.DataFrame) -> pd.DataFrame:
@@ -225,7 +221,6 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
     return merged
 
 
-
 def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Applique les règles déterministes du rulebook sur chaque ligne du DataFrame.
 
@@ -285,8 +280,6 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     return df
 
 
-
-
 def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Fait remonter un signal ML très fort dans Rule_Score même quand aucune règle déterministe
     ne s'est déclenchée, pour les cas où le salaire est conforme à la bande/aux pairs mais où
@@ -325,8 +318,6 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         + "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
     )
     return df
-
-
 
 
 def cohort_stats_and_peers_nv(df, rule_params):
@@ -433,7 +424,6 @@ def cohort_stats_and_peers_nv(df, rule_params):
     return df
 
 
-
 def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> pd.DataFrame:
     """Calcule un score d'anomalie non supervisé via IsolationForest.
 
@@ -493,8 +483,6 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
     return df
 
 
-
-
 def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Agrège le score de règles et le score d'IA pour produire un score de risque global.
 
@@ -536,7 +524,6 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     return df
 
 
-
 def recommendations(df: pd.DataFrame, rule_params: dict = None) -> pd.DataFrame:
     """Génère des recommandations d'action et le coût d'ajustement pour chaque ligne.
 
@@ -576,9 +563,6 @@ def recommendations(df: pd.DataFrame, rule_params: dict = None) -> pd.DataFrame:
         default=0.0,
     )
     return df
-
-
-
 
 
 def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
@@ -625,7 +609,9 @@ def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
     return med
 
 
-
+# -----------------------------------------------------------------------------
+# Validation du rulebook
+# -----------------------------------------------------------------------------
 
 EXPECTED_RULE_KEYS = {
     "severity_weights": {
@@ -674,6 +660,3 @@ def validate_rule_params(rule_params: dict) -> None:
                         f"[WARN][RULEBOOK] Clé 'rules.{key}.{sub_key}' absente - valeur par défaut utilisée: {sub_default}",
                         file=sys.stderr,
                     )
-
-
-

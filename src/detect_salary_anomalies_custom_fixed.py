@@ -16,8 +16,7 @@ ci-dessous, pour rester facile à relire :
   des nombres et export Excel/CSV. Rien dans ce fichier n'influence le résultat de la détection.
 
 Ce découpage est une réorganisation du code (lisibilité/maintenance) : le comportement du script
-est inchangé par rapport à la version précédente en un seul fichier. Voir corrections.txt et
-explication_simple.txt pour l'historique des corrections apportées au fil des relectures.
+est inchangé par rapport à la version précédente en un seul fichier. Voir docs/historique_reconstruit.md pour l'historique des corrections apportées au fil des relectures.
 
 En entrée, les fichiers CSV doivent être encodés en cp1252 et utiliser un séparateur point‑virgule
 (« ; »). Le fichier de règles YAML doit contenir les paramètres de détection (poids, seuils, etc.).

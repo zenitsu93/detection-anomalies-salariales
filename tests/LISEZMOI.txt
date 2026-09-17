@@ -1,0 +1,53 @@
+A QUOI SERT CE DOSSIER ?
+=========================
+Ce dossier contient des "tests unitaires" : des petits programmes qui verifient, un par un, que
+chaque morceau du calcul de detection (dans src/anomaly_core.py) fait exactement ce qu'il est
+cense faire, avec des exemples de salaries invente et des chiffres simples a verifier a la main.
+
+L'idee : au lieu de se demander "est-ce que l'outil marche bien ?" en le lancant sur 10 000
+salaries et en esperant que tout soit correct, on verifie chaque petite regle separement, avec des
+cas tres simples ("un salarie sous le minimum", "un salarie qui gagne 4 fois plus que ses
+collegues"...), pour etre sur que chaque brique du calcul est fiable individuellement. Si un jour
+quelqu'un modifie le code et casse quelque chose sans s'en rendre compte, ces tests le signalent
+immediatement.
+
+Un fichier de test = une fonction du code a verifier :
+
+- test_robust_zscore.py             -> la detection d'un salaire qui s'ecarte de son groupe
+- test_bucket_anciennete.py         -> le regroupement par tranche d'anciennete
+- test_compute_features.py          -> le rattachement aux fourchettes internes/marche et les ratios
+- test_apply_rulebook.py            -> les regles simples (hors bande, CompaRatio, ecart marche)
+- test_cohort_stats_and_peers_nv.py -> la constitution des groupes de comparaison et leur elargissement
+- test_ml_anomaly.py                -> le score calcule par l'intelligence artificielle
+- test_apply_ml_strong_signal.py    -> la remontee des profils atypiques non couverts par les regles simples
+- test_aggregate_risk.py            -> le score de risque final et le niveau de priorite
+- test_recommendations.py           -> les recommandations d'ajustement et leur cout
+- test_gender_gap_analysis.py       -> l'analyse des ecarts de remuneration homme/femme
+- test_validate_rule_params.py      -> la verification du fichier de reglages (rulebook)
+
+Chaque test commence par une phrase en langage courant qui explique ce qui est verifie et
+pourquoi c'est important - pas besoin de lire le code pour comprendre l'intention.
+
+Plusieurs tests sont des "tests de non-regression" : ils rejouent volontairement un bug deja
+corrige (reference au numero du point dans corrections.txt), pour garantir qu'il ne revient jamais
+discretement dans une future modification.
+
+
+COMMENT LANCER LES TESTS ?
+------------------------------------------------------------------
+Depuis le dossier principal du projet (celui qui contient src/, input/ et tests/) :
+
+    pip install pytest      (une seule fois, si ce n'est pas deja installe)
+    pytest tests/
+
+Chaque ligne affichee correspond a un test. Un point vert (ou "PASSED") veut dire que ce point
+precis du calcul fonctionne comme prevu. Une ligne "FAILED" indique exactement quel calcul ne
+donne plus le resultat attendu, avec le detail de ce qui a ete trouve a la place - ce qui aide
+enormement a savoir quoi corriger, sans devoir tout relire.
+
+Pour ne lancer qu'un seul fichier de test (par exemple, seulement les regles simples) :
+
+    pytest tests/test_apply_rulebook.py
+
+Ces tests ne touchent a aucun de vos fichiers reels (employes.csv, bands.csv...) : ils
+fonctionnent uniquement avec de petits exemples fabriques pour l'occasion.
