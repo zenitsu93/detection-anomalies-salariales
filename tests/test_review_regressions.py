@@ -112,6 +112,22 @@ def test_dashboard_est_une_page_complete_en_francais():
     assert "locale: 'fr-FR'" in result
 
 
+def test_dashboard_aligne_les_tranches_du_score_sur_les_seuils_de_severite():
+    # Pourquoi : la sévérité vaut « score >= seuil bas » ; avec des tranches fermées à droite,
+    # un score de 30 (Mineure) tombait dans la tranche 20-30, colorée comme les Info.
+    df = pd.DataFrame({"Matricule": list("abcd"), "Entite_N1": ["P1"] * 4, "Job_Family": ["IT"] * 4,
+                       "Severity": ["Info", "Minor", "Major", "Critical"], "RiskScore": [29.9, 30., 50., 70.],
+                       "Cout_Ajustement": [0.] * 4, "Rule_Flags": ["", "COMPA_RATIO", "MARKET_GAP", "OUT_OF_BAND"]})
+    data = build_data(df, pd.DataFrame())
+    dist = {row["Tranche_RiskScore"]: row for row in data["tables"]["riskscore_dist"]}
+    assert (dist["20-30"]["Count"], dist["20-30"]["Severity"]) == (1, "Info")
+    assert (dist["30-40"]["Count"], dist["30-40"]["Severity"]) == (1, "Minor")
+    assert (dist["70-80"]["Count"], dist["70-80"]["Severity"]) == (1, "Critical")
+    assert "Position dans la grille" in data["flags"]["labels"] and "COMPA_RATIO" in data["flags"]["codes"]
+    # Les Info (aucune action) ne sont plus empilées avec les anomalies à traiter.
+    assert [d["code"] for d in data["severity"]["datasets"]] == ["Critical", "Major", "Minor"]
+
+
 def test_excel_conserve_les_nombres_les_totaux_et_l_ordre_des_priorites(tmp_path):
     from openpyxl import load_workbook
 
