@@ -181,7 +181,7 @@ def test_api_locale_modes_validation_et_pages():
     thread = Thread(target=server.serve_forever, daemon=True); thread.start()
     connection = HTTPConnection("127.0.0.1", server.server_port, timeout=5)
     try:
-        for path in ["/", "/app.js", "/style.css", "/api/metadata"]:
+        for path in ["/", "/app.js", "/style.css", "/favicon.svg", "/apercu.png", "/api/metadata"]:
             connection.request("GET", path); response = connection.getresponse()
             assert response.status == 200; response.read()
         for mode in ["evaluate", "propose"]:

@@ -2,6 +2,8 @@
 
 Deux modes : **vérifier un salaire** et **obtenir une proposition**.
 
+![Aperçu de l'application : synthèse, chiffres clés et positionnement sur une même règle](static/apercu.png)
+
 ## Démarrer
 
 Depuis la racine du projet, dans PowerShell :

@@ -43,7 +43,11 @@ def make_handler(engine):
                 return self.send_json(200, engine.metadata())
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                      "/style.css": ("style.css", "text/css; charset=utf-8")}
+                      "/style.css": ("style.css", "text/css; charset=utf-8"),
+                      # Pourquoi : icône de l'onglet et image d'aperçu du lien, servies comme les
+                      # autres fichiers (liste fermée, aucun chemin libre lu sur le disque).
+                      "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+                      "/apercu.png": ("apercu.png", "image/png")}
             if self.path not in assets:
                 return self.send_json(404, {"error": "Page introuvable."})
             name, mime = assets[self.path]
