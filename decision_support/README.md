@@ -23,7 +23,19 @@ Si le port est occupé, ajouter `--port 8766`. Aucune dépendance supplémentair
 4. Pour un salarié existant, saisir son matricule afin de l'exclure des pairs.
 5. Consulter les comparaisons et, si disponible, la fourchette et la cible indicative.
 
-Le bouton de téléchargement enregistre un compte rendu JSON dans le navigateur. Aucun profil saisi n'est enregistré sur le serveur. Les fichiers d'entrée ne sont pas modifiés.
+## Lire le résultat
+
+Chaque chiffre n'apparaît qu'à un seul endroit :
+
+- **Bandeau de synthèse** : verdict (cohérent, points à examiner, références incomplètes), fourchette proposée et cible. En vérification, il donne aussi l'écart du salaire à la cible, en % ; en proposition, le CompaRatio de la cible.
+- **Positionnement** : une règle place sur la même échelle la grille (min–max et milieu), la médiane du marché, les collègues (P25–P75 et médiane), la fourchette proposée et, en vérification, le salaire évalué (trait brun). Les montants sont écrits sur les barres. Une phrase indique le nombre de collègues comparés et le périmètre retenu.
+- **Contrôles** (vérification seulement) : valeur, règle appliquée et statut de chaque contrôle.
+- **Points d'attention** : limites des références pour ce profil.
+- **Méthode et limites** : à déplier pour le détail du calcul.
+
+Le bouton « Exporter (JSON) » enregistre un compte rendu dans le navigateur ; « Imprimer » produit une version papier sans le formulaire. Aucun profil saisi n'est enregistré sur le serveur. Les fichiers d'entrée ne sont pas modifiés.
+
+Les couleurs de marque sont regroupées en haut de `static/style.css` (`--brand`, `--brand-soft`, `--brand-dark`) pour être ajustées à la charte officielle.
 
 ## Références utilisées
 

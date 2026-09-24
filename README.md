@@ -42,6 +42,16 @@ Depuis la racine du projet, dans PowerShell :
 
 Le tableau de bord HTML est créé dans `output/principal/`. Ajouter `--no-html` pour le désactiver. Les dossiers de sortie sont créés automatiquement si nécessaire.
 
+Pour le régénérer sans relancer la détection : `.\.venv\Scripts\python.exe src/generate_dashboard_html.py` (relit `anomalies.csv` et `gender_gap.csv`).
+
+Le tableau de bord suit la même charte que l'aide à la décision. Il présente :
+
+- un bandeau d'indicateurs : part de l'effectif à traiter, anomalies critiques, majeures et mineures, coût d'ajustement total ;
+- les anomalies à traiter par pôle, les métiers les plus concernés, le coût par pôle, les signaux déclencheurs, la répartition du score de risque (colorée par sévérité) et les écarts hommes/femmes les plus marqués ;
+- les données détaillées sous forme de tableaux repliables.
+
+Un clic sur une barre ouvre la liste des salariés concernés, exportable en CSV pour Excel. Les montants restent dans l'unité du fichier source. Les graphiques utilisent Chart.js, chargé depuis Internet : sans connexion, ils ne s'affichent pas (les données restent dans le fichier et ne sont pas envoyées).
+
 ## Utiliser l'aide à la décision
 
 ```powershell

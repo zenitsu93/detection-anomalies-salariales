@@ -117,7 +117,7 @@ Le rapport hommes/femmes vérifie aussi les catégories comparées. Il ne prése
 
 **Un signal pour les profils très atypiques.** Un score IA élevé peut maintenant faire remonter un dossier sans alerte de règle. Ce changement peut modifier sa priorité.
 
-**Un tableau de bord HTML.** Il présente les résultats et permet de retrouver les salariés concernés depuis les graphiques.
+**Un tableau de bord HTML.** Il présente les résultats et permet de retrouver les salariés concernés depuis les graphiques. Il suit la même charte que l'aide à la décision : libellés en français, couleurs réservées à la gravité, et export CSV de la liste des salariés sélectionnés.
 
 **Une variante avec régression.** Elle compare le salaire observé au salaire estimé selon le profil. Elle reste séparée du moteur principal. Ses pondérations sont différentes et peuvent changer le classement.
 
@@ -125,11 +125,11 @@ Le rapport hommes/femmes vérifie aussi les catégories comparées. Il ne prése
 
 **Des tests automatiques.** Ils vérifient les calculs et protègent les corrections contre de futures erreurs.
 
-**Une aide à la décision dans `decision_support/`.** Une interface locale permet de vérifier un salaire ou d'obtenir une fourchette indicative. Elle utilise la grille exacte du métier et du grade, puis le marché et les collègues comparables. Chaque cible proposée est revérifiée. Les références incompatibles ou insuffisantes sont signalées. Les montants sont en kMAD par an.
+**Une aide à la décision dans `decision_support/`.** Une interface locale permet de vérifier un salaire ou d'obtenir une fourchette indicative. Elle utilise la grille exacte du métier et du grade, puis le marché et les collègues comparables. Chaque cible proposée est revérifiée. Les références incompatibles ou insuffisantes sont signalées. Les montants sont en kMAD par an. Le résultat place sur une même règle la grille, le marché, les collègues, la fourchette proposée et le salaire évalué, avec les montants écrits sur les barres.
 
 ## 5. Où nous en sommes
 
-La relecture et la nouvelle brique sont couvertes par **139 tests réussis**. Les deux scripts historiques ont été rejoués sur les **10 000 lignes**, avec leurs exports CSV, Excel et HTML. L'aide à la décision a été vérifiée sur les **91 couples métier/grade**.
+La relecture et la nouvelle brique sont couvertes par **141 tests réussis**. Les deux scripts historiques ont été rejoués sur les **10 000 lignes**, avec leurs exports CSV, Excel et HTML. L'aide à la décision a été vérifiée sur les **91 couples métier/grade**.
 
 Le moteur principal classe toujours 11 dossiers en `Critical`, 33 en `Major`, 4 238 en `Minor` et 5 718 en `Info`. Les corrections de cette relecture ne changent pas ces effectifs sur le jeu présent. Ce sont des priorités de revue, pas des erreurs de salaire confirmées.
 
