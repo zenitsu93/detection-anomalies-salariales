@@ -99,6 +99,19 @@ def test_dashboard_ne_change_pas_unite_et_protege_les_donnees_embarquees():
     assert label not in result
 
 
+def test_dashboard_est_une_page_complete_en_francais():
+    # Pourquoi : sans doctype ni charset, les accents pouvaient mal s'afficher ; sans fusion
+    # profonde, la légende « undefined » réapparaissait ; sans locale, les nombres étaient en anglais.
+    df = pd.DataFrame({"Matricule": ["1"], "Entite_N1": ["Pole 1"], "Job_Family": ["IT"],
+                       "Severity": ["Minor"], "RiskScore": [35.],
+                       "Cout_Ajustement": [1500.], "Rule_Flags": ["COMPA_RATIO"]})
+    result = build_html(build_data(df, pd.DataFrame()))
+    assert result.startswith("<!doctype html>")
+    assert '<html lang="fr">' in result and '<meta charset="utf-8">' in result
+    assert "Object.assign(opts, extra)" not in result and "function merge(" in result
+    assert "locale: 'fr-FR'" in result
+
+
 def test_excel_conserve_les_nombres_les_totaux_et_l_ordre_des_priorites(tmp_path):
     from openpyxl import load_workbook
 

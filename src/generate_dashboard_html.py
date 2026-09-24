@@ -285,7 +285,14 @@ def build_html(data):
         ]
     )
 
-    html = f"""<title>Anomalies Salariales</title>
+    # Pourquoi doctype, lang et charset : sans eux, le navigateur passait en mode dégradé et pouvait
+    # deviner un mauvais encodage (accents cassés) à l'ouverture du fichier ; viewport pour le mobile.
+    html = f"""<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anomalies Salariales</title>
 <script src="{CHARTJS_URL}"></script>
 <style>
 :root {{
@@ -390,6 +397,8 @@ td {{ font-variant-numeric: tabular-nums; }}
 
 footer {{ margin-top: 32px; font-size: 11px; color: var(--text-muted); }}
 </style>
+</head>
+<body>
 
 <header>
   <h1>Détection des anomalies salariales — Tableau de bord</h1>
@@ -521,12 +530,25 @@ function themeColors() {{
   }};
 }}
 
+// Pourquoi une fusion profonde : Object.assign remplaçait tout le bloc « plugins » dès qu'un
+// graphique ajoutait une infobulle, ce qui réaffichait la légende avec le libellé « undefined ».
+function merge(base, extra) {{
+  for (const k in extra) {{
+    const v = extra[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object') merge(base[k], v);
+    else base[k] = v;
+  }}
+  return base;
+}}
+
 function baseOptions(extra) {{
   const t = themeColors();
   Chart.defaults.color = t.text;
   Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
   Chart.defaults.font.size = 12;
   const opts = {{
+    // Pourquoi : sans locale, Chart.js affichait « 70,000 » (format anglais) au lieu de « 70 000 ».
+    locale: 'fr-FR',
     responsive: true,
     maintainAspectRatio: false,
     animation: {{ duration: 500, easing: 'easeOutQuart' }},
@@ -543,7 +565,7 @@ function baseOptions(extra) {{
       y: {{ grid: {{ color: t.grid }}, ticks: {{ color: t.text }} }},
     }},
   }};
-  return Object.assign(opts, extra);
+  return merge(opts, extra);
 }}
 
 new Chart(document.getElementById('chart-severity'), {{
@@ -642,6 +664,8 @@ new Chart(document.getElementById('chart-gap'), {{
   }}),
 }});
 </script>
+</body>
+</html>
 """
     return html
 
