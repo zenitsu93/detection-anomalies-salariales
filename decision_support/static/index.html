@@ -8,39 +8,64 @@
   <script defer src="/app.js"></script>
 </head>
 <body>
-  <header><a class="brand" href="/">REPÈRES<span>Rémunération</span></a><span class="local">Simulation locale</span></header>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Aide à la décision salariale</span></a>
+    <dl class="context">
+      <div><dt>Environnement</dt><dd>Simulation locale</dd></div>
+      <div><dt>Unité</dt><dd class="unit-label">—</dd></div>
+      <div><dt>Base de référence</dt><dd id="employees-count">—</dd></div>
+    </dl>
+  </header>
   <main>
-    <section class="intro"><div class="eyebrow">AIDE À LA DÉCISION</div><h1>Un salaire. Des repères pour décider.</h1><p>Évaluez un montant ou obtenez une proposition à partir de la grille de votre métier.</p></section>
+    <div class="page-head">
+      <div><p class="crumb">Rémunération › Simulation</p><h1>Simulation salariale</h1></div>
+    </div>
     <div class="workspace">
-      <section class="form-panel" aria-labelledby="profile-title">
-        <h2 id="profile-title">Votre simulation</h2>
+      <section class="panel form-panel" aria-labelledby="profile-title">
+        <h2 class="panel-title" id="profile-title">Paramètres</h2>
         <form id="profile-form">
-          <fieldset class="modes"><legend>Que souhaitez-vous faire ?</legend>
+          <fieldset class="modes"><legend>Type d’analyse</legend>
             <label><input type="radio" name="mode" value="evaluate" checked><span>Vérifier un salaire</span></label>
             <label><input type="radio" name="mode" value="propose"><span>Obtenir une proposition</span></label>
           </fieldset>
-          <label class="field" for="job">Métier<select id="job" name="job_family" required disabled><option value="">Chargement…</option></select></label>
-          <label class="field" for="grade">Grade<select id="grade" name="grade" required disabled><option value="">Choisir d’abord le métier</option></select></label>
-          <p class="hint">La grille est sélectionnée pour ce métier et ce grade.</p>
-          <label class="field" for="seniority">Ancienneté <span class="optional">facultatif</span><div class="input-unit"><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6"><span>ans</span></div></label>
+          <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select></label>
+          <label class="field" for="grade"><span class="field-name">Grade</span><select id="grade" name="grade" required disabled><option value="">Choisir d’abord le métier</option></select></label>
+          <label class="field" for="seniority"><span class="field-name">Ancienneté <span class="optional">(facultatif)</span></span><span class="input-unit"><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6"><span>ans</span></span></label>
           <p class="hint">Affine le groupe de collègues. Aucun bonus automatique d’ancienneté.</p>
-          <div id="salary-field"><label class="field" for="salary">Salaire fixe annuel envisagé<div class="input-unit"><input id="salary" name="salary" type="number" min="0.01" step="0.01" placeholder="Ex. 200" required><span class="unit-label">kMAD / an</span></div></label><p class="hint">200 kMAD = 200 000 MAD par an.</p></div>
-          <details class="existing"><summary>Il s’agit d’un salarié existant</summary><label class="field" for="employee-id">Matricule<input id="employee-id" name="employee_id" maxlength="100" placeholder="Ex. Mat00001"></label><p class="hint">Exclut son salaire actuel des comparaisons entre collègues.</p></details>
-          <button type="submit" id="submit" disabled>Vérifier le salaire <span aria-hidden="true">→</span></button>
+          <div id="salary-field"><label class="field" for="salary"><span class="field-name">Salaire fixe annuel envisagé</span><span class="input-unit"><input id="salary" name="salary" type="number" min="0.01" step="0.01" placeholder="Ex. 200" required><span class="unit-label">kMAD / an</span></span></label><p class="hint">200 kMAD = 200 000 MAD par an.</p></div>
+          <details class="existing"><summary>Il s’agit d’un salarié existant</summary><label class="field" for="employee-id"><span class="field-name">Matricule</span><input id="employee-id" name="employee_id" maxlength="100" placeholder="Ex. Mat00001"></label><p class="hint">Exclut son salaire actuel des comparaisons entre collègues.</p></details>
+          <button type="submit" id="submit" disabled>Vérifier le salaire</button>
           <p id="form-error" class="error" role="alert" hidden></p>
         </form>
         <p class="footnote">L’âge et le sexe ne déterminent pas la proposition. Les fichiers d’entrée restent inchangés.</p>
       </section>
       <section class="result-area" aria-live="polite" aria-busy="false" id="result-area">
-        <div class="empty-state" id="empty"><span class="empty-mark" aria-hidden="true">↗</span><h2>Le bon point de comparaison</h2><p>Renseignez le profil. Retrouvez ensuite la grille applicable, les repères du marché et les salaires des collègues comparables.</p><div class="steps"><span>01 · Grille métier</span><span>02 · Marché</span><span>03 · Collègues</span></div></div>
+        <div class="panel empty-state" id="empty">
+          <div class="ghost-ruler" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+          <h2>Le bon point de comparaison</h2>
+          <p>Renseignez le profil. Retrouvez ensuite, sur une même règle, la grille applicable, les repères du marché et les salaires des collègues comparables.</p>
+          <ol class="steps"><li><b>01</b>Grille métier</li><li><b>02</b>Marché</li><li><b>03</b>Collègues</li></ol>
+        </div>
         <div id="result" hidden>
-          <section id="verdict" class="verdict"><div class="eyebrow" id="result-mode"></div><h2 id="result-title"></h2><p id="result-profile"></p></section>
-          <section class="card proposal"><div class="card-heading"><h3 id="proposal-title">Fourchette de référence</h3><span class="unit-label"></span></div><div id="proposal-values"></div><p id="proposal-context" class="hint"></p></section>
-          <div class="references" id="references"></div>
-          <section id="checks-card" class="card"><h3>Ce que montre la comparaison</h3><div id="checks"></div></section>
-          <section class="card notes" id="notes-card"><h3>À garder en tête</h3><ul id="warnings"></ul></section>
-          <details class="card method"><summary>Comprendre la proposition</summary><p id="method"></p><ul id="basis"></ul><p id="limits"></p><p id="loaded-at" class="hint"></p></details>
-          <button class="secondary" id="download" type="button">Télécharger cette simulation</button>
+          <section id="verdict" class="panel verdict">
+            <div class="verdict-main">
+              <p class="verdict-mode" id="result-mode"></p>
+              <h2 id="result-title"></h2>
+              <p class="verdict-profile" id="result-profile"></p>
+            </div>
+            <dl class="figures" id="summary-figures"></dl>
+          </section>
+          <section class="panel" id="ruler-card" aria-labelledby="ruler-title">
+            <div class="panel-head"><h3 class="panel-title" id="ruler-title">Positionnement</h3><span class="unit-label"></span></div>
+            <div class="panel-body">
+              <div class="ruler" id="ruler"></div>
+              <p class="hint ruler-note" id="ruler-note"></p>
+            </div>
+          </section>
+          <section id="checks-card" class="panel"><div class="panel-head"><h3 class="panel-title">Contrôles</h3></div><table class="table" id="checks"></table></section>
+          <section class="panel notes" id="notes-card"><div class="panel-head"><h3 class="panel-title">Points d’attention</h3></div><ul class="panel-body" id="warnings"></ul></section>
+          <details class="panel method"><summary>Méthode et limites</summary><div class="panel-body"><p id="method"></p><ul id="basis"></ul><p id="limits"></p><p id="loaded-at" class="hint"></p></div></details>
+          <div class="actions"><button class="secondary" id="download" type="button">Exporter (JSON)</button><button class="secondary" id="print" type="button">Imprimer</button></div>
         </div>
       </section>
     </div>
