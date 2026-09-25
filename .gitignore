@@ -7,4 +7,3 @@ __pycache__/
 output/
 models/*.joblib
 .vscode/
-.claude/
