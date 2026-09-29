@@ -1,4 +1,29 @@
 rules:
+  # Points ajoutés au score des règles (Rule_Score) chaque fois qu'une règle se déclenche.
+  # Plus le nombre est grand, plus cette règle pèse dans la priorité finale du dossier.
+  severity_weights:
+    out_of_band: 30        # hors des bornes Min/Max internes (RangePenetration)
+    compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
+    market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
+    peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
+
+  # Règle « hors grille » : RangePenetration vaut 0 quand le salaire est au Min de la grille et 1
+  # quand il est au Max. On tolère une petite marge (0.05 = 5 % de la largeur de la grille) sous le
+  # Min et au-dessus du Max avant de lever l'alerte, pour ne pas signaler un salaire tout juste à la
+  # limite.
+  range_penetration_low_buffer: -0.05
+  range_penetration_high_buffer: 0.05
+
+  # Règle CompaRatio = salaire ÷ milieu de la grille (Mid). 1.00 = pile au milieu. En dessous de
+  # 0.85 ou au-dessus de 1.15, le salaire est jugé trop loin du milieu.
+  compa_ratio_low: 0.85
+  compa_ratio_high: 1.15
+
+  # Règle marché = salaire ÷ médiane du marché (même métier, même grade). En dessous de 0.90 ou
+  # au-dessus de 1.20 : alerte.
+  market_low: 0.90
+  market_high: 1.20
+
   # Taille minimale du groupe de collègues : un groupe doit compter au moins 15 personnes pour que la comparaison ait du sens.
   cohort_min_size: 15
   # Groupes essayés pour chaque salarié, du plus précis au plus large : on prend le premier qui compte
@@ -8,3 +33,8 @@ rules:
     - "Grade|Job_Family|Anciennete_Bucket"
     - "Grade|Job_Family"
     - "Grade"
+
+  # Écart aux collègues (PeerZ) : mesure à quel point un salaire s'éloigne de ceux de son groupe
+  # (0 = dans la moyenne ; 2 = nettement à part ; 3 = très à part).
+  peer_z_threshold_minor: 2.0   # au-delà : simple étiquette PEER_OUTLIER, sans points en plus
+  peer_z_threshold_major: 3.0   # au-delà : points en plus (Rule_Score) et motif affiché
