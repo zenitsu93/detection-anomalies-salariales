@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+SIGNAL FORT DE L'IA : DES POINTS POUR LES PROFILS TRÈS ATYPIQUES SANS AUCUNE RÈGLE DÉCLENCHÉE
+============================================================================================
+
+Un salarié peut respecter la grille et gagner autant que ses collègues, tout en ayant un profil très
+inhabituel. L'IA le repère (ML_AnomalyScore), mais aucune règle ne se déclenche. Ce fichier lui
+ajoute donc l'étiquette ML_STRONG_SIGNAL, des points dans Rule_Score et un motif, comme si une règle
+s'était déclenchée.
+
+Il prend en entrée le DataFrame rendu par anomaly_signal_iforest.py et rend ce DataFrame complété.
+
+Utilisation :
+- depuis Python :
+      from anomaly_signal_fort import apply_ml_strong_signal
+      df = apply_ml_strong_signal(df, rule_params)
+- en ligne de commande, depuis le dossier du projet :
+      python src/anomaly_signal_fort.py
+  Le DataFrame est enregistré dans output/signal_fort/employes_signal_fort.csv, à ouvrir avec Excel.
+"""
+
+from pathlib import Path
+
+import pandas as pd
+import yaml
+
+from anomaly_pretraitement import preparer_employes
+from anomaly_cohortes import former_cohortes
+from anomaly_regles import apply_rulebook
+from anomaly_signal_iforest import ml_anomaly
+
+
+def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+    """Donne l'étiquette ML_STRONG_SIGNAL aux salariés parmi les plus atypiques pour l'IA (les 5 % du
+    haut avec ml_strong_signal_percentile = 0.95) qui n'ont déclenché aucune règle. Rend un NOUVEAU
+    DataFrame (celui reçu n'est pas modifié).
+
+    On classe les salariés du score le plus faible au plus élevé, puis on prend le seuil au-dessus
+    duquel se trouvent les 5 % du haut (sur 100 salariés, ce serait vers le 95ᵉ).
+    """
+    weights = rule_params.get("severity_weights")
+    percentile = rule_params.get("ml_strong_signal_percentile")
+
+    df = df.copy()
+
+    # Le score à partir duquel on fait partie des plus atypiques.
+    seuil = df["ML_AnomalyScore"].quantile(percentile)
+    # Très atypique ET aucune règle déclenchée (Rule_Flags vide).
+    fort = (df["ML_AnomalyScore"] >= seuil) & (df["Rule_Flags"] == "")
+
+    # Aucune règle déclenchée : Rule_Flags et Reason_Principale sont vides, on les remplit directement.
+    df.loc[fort, "Rule_Flags"] = "ML_STRONG_SIGNAL"
+    df.loc[fort, "Rule_Score"] += weights.get("ml_strong_signal")
+    df.loc[fort, "Reason_Principale"] = "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
+
+    return df
+
+
+# Ce bloc ne s'exécute que si l'on lance CE fichier directement (python src/anomaly_signal_fort.py),
+# pas quand un autre programme fait « from anomaly_signal_fort import ... ».
+if __name__ == "__main__":
+    # Le dossier du projet : deux crans au-dessus de ce fichier (src/anomaly_signal_fort.py).
+    projet = Path(__file__).resolve().parent.parent
+
+    # Les réglages : la partie « rules: » du fichier de règles.
+    with open(projet / "config" / "rules.yaml", encoding="utf-8") as fichier:
+        rule_params = yaml.safe_load(fichier)["rules"]
+
+    # Les étapes dans l'ordre : la sortie de chacune est l'entrée de la suivante.
+    # 1. Prétraitement : lecture, doublons, grille, marché, ratios (anomaly_pretraitement.py).
+    df = preparer_employes(projet / "input" / "employes.csv",
+                           projet / "input" / "bands.csv",
+                           projet / "input" / "market.csv")
+    # 2. Groupes de collègues et écart PeerZ (anomaly_cohortes.py).
+    df = former_cohortes(df, rule_params)
+    # 3. Règles : étiquettes, points et motifs (anomaly_regles.py).
+    df = apply_rulebook(df, rule_params)
+    # 4. Score de l'IA (anomaly_signal_iforest.py).
+    df = ml_anomaly(df, rule_params)
+    # 5. Signal fort de l'IA (ce fichier).
+    df = apply_ml_strong_signal(df, rule_params)
+    print(df.head(10).to_string(index=False))
+
+    # Le DataFrame complet, pour Excel : séparateur « ; », virgule décimale, et encodage utf-8-sig
+    # (pour qu'Excel affiche bien les accents).
+    sortie = projet / "output" / "signal_fort" / "employes_signal_fort.csv"
+    sortie.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(sortie, index=False, sep=";", decimal=",", encoding="utf-8-sig")
+    print(f"\n{len(df)} salariés - DataFrame enregistré dans : {sortie}")
