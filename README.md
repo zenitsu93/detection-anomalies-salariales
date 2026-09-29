@@ -17,6 +17,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`b7de521`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b7de521eb7ac77b99aff707a1da26b50e5fab630) | feat: calculer le score général et la priorité de chaque salarié | `src/anomaly_score_general.py` : réunit le score des règles (70 %) et celui de l'IA (30 %) en un score général, et en déduit la priorité de chaque salarié (Critical, Major, Minor, Info). |
 | [`19abd86`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/19abd860f55769d4d05ed3796ed4e6460514dc32) | feat: créer le tableau de bord HTML | `src/generate_dashboard_html.py` : page web qui résume les résultats (priorités, pôles, métiers, coûts, signaux, score général, écarts hommes/femmes), avec la liste des salariés au clic. |
 | [`237159e`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/237159e34cdc9ce93bd7a86d3aa591ea4d9a73b7) | feat: enchaîner toutes les étapes (programme principal) | `src/detect_salary_anomalies.py` : enchaîne toutes les étapes et enregistre anomalies.csv, gender_gap.csv et le tableau de bord. |
+| [`b90d769`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b90d76925316b7d929371518727aaa89358abdb2) | feat: vérifier un salaire proposé avec une régression | `src/anomaly_signal_regression.py` : prédit le salaire attendu d'un nouvel embauché ou d'un salarié revu, et signale un salaire proposé trop éloigné (en dehors du programme principal). |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
