@@ -7,6 +7,16 @@ rules:
     market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
     peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
 
+  # Réglages du modèle d'IA (Isolation Forest). Avant, ils étaient écrits en dur dans le programme.
+  # Les valeurs ci-dessous sont les mêmes qu'avant : rien ne change tant qu'on n'y touche pas.
+  # - ml_contamination : part d'anomalies que le modèle s'attend à trouver (0.05 = 5 %).
+  #   Attention, ce n'est PAS le nombre final d'alertes : le programme utilise le score du modèle
+  #   (de 0 à 100), pas son verdict oui/non. La priorité finale dépend des scores, poids et seuils.
+  # - ml_n_estimators : nombre d'arbres du modèle. Plus il y en a, plus le résultat est stable d'une
+  #   exécution à l'autre, mais plus c'est lent. 200 suffit largement.
+  ml_contamination: 0.05
+  ml_n_estimators: 200
+
   # Règle « hors grille » : RangePenetration vaut 0 quand le salaire est au Min de la grille et 1
   # quand il est au Max. On tolère une petite marge (0.05 = 5 % de la largeur de la grille) sous le
   # Min et au-dessus du Max avant de lever l'alerte, pour ne pas signaler un salaire tout juste à la
