@@ -10,6 +10,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`8bdea95`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8bdea95ce3fb3aad7e9aa5bbdb1247271e4faf0a) | feat: ajouter le générateur de données salariales fictives | `src/generate_sources.py` et les trois fichiers de `input/` : 10 000 salariés.                                                                               |
 | [`4999a33`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/4999a33b793d0910f9089711e97b032d7e4fbf5c) | feat: former les groupes de collègues (cohortes) | `src/anomaly_cohortes.py` : compare chaque salarié à un groupe d'au moins 15 collègues comparables (même grade, même métier, ancienneté proche) et mesure son écart au groupe (PeerZ). |
 | [`6872cef`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/6872cef7616f720b16cf2159d807cc4b5ce23ea3) | feat: repérer les salaires hors des clous (règles) | `src/anomaly_regles.py` : applique quatre règles (hors grille, CompaRatio, marché, écart aux collègues) et ajoute à chaque salarié ses alertes, ses points et ses motifs. |
+| [`8bd99ee`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8bd99eefc8d0927c063f3ea10eab6e0c9556c485) | feat: repérer les profils atypiques avec l'IA (Isolation Forest) | `src/anomaly_signal_iforest.py` : donne à chaque salarié un score d'anomalie de 0 à 100 (ML_AnomalyScore), calculé par l'IA sur tout son profil. |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
