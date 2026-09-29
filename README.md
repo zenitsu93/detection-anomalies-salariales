@@ -19,6 +19,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`237159e`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/237159e34cdc9ce93bd7a86d3aa591ea4d9a73b7) | feat: enchaîner toutes les étapes (programme principal) | `src/detect_salary_anomalies.py` : enchaîne toutes les étapes et enregistre anomalies.csv, gender_gap.csv et le tableau de bord. |
 | [`b90d769`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b90d76925316b7d929371518727aaa89358abdb2) | feat: vérifier un salaire proposé avec une régression | `src/anomaly_signal_regression.py` : prédit le salaire attendu d'un nouvel embauché ou d'un salarié revu, et signale un salaire proposé trop éloigné (en dehors du programme principal). |
 | [`860df00`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/860df003137c727fdacd0ca1a6569cea9a0dbe2f) | chore: enregistrer les résultats de toutes les étapes (output/) | `output/` : les résultats de chaque étape (CSV pour Excel) et le tableau de bord, produits avec le code du dépôt. |
+| [`8f35e12`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8f35e129adad236be679a67717e8962aaf98379b) | refactor: écrire plus clairement l'attribution des priorités | `src/anomaly_score_general.py` : même calcul des priorités, écrit en trois temps nommés et commentés. |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
