@@ -13,6 +13,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`8bd99ee`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8bd99eefc8d0927c063f3ea10eab6e0c9556c485) | feat: repérer les profils atypiques avec l'IA (Isolation Forest) | `src/anomaly_signal_iforest.py` : donne à chaque salarié un score d'anomalie de 0 à 100 (ML_AnomalyScore), calculé par l'IA sur tout son profil. |
 | [`b140977`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b14097743eb739791ecf374481518ce8c7103131) | feat: signaler les profils que seule l'IA repère (signal fort) | `src/anomaly_signal_fort.py` : donne l'étiquette ML_STRONG_SIGNAL et 15 points aux 5 % de profils les plus atypiques pour l'IA qui n'ont déclenché aucune règle. |
 | [`c294ed6`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/c294ed6a8702a6781864d15287c1ff10e8812128) | feat: recommander un ajustement et en chiffrer le coût (recommandations) | `src/anomaly_recommandations.py` : donne à chaque salarié une recommandation (ajuster au MIN, vers le MID, ou revue) et le coût de l'ajustement. |
+| [`f3d2276`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/f3d227696940cd52c47454968164fa714fc00409) | feat: comparer les salaires des femmes et des hommes (écarts hommes/femmes) | `src/anomaly_ecarts_hommes_femmes.py` : compare, pour chaque métier + grade, le salaire médian des femmes et des hommes (rapport M_div_F). |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
