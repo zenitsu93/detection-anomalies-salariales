@@ -55,3 +55,17 @@ rules:
   # (0 = dans la moyenne ; 2 = nettement à part ; 3 = très à part).
   peer_z_threshold_minor: 2.0   # au-delà : simple étiquette PEER_OUTLIER, sans points en plus
   peer_z_threshold_major: 3.0   # au-delà : points en plus (Rule_Score) et motif affiché
+
+  # Score final : RiskScore = rule_weight × Rule_Score + ml_weight × ML_AnomalyScore.
+  # Les règles comptent pour 70 %, l'IA pour 30 %.
+  rule_weight: 0.7
+  ml_weight: 0.3
+
+  # Niveaux de priorité (Severity) selon le RiskScore, de 0 à 100.
+  # Seule la première valeur (la borne basse) compte : un score de 69,4 est « Major », car il
+  # atteint 50 sans atteindre 70. La deuxième valeur est gardée à titre indicatif.
+  prioritization_buckets:
+    Critical: [70, 100]
+    Major: [50, 69]
+    Minor: [30, 49]
+    Info: [0, 29]
