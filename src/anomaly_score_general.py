@@ -47,8 +47,21 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # virgule entre deux niveaux, comme 69,4 (au-dessus de Major [50, 69], sous Critical [70, 100]),
     # ne tombait alors dans aucun niveau et finissait en « Info ». Ici, on part du niveau le plus bas
     # et chaque niveau prend tous les scores qui atteignent sa borne basse.
-    for niveau, (borne_basse, _) in sorted(buckets.items(), key=lambda b: b[1][0]):
-        df.loc[df["RiskScore"] >= borne_basse, "Severity"] = niveau
+    # 1. Lire le score minimum d'un niveau. Exemple : pour Major [50, 69], on lit 50.
+    def score_minimum(niveau):
+        bornes = buckets[niveau]
+        return bornes[0]
+
+    # 2. Ranger les niveaux par score minimum croissant : Info, Minor, Major, Critical.
+    niveaux_tries = sorted(buckets, key=score_minimum)
+
+    # 3. Attribuer chaque niveau aux salariés qui atteignent son score minimum.
+    # Le niveau suivant remplace le précédent si son seuil est lui aussi atteint.
+    # Exemple pour 69,4 : Info, puis Minor, puis Major ; Critical ne s'applique pas.
+    for niveau in niveaux_tries:
+        borne_basse = score_minimum(niveau)
+        seuil_atteint = df["RiskScore"] >= borne_basse
+        df.loc[seuil_atteint, "Severity"] = niveau
 
     return df
 
