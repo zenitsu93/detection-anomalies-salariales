@@ -4,10 +4,11 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 
 | Commit      | Titre                                                         | En bref                                                                                                                                                           |
 | ----------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `c75df63` | docs: ajouter la chronologie des commits | `README.md` : ce tableau, affiché sur la page d'accueil, qui suit les commits du plus ancien au plus récent. |
-| `640a545` | chore: enregistrer le code d'origine, sans correction         | Le code d'origine, gardé tel quel dans `archive/`.                                                                                                              |
-| `1da24e1` | feat: préparer le tableau des salariés (prétraitement)     | `src/anomaly_pretraitement.py` : lit les trois fichiers d'entrée, retire les doublons, ajoute la fourchette de la grille, le salaire du marché et les ratios. |
-| `8bdea95` | feat: ajouter le générateur de données salariales fictives | `src/generate_sources.py` et les trois fichiers de `input/` : 10 000 salariés.                                                                               |
+| [`c75df63`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/c75df63690e7568fdc533a11606666ba61075a63) | docs: ajouter la chronologie des commits | `README.md` : ce tableau, affiché sur la page d'accueil, qui suit les commits du plus ancien au plus récent. |
+| [`640a545`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/640a545de1440e2eaac34aca2049c0c658fab7b0) | chore: enregistrer le code d'origine, sans correction         | Le code d'origine, gardé tel quel dans `archive/`.                                                                                                              |
+| [`1da24e1`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/1da24e1948a8f3ce2394543e502d84bf0d0fd461) | feat: préparer le tableau des salariés (prétraitement)     | `src/anomaly_pretraitement.py` : lit les trois fichiers d'entrée, retire les doublons, ajoute la fourchette de la grille, le salaire du marché et les ratios. |
+| [`8bdea95`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8bdea95ce3fb3aad7e9aa5bbdb1247271e4faf0a) | feat: ajouter le générateur de données salariales fictives | `src/generate_sources.py` et les trois fichiers de `input/` : 10 000 salariés.                                                                               |
+| [`4999a33`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/4999a33b793d0910f9089711e97b032d7e4fbf5c) | feat: former les groupes de collègues (cohortes) | `src/anomaly_cohortes.py` : compare chaque salarié à un groupe d'au moins 15 collègues comparables (même grade, même métier, ancienneté proche) et mesure son écart au groupe (PeerZ). |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
@@ -19,5 +20,5 @@ Une phrase : ce que cet envoi apporte.
 
 | Commit | Titre | En bref |
 |---|---|---|
-| `abc1234` | feat: ... | ... |
+| [`abc1234`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/abc1234) | feat: ... | ... |
 -->
