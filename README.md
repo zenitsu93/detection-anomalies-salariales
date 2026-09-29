@@ -16,6 +16,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`f3d2276`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/f3d227696940cd52c47454968164fa714fc00409) | feat: comparer les salaires des femmes et des hommes (écarts hommes/femmes) | `src/anomaly_ecarts_hommes_femmes.py` : compare, pour chaque métier + grade, le salaire médian des femmes et des hommes (rapport M_div_F). |
 | [`b7de521`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b7de521eb7ac77b99aff707a1da26b50e5fab630) | feat: calculer le score général et la priorité de chaque salarié | `src/anomaly_score_general.py` : réunit le score des règles (70 %) et celui de l'IA (30 %) en un score général, et en déduit la priorité de chaque salarié (Critical, Major, Minor, Info). |
 | [`19abd86`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/19abd860f55769d4d05ed3796ed4e6460514dc32) | feat: créer le tableau de bord HTML | `src/generate_dashboard_html.py` : page web qui résume les résultats (priorités, pôles, métiers, coûts, signaux, score général, écarts hommes/femmes), avec la liste des salariés au clic. |
+| [`237159e`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/237159e34cdc9ce93bd7a86d3aa591ea4d9a73b7) | feat: enchaîner toutes les étapes (programme principal) | `src/detect_salary_anomalies.py` : enchaîne toutes les étapes et enregistre anomalies.csv, gender_gap.csv et le tableau de bord. |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
