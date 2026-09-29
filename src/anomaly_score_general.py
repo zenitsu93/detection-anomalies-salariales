@@ -43,23 +43,24 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df = df.copy()
     df["RiskScore"] = rule_w * df["Rule_Score"] + ml_w * df["ML_AnomalyScore"]
 
-    # Pourquoi seule la borne basse compte : l'archive vérifiait aussi la borne haute. Un score à
-    # virgule entre deux niveaux, comme 69,4 (au-dessus de Major [50, 69], sous Critical [70, 100]),
-    # ne tombait alors dans aucun niveau et finissait en « Info ». Ici, on part du niveau le plus bas
-    # et chaque niveau prend tous les scores qui atteignent sa borne basse.
-    # 1. Lire le score minimum d'un niveau. Exemple : pour Major [50, 69], on lit 50.
-    def score_minimum(niveau):
-        bornes = buckets[niveau]
-        return bornes[0]
-
-    # 2. Ranger les niveaux par score minimum croissant : Info, Minor, Major, Critical.
-    niveaux_tries = sorted(buckets, key=score_minimum)
-
-    # 3. Attribuer chaque niveau aux salariés qui atteignent son score minimum.
+    # Pourquoi cette correction par rapport à l'archive ? Le score peut avoir des décimales,
+    # mais l'ancien code vérifiait les deux bornes incluses, par exemple 50 <= score <= 69.
+    # Avec un score de 69,4 :
+    # - Major [50, 69] était refusé, car 69,4 > 69 ;
+    # - Critical [70, 100] était refusé, car 69,4 < 70 ;
+    # - aucun intervalle ne correspondait : le code renvoyait « Info » par défaut.
+    # Un score proche de Critical se retrouvait donc à la priorité la plus basse.
+    # On corrige ce trou entre les niveaux en utilisant seulement leurs scores minimums :
+    # Major commence à 50 et reste valable jusqu'à 70 exclu. Ainsi, 69,4 reste Major.
+    # Le calcul du RiskScore ne change pas ; c'est son classement qui est corrigé.
+    #
+    # Les niveaux sont déjà rangés dans le YAML : Info, Minor, Major, Critical.
+    # Il faut conserver cet ordre croissant des bornes basses dans la configuration.
     # Le niveau suivant remplace le précédent si son seuil est lui aussi atteint.
     # Exemple pour 69,4 : Info, puis Minor, puis Major ; Critical ne s'applique pas.
-    for niveau in niveaux_tries:
-        borne_basse = score_minimum(niveau)
+    for niveau in buckets:
+        bornes = buckets[niveau]
+        borne_basse = bornes[0]
         seuil_atteint = df["RiskScore"] >= borne_basse
         df.loc[seuil_atteint, "Severity"] = niveau
 
