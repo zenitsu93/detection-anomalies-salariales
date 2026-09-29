@@ -1,0 +1,10 @@
+rules:
+  # Taille minimale du groupe de collègues : un groupe doit compter au moins 15 personnes pour que la comparaison ait du sens.
+  cohort_min_size: 15
+  # Groupes essayés pour chaque salarié, du plus précis au plus large : on prend le premier qui compte
+  # au moins cohort_min_size personnes, toujours en entier (voir former_cohortes dans
+  # src/anomaly_cohortes.py).
+  cohort_widening_steps:
+    - "Grade|Job_Family|Anciennete_Bucket"
+    - "Grade|Job_Family"
+    - "Grade"
