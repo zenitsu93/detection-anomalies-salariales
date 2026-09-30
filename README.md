@@ -21,6 +21,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`860df00`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/860df003137c727fdacd0ca1a6569cea9a0dbe2f) | chore: enregistrer les résultats de toutes les étapes (output/) | `output/` : les résultats de chaque étape (CSV pour Excel) et le tableau de bord, produits avec le code du dépôt. |
 | [`8f35e12`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/8f35e129adad236be679a67717e8962aaf98379b) | refactor: écrire plus clairement l'attribution des priorités | `src/anomaly_score_general.py` : même calcul des priorités, écrit en trois temps nommés et commentés. |
 | [`b01f627`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/b01f627a70164157bad29da82820cd6858ba3fda) | refactor: parcourir les priorités dans l'ordre du fichier de règles | `src/anomaly_score_general.py` et `config/rules.yaml` : les niveaux de priorité sont rangés du plus bas au plus haut dans le fichier de règles, et le code les suit dans cet ordre (même résultat). |
+| [`526938e`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/526938ed3873896f0ca3b50e77dcc0624aff044a) | feat: ajouter l'aide à la décision salariale (application locale) | `decision_support/` : petite application web qui vérifie un salaire ou propose une fourchette et une cible, à partir de la grille, du marché, des groupes de collègues et des règles du programme principal. |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
