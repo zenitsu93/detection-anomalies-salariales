@@ -62,10 +62,7 @@ Le dépôt contient déjà trois fichiers fictifs (10 000 salariés) : le projet
 Format des trois fichiers :
 
 - la première ligne donne les noms des colonnes, écrits exactement comme ci-dessous (l'ordre des colonnes n'a pas d'importance) ;
-- les colonnes sont séparées par un point-virgule `;` ;
 - les nombres décimaux s'écrivent avec un point : `238.34`, pas `238,34` ;
-- l'encodage est celui de Windows (ANSI, aussi appelé cp1252) ;
-- les montants sont en **kMAD par an** : `238.34` veut dire 238 340 MAD ;
 - le métier (`Job_Family`) et le grade (`Grade`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + grade manque dans la grille reste dans l'analyse, mais sans fourchette.
 
 Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis avec le Bloc-notes.
