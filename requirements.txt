@@ -1,0 +1,7 @@
+# Bibliothèques Python nécessaires au projet (voir « Lancer le projet » dans le README).
+# Versions fixées : la même installation donne les mêmes résultats sur tous les ordinateurs.
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.7.2
+PyYAML==6.0.3
+joblib==1.6.0

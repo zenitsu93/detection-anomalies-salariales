@@ -24,6 +24,114 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`526938e`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/526938ed3873896f0ca3b50e77dcc0624aff044a) | feat: ajouter l'aide à la décision salariale (application locale) | `decision_support/` : petite application web qui vérifie un salaire ou propose une fourchette et une cible, à partir de la grille, du marché, des groupes de collègues et des règles du programme principal. |
 | [`7b625cc`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/7b625cc9ac208f36ba035f9d59ba4676f6cec299) | docs: mettre à jour la capture d'écran de l'aide à la décision | `decision_support/static/apercu.png` : la capture d'écran montre la page avec les chiffres que l'application calcule aujourd'hui. |
 
+# Lancer le projet
+
+Toutes les commandes se tapent dans un terminal (PowerShell sous Windows) ouvert dans le dossier du projet.
+
+## 1. Installer l'environnement (une seule fois)
+
+Il faut Python 3.10 ou plus récent ([python.org](https://www.python.org/downloads/) ; sous Windows, cocher « Add python.exe to PATH » pendant l'installation).
+
+L'environnement virtuel est un dossier `.venv`, propre au projet, où sont installées les bibliothèques de `requirements.txt` sans toucher au reste de l'ordinateur.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Quand `(.venv)` s'affiche au début de la ligne, l'environnement est actif. Dans chaque nouveau terminal, il suffit de refaire la deuxième ligne.
+
+- Si PowerShell refuse `Activate.ps1` (« l'exécution de scripts est désactivée »), taper une fois `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, puis recommencer.
+- Sous macOS ou Linux : `python3 -m venv .venv`, puis `source .venv/bin/activate`.
+
+## 2. Déposer les trois fichiers d'entrée
+
+Les trois fichiers vont dans `input/`, avec exactement ces noms :
+
+```text
+input/
+├── employes.csv   les salariés : une ligne par salarié
+├── bands.csv      la grille interne : une ligne par métier + grade
+└── market.csv     le marché : une ligne par métier + grade
+```
+
+Le dépôt contient déjà trois fichiers fictifs (10 000 salariés) : le projet se lance tel quel. Pour analyser de vraies données, il suffit de les remplacer.
+
+Format des trois fichiers :
+
+- la première ligne donne les noms des colonnes, écrits exactement comme ci-dessous (l'ordre des colonnes n'a pas d'importance) ;
+- les colonnes sont séparées par un point-virgule `;` ;
+- les nombres décimaux s'écrivent avec un point : `238.34`, pas `238,34` ;
+- l'encodage est celui de Windows (ANSI, aussi appelé cp1252) ;
+- les montants sont en **kMAD par an** : `238.34` veut dire 238 340 MAD ;
+- le métier (`Job_Family`) et le grade (`Grade`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + grade manque dans la grille reste dans l'analyse, mais sans fourchette.
+
+Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis avec le Bloc-notes.
+
+**`employes.csv`**
+
+| Colonne | Contenu | Exemple |
+| --- | --- | --- |
+| `Matricule` | identifiant du salarié (en cas de doublon, la première ligne est gardée) | `Mat00001` |
+| `Nom` | nom (peut rester vide) | |
+| `Entite_N1` | pôle | `Pole 3` |
+| `Entite_N2` | entité dans le pôle | `P3-E05` |
+| `Job_Family` | métier | `RETAIL BANKING` |
+| `Job_Title` | poste | `JT1389` |
+| `Grade` | grade | `5` |
+| `Fixe_Annuel_MAD` | salaire fixe annuel, en kMAD | `238.34` |
+| `Age` | âge, en années | `28` |
+| `Anciennete` | ancienneté, en années | `8` |
+| `Sexe` | `F` ou `M` (exactement) | `F` |
+| `Competence_N1` | note de compétences de l'année précédente | `4.09` |
+| `Positionnement_9BOX` | case de la grille 9Box | `6` |
+| `Hot_job` | tension du métier sur le marché, de 0 (faible) à 6 (forte) | `4` |
+
+Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne servent à aucun calcul : elles sont simplement recopiées dans les résultats.
+
+**`bands.csv`** : `Job_Family`, `Grade`, puis `Min`, `Mid` (milieu) et `Max` de la grille, en kMAD.
+
+**`market.csv`** : `Job_Family`, `Grade`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
+
+## 3. Tout lancer d'un coup
+
+```powershell
+python src/detect_salary_anomalies.py
+```
+
+Les résultats arrivent dans `output/detection/` :
+
+- `anomalies.csv` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
+- `gender_gap.csv` : les écarts de salaire femmes / hommes, par métier + grade ;
+- `dashboard_anomalies.html` : le tableau de bord, à ouvrir avec un navigateur (double-clic, ou `start output\detection\dashboard_anomalies.html`).
+
+## 4. Lancer étape par étape
+
+Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a besoin, puis enregistre son propre résultat. On peut donc lancer directement celle qu'on veut regarder. L'ordre ci-dessous est celui du programme principal.
+
+| Ordre | Commande | Ce que l'étape ajoute | Résultat |
+| --- | --- | --- | --- |
+| 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié | `output/pretraitement/employes_pretraites.csv` |
+| 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.csv` |
+| 3 | `python src/anomaly_regles.py` | alertes des quatre règles et leurs points | `output/regles/employes_regles.csv` |
+| 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.csv` |
+| 5 | `python src/anomaly_signal_fort.py` | points pour les profils que seule l'IA repère | `output/signal_fort/employes_signal_fort.csv` |
+| 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.csv` |
+| 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.csv` |
+| 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.csv` |
+| 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies.html` |
+
+Les seuils des règles, les poids et les niveaux de priorité se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.
+
+## 5. En dehors du programme principal
+
+| Commande | Ce qu'elle fait |
+| --- | --- |
+| `python src/anomaly_signal_regression.py` | entraîne les deux modèles de régression (nouvel embauché, salarié revu), les enregistre dans `models/` et affiche deux exemples de vérification d'un salaire proposé. |
+| `python -m decision_support.app` | ouvre l'aide à la décision sur **http://127.0.0.1:8765** (arrêter avec `Ctrl+C`) ; mode d'emploi dans [`decision_support/README.md`](decision_support/README.md). |
+| `python src/generate_sources.py` | fabrique de nouvelles données fictives. **Attention :** il réécrit les trois fichiers de `input/` et remplace donc les vôtres. |
+
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.
 Avant d'envoyer, « git log --oneline origin/main..HEAD » liste les commits qui vont partir.
