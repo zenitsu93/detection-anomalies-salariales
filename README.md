@@ -28,6 +28,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`0893e42`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/0893e42274181ebe771c5b437c1f182605deb85f) | feat: suivre l'avancement dans le terminal | `src/detect_salary_anomalies.py` : quand on lance tout, le terminal affiche chaque étape au moment où elle commence (`[4/9] ...`), le temps qu'elle a pris, puis la durée totale et l'endroit des résultats. |
 | [`987bf25`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/987bf25c8c6826b463bf7f7d17c6c568ebace80e) | chore: remplacer les anciens tableaux de bord par le tableau de bord daté | `output/dashboard/` : le tableau de bord daté, produit avec le code du dépôt, remplace les deux anciens tableaux de bord sans date. |
 | [`31c89a2`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/31c89a28bdd97df580845a48702b63a6d6624bc7) | feat: faire du signal fort un cinquième signal, sans points | `src/anomaly_signal_fort.py` et `config/rules.yaml` : les 5 % de profils les plus atypiques pour l'IA reçoivent l'étiquette ML_STRONG_SIGNAL et son motif, en plus des signaux des règles, sans aucun point dans le score. |
+| [`bff4966`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/bff49667d0eea9c83cf3a48dff36a6ce81f4ce4c) | chore: mettre à jour les résultats après le changement du signal fort | `output/` : les CSV des étapes touchées par le signal fort et le tableau de bord daté qui va avec, refaits avec le code du dépôt. |
 
 # Lancer le projet
 
