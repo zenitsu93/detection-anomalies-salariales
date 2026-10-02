@@ -10,7 +10,7 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 2. anomaly_cohortes.py             : groupes de collègues et écart PeerZ ;
 3. anomaly_regles.py               : règles (étiquettes, points, motifs) ;
 4. anomaly_signal_iforest.py       : score de l'IA ;
-5. anomaly_signal_fort.py          : points pour les profils très atypiques sans aucune règle déclenchée ;
+5. anomaly_signal_fort.py          : signal ML_STRONG_SIGNAL pour les profils très atypiques (sans points) ;
 6. anomaly_score_general.py        : score général (règles + IA) et priorité de chaque salarié ;
 7. anomaly_recommandations.py      : recommandation et coût d'ajustement ;
 8. anomaly_ecarts_hommes_femmes.py : médianes femmes / hommes par métier + grade ;

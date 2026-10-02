@@ -6,10 +6,10 @@ rules:
     compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
     market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
     peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
-    ml_strong_signal: 15   # profil jugé très atypique par l'IA alors qu'aucune règle ne s'est déclenchée
 
   # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
-  # qui n'ont déclenché aucune règle reçoivent les points ml_strong_signal ci-dessus.
+  # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
+  # point : le score de l'IA compte déjà dans le score général (ml_weight, plus bas).
   # Pourquoi « les 5 % les plus atypiques » et pas « score IA supérieur à 80 » ? Le score IA est
   # recalculé de 0 à 100 à chaque analyse : un même nombre n'a pas le même sens d'un fichier à l'autre.
   ml_strong_signal_percentile: 0.95

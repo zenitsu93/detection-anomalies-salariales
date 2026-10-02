@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 
 """
-SIGNAL FORT DE L'IA : DES POINTS POUR LES PROFILS TRÈS ATYPIQUES SANS AUCUNE RÈGLE DÉCLENCHÉE
-============================================================================================
+SIGNAL FORT DE L'IA : UN CINQUIÈME SIGNAL POUR LES PROFILS TRÈS ATYPIQUES
+=========================================================================
 
-Un salarié peut respecter la grille et gagner autant que ses collègues, tout en ayant un profil très
-inhabituel. L'IA le repère (ML_AnomalyScore), mais aucune règle ne se déclenche. Ce fichier lui
-ajoute donc l'étiquette ML_STRONG_SIGNAL, des points dans Rule_Score et un motif, comme si une règle
-s'était déclenchée.
+Les quatre règles regardent le salaire sous un angle précis (grille, CompaRatio, marché, collègues).
+L'IA, elle, regarde tout le profil d'un coup (ML_AnomalyScore). Ce fichier fait remonter ce qu'elle
+voit comme un cinquième signal : les salariés parmi les plus atypiques pour l'IA reçoivent
+l'étiquette ML_STRONG_SIGNAL et un motif, en plus des signaux des règles.
+
+Ce signal n'ajoute aucun point : Rule_Score ne change pas. Le score de l'IA compte déjà dans le
+score général (ml_weight dans config/rules.yaml) ; lui donner aussi des points le compterait deux
+fois.
 
 Il prend en entrée le DataFrame rendu par anomaly_signal_iforest.py et rend ce DataFrame complété.
 
@@ -33,27 +37,28 @@ from anomaly_signal_iforest import ml_anomaly
 
 
 def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
-    """Donne l'étiquette ML_STRONG_SIGNAL aux salariés parmi les plus atypiques pour l'IA (les 5 % du
-    haut avec ml_strong_signal_percentile = 0.95) qui n'ont déclenché aucune règle. Rend un NOUVEAU
-    DataFrame (celui reçu n'est pas modifié).
+    """Ajoute l'étiquette ML_STRONG_SIGNAL aux salariés parmi les plus atypiques pour l'IA (les 5 % du
+    haut avec ml_strong_signal_percentile = 0.95), qu'une règle se soit déclenchée ou non. Ne touche
+    pas à Rule_Score. Rend un NOUVEAU DataFrame (celui reçu n'est pas modifié).
 
     On classe les salariés du score le plus faible au plus élevé, puis on prend le seuil au-dessus
     duquel se trouvent les 5 % du haut (sur 100 salariés, ce serait vers le 95ᵉ).
     """
-    weights = rule_params.get("severity_weights")
     percentile = rule_params.get("ml_strong_signal_percentile")
 
     df = df.copy()
 
     # Le score à partir duquel on fait partie des plus atypiques.
     seuil = df["ML_AnomalyScore"].quantile(percentile)
-    # Très atypique ET aucune règle déclenchée (Rule_Flags vide).
-    fort = (df["ML_AnomalyScore"] >= seuil) & (df["Rule_Flags"] == "")
+    fort = df["ML_AnomalyScore"] >= seuil
 
-    # Aucune règle déclenchée : Rule_Flags et Reason_Principale sont vides, on les remplit directement.
-    df.loc[fort, "Rule_Flags"] = "ML_STRONG_SIGNAL"
-    df.loc[fort, "Rule_Score"] += weights.get("ml_strong_signal")
-    df.loc[fort, "Reason_Principale"] = "Profil atypique détecté par le modèle ML (aucune règle de salaire déclenchée)"
+    # Le signal et son motif s'ajoutent à ceux des règles, avec les mêmes séparateurs que dans
+    # anomaly_regles.py (« ; » et « & »). Pour un salarié sans aucune règle déclenchée, il n'y avait
+    # rien avant : on retire le séparateur resté en tête.
+    df.loc[fort, "Rule_Flags"] += ";ML_STRONG_SIGNAL"
+    df["Rule_Flags"] = df["Rule_Flags"].str.lstrip(";")
+    df.loc[fort, "Reason_Principale"] += " & Profil atypique détecté par le modèle ML"
+    df["Reason_Principale"] = df["Reason_Principale"].str.removeprefix(" & ")
 
     return df
 

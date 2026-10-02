@@ -120,7 +120,7 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 | 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.csv` |
 | 3 | `python src/anomaly_regles.py` | alertes des quatre règles et leurs points | `output/regles/employes_regles.csv` |
 | 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.csv` |
-| 5 | `python src/anomaly_signal_fort.py` | points pour les profils que seule l'IA repère | `output/signal_fort/employes_signal_fort.csv` |
+| 5 | `python src/anomaly_signal_fort.py` | signal ML_STRONG_SIGNAL pour les 5 % de profils les plus atypiques pour l'IA (sans points) | `output/signal_fort/employes_signal_fort.csv` |
 | 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.csv` |
 | 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.csv` |
 | 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.csv` |
