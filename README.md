@@ -99,6 +99,8 @@ Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne s
 python src/detect_salary_anomalies.py
 ```
 
+Pendant le calcul, le terminal affiche chaque étape au moment où elle commence (`[4/9] Score de l'IA (Isolation Forest)...`), puis le temps qu'elle a pris. À la fin, il donne la durée totale et l'endroit où trouver les résultats.
+
 Les résultats arrivent dans `output/detection/` :
 
 - `anomalies.csv` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
