@@ -9,8 +9,8 @@ Ce fichier crée un tableau de bord HTML (graphiques Chart.js) à partir de :
 - df : le DataFrame des salariés rendu par anomaly_recommandations.py, avec le score général
   (RiskScore) et la priorité (Severity) ajoutés par anomaly_score_general.py ;
 - gg : le tableau rendu par anomaly_ecarts_hommes_femmes.py.
-Il ne recalcule rien : il compte et affiche. Un clic sur une barre affiche les salariés concernés,
-avec un export CSV.
+Il ne recalcule rien : il compte et affiche. Un clic sur une barre ou un point affiche les salariés
+concernés, avec un export CSV.
 
 Un salarié est « à traiter » si sa priorité est Critical, Major ou Minor : les « Info » n'ont rien à
 faire.
@@ -18,11 +18,12 @@ faire.
 Utilisation :
 - depuis Python :
       from generate_dashboard_html import generate_dashboard
-      generate_dashboard(df, gg, "output/detection/dashboard_anomalies.html")
+      generate_dashboard(df, gg, "output/dashboard")
 - en ligne de commande, depuis le dossier du projet :
       python src/generate_dashboard_html.py
-  Le tableau de bord est enregistré dans output/dashboard/dashboard_anomalies.html, à ouvrir avec un
-  navigateur.
+  Le tableau de bord est enregistré dans output/dashboard/, sous un nom daté
+  (dashboard_anomalies_AAAA-MM-JJ_HH-MM-SS.html), à ouvrir avec un navigateur. Chaque lancement
+  ajoute un fichier sans effacer les précédents.
 """
 
 import json
@@ -54,6 +55,10 @@ SLATE = "#5b6b7d"
 SEVERITY_ORDER = ["Critical", "Major", "Minor", "Info"]
 STATUS = {"Critical": "#b3261e", "Major": "#d9731f", "Minor": GOLD, "Info": "#c4c9cf"}
 SEVERITY_FR = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "Info": "Info (sans action)"}
+
+# Les trois courbes du score général : brun cuivré pour le score général, or pour les règles, bleu
+# pour l'IA. Trois teintes choisies pour rester distinctes, y compris pour un lecteur daltonien.
+SCORE_COLORS = {"RiskScore": "#9a5530", "Rule_Score": GOLD, "ML_AnomalyScore": "#3d6fa8"}
 
 # Les étiquettes traduites pour l'écran ; le code d'origine reste visible dans l'infobulle.
 FLAG_FR = {
@@ -93,15 +98,20 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
     pole = pole.loc[pole.sum(axis=1).sort_values(ascending=False).index]
     job = df.loc[a_traiter, "Job_Family"].value_counts().head(10)
     cost = df.groupby("Entite_N1")["Cout_Ajustement"].sum().sort_values(ascending=False)
-    # Score général par tranches de 10 (tout ce qui dépasse 90 va dans la dernière). Même arrondi et
-    # même calcul que la liste affichée au clic, pour que les deux comptes collent.
-    tranche = np.floor(df["RiskScore"].round(2) / 10).clip(upper=9).astype(int)
-    risk = tranche.value_counts().reindex(range(10), fill_value=0)
-    # Couleur de chaque barre : la priorité la plus fréquente parmi les salariés de la tranche.
-    dominante = df["Severity"].groupby(tranche).agg(lambda s: s.mode().iat[0]).reindex(range(10))
-    # Les 10 écarts hommes / femmes les plus marqués, dans un sens ou dans l'autre.
-    gap = gg.assign(Ecart_pct=(gg["M_div_F"] - 1) * 100)
-    gap = gap.loc[gap["Ecart_pct"].abs().nlargest(10).index]
+    # Les trois scores comptés par tranches de 10 (tout ce qui dépasse 90 va dans la dernière). Même
+    # arrondi et même calcul que la liste affichée au clic, pour que les deux comptes collent.
+    scores = [{"code": col, "label": COL_FR[col], "color": couleur,
+               "data": np.floor(df[col].round(2) / 10).clip(upper=9).astype(int)
+                         .value_counts().reindex(range(10), fill_value=0).tolist()}
+              for col, couleur in SCORE_COLORS.items()]
+    # Tous les écarts hommes / femmes (le choix des 10 plus marqués ou d'un grade se fait dans la page),
+    # avec le nombre de femmes et d'hommes : un écart sur 3 personnes ne pèse pas comme un écart sur 300.
+    # Un métier + grade sans femme ou sans homme n'a pas d'écart : il est écarté.
+    effectifs = df.groupby(["Job_Family", "Grade", "Sexe"]).size().unstack(fill_value=0).reset_index()
+    gap = gg.dropna(subset=["M_div_F"]).merge(effectifs, on=["Job_Family", "Grade"])
+    gap["Ecart_pct"] = (gap["M_div_F"] - 1) * 100
+    gap = gap[["Job_Family", "Grade", "Median_F", "Median_M", "F", "M", "Ecart_pct"]]
+    gap = gap.round({"Median_F": 2, "Median_M": 2, "Ecart_pct": 1})
 
     # La liste des salariés : cases vides en None, sinon le JSON serait invalide.
     rec = df[list(COL_FR)].round(2)
@@ -125,17 +135,8 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
         "cost": {"labels": cost.index.tolist(), "data": cost.round(1).tolist()},
         "flags": {"labels": [FLAG_FR.get(f, f) for f in flags.index], "codes": flags.index.tolist(),
                   "data": flags.tolist()},
-        "risk": {"labels": [f"{b}-{b + 10}" for b in range(0, 100, 10)], "data": risk.tolist(),
-                 "colors": [STATUS.get(s, STATUS["Info"]) for s in dominante]},
-        "gap": {
-            "labels": [f"{j} - Grade {g}" for j, g in zip(gap["Job_Family"], gap["Grade"])],
-            "data": gap["Ecart_pct"].round(1).tolist(),
-            "median_f": gap["Median_F"].round(2).tolist(),
-            "median_m": gap["Median_M"].round(2).tolist(),
-            # Ardoise = hommes mieux payés, or = femmes mieux payées.
-            "colors": [SLATE if v > 0 else GOLD for v in gap["Ecart_pct"]],
-            "meta": [{"job_family": j, "grade": int(g)} for j, g in zip(gap["Job_Family"], gap["Grade"])],
-        },
+        "scores": {"labels": [f"{b}-{b + 10}" for b in range(0, 100, 10)], "datasets": scores},
+        "gap": gap.to_dict("records"),
         "records": {"cols": list(COL_FR), "rows": rec.values.tolist()},
     }
 
@@ -150,15 +151,17 @@ def table_html(entetes, lignes):
     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
-def build_html(data: dict) -> str:
+def build_html(data: dict, maintenant: datetime) -> str:
     kpis = data["kpis"]
     # Un « < » dans un libellé ne doit pas pouvoir fermer la balise <script>.
     data_json = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
     names_json = json.dumps({"cols": COL_FR, "flags": FLAG_FR, "sev": SEVERITY_FR}, ensure_ascii=False).replace("<", "\\u003c")
-    generated = datetime.now().strftime("%d/%m/%Y à %H:%M")
+    # La même heure que dans le nom du fichier.
+    generated = maintenant.strftime("%d/%m/%Y à %H:%M")
     pct = kpis["a_traiter"] / kpis["effectif"] * 100 if kpis["effectif"] else 0.0
 
-    g, p = data["gap"], data["pole"]
+    s, p = data["scores"], data["pole"]
+    # Plus de tableau des écarts hommes / femmes : le graphique par grade le remplace.
     tables_html = "".join(
         f'<details class="data-toggle"><summary>{titre}</summary>'
         f'<div class="table-wrap">{table_html(entetes, lignes)}</div></details>'
@@ -168,9 +171,8 @@ def build_html(data: dict) -> str:
             ("Top métiers", ["Métier", "Salariés à traiter"], zip(data["job"]["labels"], data["job"]["data"])),
             ("Coût par pôle", ["Pôle", "Coût d'ajustement"], zip(data["cost"]["labels"], data["cost"]["data"])),
             ("Signaux déclencheurs", ["Signal", "Salariés"], zip(data["flags"]["labels"], data["flags"]["data"])),
-            ("Score général", ["Tranche", "Salariés"], zip(data["risk"]["labels"], data["risk"]["data"])),
-            ("Écarts de rémunération H/F", ["Métier × grade", "Médiane femmes", "Médiane hommes", "Écart (%)"],
-             zip(g["labels"], g["median_f"], g["median_m"], g["data"])),
+            ("Score général", ["Tranche"] + [d["label"] for d in s["datasets"]],
+             zip(s["labels"], *[d["data"] for d in s["datasets"]])),
         ]
     )
 
@@ -235,6 +237,10 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 .h-sm {{ height: 240px; }}
 .h-md {{ height: 300px; }}
 .h-lg {{ height: 360px; }}
+.h-xl {{ height: 520px; }}
+/* Boutons de choix des écarts hommes / femmes : celui qui est affiché est foncé. */
+.views {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }}
+.views button[aria-pressed="true"] {{ background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }}
 
 details.data-toggle {{ border-top: 1px solid var(--line-soft); }}
 details.data-toggle summary {{ cursor: pointer; padding: 10px 16px; font-size: 13px; }}
@@ -294,7 +300,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 <main>
   <div class="page-head">
     <div><p class="crumb">Rémunération › Anomalies</p><h1>Tableau de bord des anomalies</h1></div>
-    <p class="page-hint">Cliquez une barre pour afficher les salariés concernés.</p>
+    <p class="page-hint">Cliquez une barre ou un point pour afficher les salariés concernés.</p>
   </div>
 
   <dl class="panel kpis">
@@ -320,18 +326,24 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Signaux déclencheurs</h2><span class="panel-unit">salariés</span></div>
-      <div class="panel-body"><div class="chart-box h-md"><canvas id="chart-flags"></canvas></div>
+      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-flags"></canvas></div>
         <p class="note">Un salarié peut déclencher plusieurs signaux.</p></div>
     </section>
     <section class="panel">
-      <div class="panel-head"><h2 class="panel-title">Score général</h2><span class="panel-unit">salariés par tranche</span></div>
-      <div class="panel-body"><div class="chart-box h-md"><canvas id="chart-risk"></canvas></div>
-        <p class="note">Score des règles et score de l'IA réunis. Couleur : priorité la plus fréquente dans la tranche.</p></div>
+      <div class="panel-head"><h2 class="panel-title">Score général</h2><span class="panel-unit">salariés par tranche de score</span></div>
+      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-risk"></canvas></div>
+        <p class="note">Le score général réunit le score de règles et le score IA ; c'est lui qui fixe la priorité.</p></div>
     </section>
     <section class="panel full">
-      <div class="panel-head"><h2 class="panel-title">Écarts hommes / femmes les plus marqués</h2><span class="panel-unit">métier × grade</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-gap"></canvas></div>
-        <p class="note">Écart entre salaires médians. Ardoise : hommes mieux payés ; or : femmes mieux payées.</p></div>
+      <div class="panel-head"><h2 class="panel-title">Écarts de salaire hommes / femmes</h2><span class="panel-unit">par métier et grade</span></div>
+      <div class="panel-body">
+        <div class="views" id="gap-views" role="group" aria-label="Écarts à afficher"></div>
+        <div class="chart-box h-xl"><canvas id="chart-gap"></canvas></div>
+        <p class="note">Chaque barre compare le salaire médian (celui du milieu) des hommes à celui des femmes, à métier
+          et grade égaux : +10 % veut dire que les hommes touchent 10 % de plus. Sous chaque métier, le nombre de
+          femmes et d'hommes comparés : sur quelques personnes, un seul salaire suffit à créer un gros écart. Un métier
+          sans femme ou sans homme dans le grade n'apparaît pas.</p>
+      </div>
     </section>
     <details class="panel full data-panel">
       <summary class="panel-head"><h2 class="panel-title">Données détaillées</h2><span class="panel-unit">afficher</span></summary>
@@ -497,40 +509,145 @@ new Chart(document.getElementById('chart-flags'), {{
   }}),
 }});
 
+// Une courbe par score : combien de salariés tombent dans chaque tranche de 10 points.
+const tranche = v => Math.min(Math.floor(v / 10), 9);
 new Chart(document.getElementById('chart-risk'), {{
-  type: 'bar',
-  data: {{ labels: DATA.risk.labels, datasets: [{{ data: DATA.risk.data, backgroundColor: DATA.risk.colors, borderRadius: 2, maxBarThickness: 40 }}] }},
+  type: 'line',
+  data: {{ labels: DATA.scores.labels, datasets: DATA.scores.datasets.map((s, k) => ({{
+    label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color,
+    // Le score général (le premier), celui qui fixe la priorité, en trait plus épais.
+    borderWidth: k ? 2 : 3, pointRadius: k ? 4 : 5, pointHoverRadius: 7, pointBorderColor: '#fff', pointBorderWidth: 2,
+  }})) }},
   options: baseOptions({{
-    scales: {{ x: {{ grid: {{ display: false }} }} }},
-    onClick: (evt, els) => pick(els, i => {{
-      showPopulation('Score général ' + DATA.risk.labels[i], r => Math.min(Math.floor(r[RIDX.RiskScore] / 10), 9) === i);
+    // L'infobulle donne les trois scores de la tranche survolée.
+    interaction: {{ mode: 'index', intersect: false }},
+    plugins: {{
+      legend: {{ display: true, position: 'top', align: 'start', labels: {{ usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 16 }} }},
+      tooltip: {{ displayColors: true, callbacks: {{
+        title: items => {{ const b = items[0].dataIndex * 10; return 'Score de ' + b + (b < 90 ? ' à moins de ' + (b + 10) : ' à 100'); }},
+        label: c => c.dataset.label + ' : ' + NUM.format(c.parsed.y) + ' salariés',
+      }} }},
+    }},
+    scales: {{
+      x: {{ grid: {{ display: false }}, title: {{ display: true, text: 'Score sur 100, par tranche de 10 points' }} }},
+      y: {{ beginAtZero: true, title: {{ display: true, text: 'Nombre de salariés' }} }},
+    }},
+    // Le clic retient le point le plus proche, donc une seule courbe.
+    onClick: (evt, els, chart) => pick(chart.getElementsAtEventForMode(evt, 'nearest', {{ intersect: false, axis: 'xy' }}, false), (i, d) => {{
+      const s = DATA.scores.datasets[d];
+      showPopulation(s.label + ' ' + DATA.scores.labels[i], r => tranche(r[RIDX[s.code]]) === i);
     }}),
   }}),
 }});
 
-new Chart(document.getElementById('chart-gap'), {{
+// ---- Écarts hommes / femmes : les 10 plus marqués, puis un bouton par grade ----
+const GAP = DATA.gap;
+const plural = (n, mot) => n + ' ' + mot + (n > 1 ? 's' : '');
+const pctText = v => (v > 0 ? '+' : '') + NUM.format(v) + ' %';
+const gapName = (r, avecGrade) => r.Job_Family + (avecGrade ? ' · grade ' + r.Grade : '');
+// La même échelle pour toutes les vues : deux barres de même longueur montrent le même écart, d'un
+// grade à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
+// arrondir à 20 près garde des graduations régulières (-40 %, -20 %, 0 %...).
+const gapMax = Math.ceil(Math.max(...GAP.map(r => Math.abs(r.Ecart_pct))) * 1.2 / 20) * 20;
+const gapViews = [{{ name: 'Les 10 plus marqués', rows: [...GAP].sort((a, b) => Math.abs(b.Ecart_pct) - Math.abs(a.Ecart_pct)).slice(0, 10) }}]
+  .concat([...new Set(GAP.map(r => r.Grade))].sort((a, b) => a - b).map(g => ({{
+    // Dans un grade, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
+    name: 'Grade ' + g, grade: g, rows: GAP.filter(r => r.Grade === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
+  }})));
+let gapRows = [];
+
+// Écrit l'écart au bout de chaque barre, et le sens de lecture de part et d'autre du zéro.
+const gapLabels = {{
+  id: 'gapLabels',
+  afterDatasetsDraw(chart) {{
+    const {{ ctx, chartArea, scales: {{ x }} }} = chart, zero = x.getPixelForValue(0), y = chartArea.top - 14;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    ctx.font = '600 12px ' + Chart.defaults.font.family;
+    ctx.fillStyle = '#1f2328';
+    chart.getDatasetMeta(0).data.forEach((bar, i) => {{
+      if (!gapRows[i]) return;
+      const v = gapRows[i].Ecart_pct;
+      ctx.textAlign = v < 0 ? 'right' : 'left';
+      ctx.fillText(pctText(v), bar.x + (v < 0 ? -6 : 6), bar.y);
+    }});
+    ctx.font = '12px ' + Chart.defaults.font.family;
+    ctx.fillStyle = '{GOLD}'; ctx.fillRect(zero - 18, y - 5, 10, 10);
+    ctx.fillStyle = '{SLATE}'; ctx.fillRect(zero + 8, y - 5, 10, 10);
+    ctx.fillStyle = '#5f6670';
+    ctx.textAlign = 'right'; ctx.fillText('Femmes mieux payées', zero - 24, y);
+    ctx.textAlign = 'left'; ctx.fillText('Hommes mieux payés', zero + 24, y);
+    ctx.restore();
+  }},
+}};
+
+const gapChart = new Chart(document.getElementById('chart-gap'), {{
   type: 'bar',
-  data: {{ labels: DATA.gap.labels, datasets: [hbar(DATA.gap.colors, {{ data: DATA.gap.data }})] }},
+  data: {{ labels: [], datasets: [hbar([], {{ data: [] }})] }},
+  plugins: [gapLabels],
   options: hOptions({{
-    plugins: {{ tooltip: {{ callbacks: {{ label: c => (c.parsed.x > 0 ? '+' : '') + NUM.format(c.parsed.x) + ' %' }} }} }},
-    scales: {{ x: {{ ticks: {{ callback: v => (v > 0 ? '+' : '') + v + ' %' }} }} }},
+    layout: {{ padding: {{ top: 24 }} }},
+    plugins: {{ tooltip: {{ callbacks: {{
+      title: items => gapName(gapRows[items[0].dataIndex], true),
+      label: c => {{
+        const r = gapRows[c.dataIndex];
+        return ['Médiane femmes : ' + NUM.format(r.Median_F) + ' (' + plural(r.F, 'femme') + ')',
+                'Médiane hommes : ' + NUM.format(r.Median_M) + ' (' + plural(r.M, 'homme') + ')',
+                'Les hommes touchent ' + NUM.format(Math.abs(r.Ecart_pct)) + ' % de ' + (r.Ecart_pct < 0 ? 'moins' : 'plus') + ' que les femmes'];
+      }},
+    }} }} }},
+    scales: {{
+      x: {{ min: -gapMax, max: gapMax,
+            ticks: {{ callback: v => (v > 0 ? '+' : '') + v + ' %' }},
+            // Le zéro (pas d'écart) en trait plus foncé.
+            grid: {{ color: c => c.tick.value === 0 ? '#8b929b' : GRID }},
+            title: {{ display: true, text: 'Salaire médian des hommes comparé à celui des femmes (en %)' }} }},
+      y: {{ title: {{ display: true }} }},
+    }},
     onClick: (evt, els) => pick(els, i => {{
-      const meta = DATA.gap.meta[i];
-      showPopulation(DATA.gap.labels[i], r => r[RIDX.Job_Family] === meta.job_family && r[RIDX.Grade] === meta.grade);
+      const r = gapRows[i];
+      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Grade] === r.Grade);
     }}),
   }}),
 }});
+
+function showGapView(view, button) {{
+  gapRows = view.rows;
+  // Deux lignes sous chaque barre : le métier (et le grade s'ils sont mélangés), puis les effectifs.
+  gapChart.data.labels = gapRows.map(r => [gapName(r, !view.grade), plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme')]);
+  gapChart.data.datasets[0].data = gapRows.map(r => r.Ecart_pct);
+  // Ardoise = hommes mieux payés, or = femmes mieux payées.
+  gapChart.data.datasets[0].backgroundColor = gapRows.map(r => r.Ecart_pct > 0 ? '{SLATE}' : '{GOLD}');
+  gapChart.options.scales.y.title.text = view.grade ? 'Métiers du grade ' + view.grade : 'Métier et grade';
+  gapChart.update();
+  viewButtons.forEach(b => b.setAttribute('aria-pressed', b === button));
+}}
+const viewButtons = gapViews.map(view => {{
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = view.name;
+  b.addEventListener('click', () => showGapView(view, b));
+  document.getElementById('gap-views').appendChild(b);
+  return b;
+}});
+showGapView(gapViews[0], viewButtons[0]);
 </script>
 </body>
 </html>
 """
 
 
-def generate_dashboard(df: pd.DataFrame, gg: pd.DataFrame, out_html) -> Path:
-    """Crée le tableau de bord à partir des deux tableaux et l'enregistre dans out_html."""
-    out_html = Path(out_html)
+def generate_dashboard(df: pd.DataFrame, gg: pd.DataFrame, dossier) -> Path:
+    """Crée le tableau de bord à partir des deux tableaux et l'enregistre dans dossier.
+
+    Le nom du fichier porte la date et l'heure (dashboard_anomalies_2026-10-02_14-35-08.html) : un
+    nouveau lancement ne remplace pas le tableau de bord précédent, et les noms se rangent d'eux-mêmes
+    du plus ancien au plus récent.
+    """
+    maintenant = datetime.now()
+    out_html = Path(dossier) / f"dashboard_anomalies_{maintenant:%Y-%m-%d_%H-%M-%S}.html"
     out_html.parent.mkdir(parents=True, exist_ok=True)
-    out_html.write_text(build_html(build_data(df, gg)), encoding="utf-8")
+    out_html.write_text(build_html(build_data(df, gg), maintenant), encoding="utf-8")
     return out_html
 
 
@@ -556,5 +673,5 @@ if __name__ == "__main__":
     df = aggregate_risk(df, rule_params)
     df = recommendations(df, rule_params)
 
-    sortie = generate_dashboard(df, gg, projet / "output" / "dashboard" / "dashboard_anomalies.html")
+    sortie = generate_dashboard(df, gg, projet / "output" / "dashboard")
     print(f"Tableau de bord enregistré dans : {sortie}")

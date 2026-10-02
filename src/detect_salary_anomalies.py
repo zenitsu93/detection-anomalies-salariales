@@ -18,9 +18,10 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 
 Utilisation, depuis le dossier du projet :
       python src/detect_salary_anomalies.py
-Les résultats sont enregistrés dans output/detection/ :
-- anomalies.csv et gender_gap.csv, à ouvrir avec Excel ;
-- dashboard_anomalies.html, à ouvrir avec un navigateur.
+Les résultats sont enregistrés :
+- dans output/detection/ : anomalies.csv et gender_gap.csv, à ouvrir avec Excel ;
+- dans output/dashboard/ : le tableau de bord, sous un nom daté
+  (dashboard_anomalies_AAAA-MM-JJ_HH-MM-SS.html), à ouvrir avec un navigateur.
 """
 
 from pathlib import Path
@@ -71,5 +72,7 @@ if __name__ == "__main__":
     # Pour Excel : séparateur « ; », virgule décimale, et encodage utf-8-sig (pour les accents).
     df.to_csv(dossier / "anomalies.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")
     gg.to_csv(dossier / "gender_gap.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")
-    generate_dashboard(df, gg, dossier / "dashboard_anomalies.html")
+    # Tous les tableaux de bord au même endroit, quel que soit le programme qui les crée.
+    tableau_de_bord = generate_dashboard(df, gg, projet / "output" / "dashboard")
     print(f"{len(df)} salariés - résultats enregistrés dans : {dossier}")
+    print(f"Tableau de bord enregistré dans : {tableau_de_bord}")

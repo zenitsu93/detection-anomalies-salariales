@@ -101,8 +101,9 @@ python src/detect_salary_anomalies.py
 Les résultats arrivent dans `output/detection/` :
 
 - `anomalies.csv` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
-- `gender_gap.csv` : les écarts de salaire femmes / hommes, par métier + grade ;
-- `dashboard_anomalies.html` : le tableau de bord, à ouvrir avec un navigateur (double-clic, ou `start output\detection\dashboard_anomalies.html`).
+- `gender_gap.csv` : les écarts de salaire femmes / hommes, par métier + grade.
+
+Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic).
 
 ## 4. Lancer étape par étape
 
@@ -118,7 +119,7 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 | 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.csv` |
 | 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.csv` |
 | 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.csv` |
-| 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies.html` |
+| 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies_<date>_<heure>.html` |
 
 Les seuils des règles, les poids et les niveaux de priorité se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.
 
