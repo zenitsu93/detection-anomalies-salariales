@@ -109,8 +109,8 @@ Pendant le calcul, le terminal affiche chaque étape au moment où elle commence
 
 Les résultats arrivent dans `output/detection/` :
 
-- `anomalies.csv` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
-- `gender_gap.csv` : les écarts de salaire femmes / hommes, par métier + grade.
+- `anomalies.xlsx` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
+- `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + grade.
 
 Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic).
 
@@ -120,14 +120,14 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 
 | Ordre | Commande | Ce que l'étape ajoute | Résultat |
 | --- | --- | --- | --- |
-| 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié | `output/pretraitement/employes_pretraites.csv` |
-| 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.csv` |
-| 3 | `python src/anomaly_regles.py` | alertes des quatre règles et leurs points | `output/regles/employes_regles.csv` |
-| 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.csv` |
-| 5 | `python src/anomaly_signal_fort.py` | signal ML_STRONG_SIGNAL pour les 5 % de profils les plus atypiques pour l'IA (sans points) | `output/signal_fort/employes_signal_fort.csv` |
-| 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.csv` |
-| 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.csv` |
-| 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.csv` |
+| 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié | `output/pretraitement/employes_pretraites.xlsx` |
+| 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.xlsx` |
+| 3 | `python src/anomaly_regles.py` | alertes des quatre règles et leurs points | `output/regles/employes_regles.xlsx` |
+| 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.xlsx` |
+| 5 | `python src/anomaly_signal_fort.py` | signal ML_STRONG_SIGNAL pour les 5 % de profils les plus atypiques pour l'IA (sans points) | `output/signal_fort/employes_signal_fort.xlsx` |
+| 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.xlsx` |
+| 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.xlsx` |
+| 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.xlsx` |
 | 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies_<date>_<heure>.html` |
 
 Les seuils des règles, les poids et les niveaux de priorité se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.

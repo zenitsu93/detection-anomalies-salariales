@@ -17,7 +17,7 @@ Utilisation :
       df = ml_anomaly(df, rule_params)
 - en ligne de commande, depuis le dossier du projet :
       python src/anomaly_signal_iforest.py
-  Le DataFrame est enregistré dans output/signal_iforest/employes_signal_iforest.csv, à ouvrir
+  Le DataFrame est enregistré dans output/signal_iforest/employes_signal_iforest.xlsx, à ouvrir
   avec Excel.
 """
 
@@ -110,9 +110,9 @@ if __name__ == "__main__":
     df = ml_anomaly(df, rule_params)
     print(df.head(10).to_string(index=False))
 
-    # Le DataFrame complet, pour Excel : séparateur « ; », virgule décimale, et encodage utf-8-sig
-    # (pour qu'Excel affiche bien les accents).
-    sortie = projet / "output" / "signal_iforest" / "employes_signal_iforest.csv"
+    # Le DataFrame complet, en fichier Excel (.xlsx) : il s'ouvre directement, sans souci de
+    # séparateur, de virgule décimale ou d'accents.
+    sortie = projet / "output" / "signal_iforest" / "employes_signal_iforest.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(sortie, index=False, sep=";", decimal=",", encoding="utf-8-sig")
+    df.to_excel(sortie, index=False)
     print(f"\n{len(df)} salariés - DataFrame enregistré dans : {sortie}")

@@ -19,7 +19,7 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 Utilisation, depuis le dossier du projet :
       python src/detect_salary_anomalies.py
 Les résultats sont enregistrés :
-- dans output/detection/ : anomalies.csv et gender_gap.csv, à ouvrir avec Excel ;
+- dans output/detection/ : anomalies.xlsx et gender_gap.xlsx, à ouvrir avec Excel ;
 - dans output/dashboard/ : le tableau de bord, sous un nom daté
   (dashboard_anomalies_AAAA-MM-JJ_HH-MM-SS.html), à ouvrir avec un navigateur.
 """
@@ -89,10 +89,11 @@ if __name__ == "__main__":
     # Tous les tableaux de bord au même endroit, quel que soit le programme qui les crée.
     tableau_de_bord = lancer(9, "Tableau de bord", generate_dashboard, df, gg, projet / "output" / "dashboard")
 
-    # Pour Excel : séparateur « ; », virgule décimale, et encodage utf-8-sig (pour les accents).
-    df.to_csv(dossier / "anomalies.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")
-    gg.to_csv(dossier / "gender_gap.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")
+    # En fichiers Excel (.xlsx) : ils s'ouvrent directement, sans souci de séparateur, de virgule
+    # décimale ou d'accents.
+    df.to_excel(dossier / "anomalies.xlsx", index=False)
+    gg.to_excel(dossier / "gender_gap.xlsx", index=False)
 
     print(f"\nTerminé en {secondes(debut)} : {len(df)} salariés analysés.")
-    print(f"- CSV (anomalies.csv, gender_gap.csv) : {dossier}")
+    print(f"- Excel (anomalies.xlsx, gender_gap.xlsx) : {dossier}")
     print(f"- Tableau de bord : {tableau_de_bord}")

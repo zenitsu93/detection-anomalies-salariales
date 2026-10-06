@@ -19,7 +19,7 @@ Utilisation :
       gg = gender_gap_analysis(df)
 - en ligne de commande, depuis le dossier du projet :
       python src/anomaly_ecarts_hommes_femmes.py
-  Le tableau est enregistré dans output/ecarts_hommes_femmes/gender_gap.csv, à ouvrir avec Excel.
+  Le tableau est enregistré dans output/ecarts_hommes_femmes/gender_gap.xlsx, à ouvrir avec Excel.
 """
 
 from pathlib import Path
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     gg = gender_gap_analysis(df)
     print(gg.head(10).to_string(index=False))
 
-    sortie = projet / "output" / "ecarts_hommes_femmes" / "gender_gap.csv"
+    sortie = projet / "output" / "ecarts_hommes_femmes" / "gender_gap.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
-    gg.to_csv(sortie, index=False, sep=";", decimal=",", encoding="utf-8-sig")
+    gg.to_excel(sortie, index=False)
     print(f"\n{len(gg)} métiers + grades - tableau enregistré dans : {sortie}")

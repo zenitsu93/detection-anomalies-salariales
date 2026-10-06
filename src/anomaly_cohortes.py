@@ -63,7 +63,7 @@ minimum, et sans aucun message.
 - Lancer ce fichier tout seul, depuis le dossier du projet : « python src/anomaly_cohortes.py »
   prépare les vrais fichiers du dossier input/ (avec anomaly_pretraitement.py) et forme les groupes.
   Les 10 premières lignes s'affichent, et le DataFrame complet est enregistré dans
-  output/cohortes/cohortes_salaries.csv, à ouvrir avec Excel.
+  output/cohortes/cohortes_salaries.xlsx, à ouvrir avec Excel.
 - Dans un éditeur de code, poser un point d'arrêt dans la boucle « for position, niveau in ... » de
   la recette former_cohortes, et regarder trois choses à chaque tour :
   cle (le nom du groupe de chaque salarié à ce niveau), taille (le nombre de personnes de ce groupe),
@@ -252,9 +252,9 @@ if __name__ == "__main__":
     df = former_cohortes(salaries, reglages)
     print(df.head(10).to_string(index=False))
 
-    # Le DataFrame complet, pour Excel : séparateur « ; », virgule décimale, et encodage utf-8-sig
-    # (pour qu'Excel affiche bien les accents).
-    sortie = projet / "output" / "cohortes" / "cohortes_salaries.csv"
+    # Le DataFrame complet, en fichier Excel (.xlsx) : il s'ouvre directement, sans souci de
+    # séparateur, de virgule décimale ou d'accents.
+    sortie = projet / "output" / "cohortes" / "cohortes_salaries.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(sortie, index=False, sep=";", decimal=",", encoding="utf-8-sig")
+    df.to_excel(sortie, index=False)
     print(f"\n{len(df)} salariés - DataFrame enregistré dans : {sortie}")
