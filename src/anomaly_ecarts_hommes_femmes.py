@@ -44,9 +44,9 @@ if __name__ == "__main__":
     # Le dossier du projet : deux crans au-dessus de ce fichier (src/anomaly_ecarts_hommes_femmes.py).
     projet = Path(__file__).resolve().parent.parent
 
-    df = preparer_employes(projet / "input" / "employes.csv",
-                           projet / "input" / "bands.csv",
-                           projet / "input" / "market.csv")
+    df = preparer_employes(projet / "input" / "employes.xlsx",
+                           projet / "input" / "bands.xlsx",
+                           projet / "input" / "market.xlsx")
     gg = gender_gap_analysis(df)
     print(gg.head(10).to_string(index=False))
 

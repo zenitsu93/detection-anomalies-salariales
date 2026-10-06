@@ -62,22 +62,23 @@ Les trois fichiers vont dans `input/`, avec exactement ces noms :
 
 ```text
 input/
-├── employes.csv   les salariés : une ligne par salarié
-├── bands.csv      la grille interne : une ligne par métier + grade
-└── market.csv     le marché : une ligne par métier + grade
+├── employes.xlsx  les salariés : une ligne par salarié
+├── bands.xlsx     la grille interne : une ligne par métier + grade
+└── market.xlsx    le marché : une ligne par métier + grade
 ```
 
 Le dépôt contient déjà trois fichiers fictifs (10 000 salariés) : le projet se lance tel quel. Pour analyser de vraies données, il suffit de les remplacer.
 
 Format des trois fichiers :
 
+- ce sont des classeurs Excel (`.xlsx`), dont seule la première feuille est lue ;
 - la première ligne donne les noms des colonnes, écrits exactement comme ci-dessous (l'ordre des colonnes n'a pas d'importance) ;
-- les nombres décimaux s'écrivent avec un point : `238.34`, pas `238,34` ;
+- les salaires, âges et notes sont saisis comme des nombres, pas comme du texte ;
 - le métier (`Job_Family`) et le grade (`Grade`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + grade manque dans la grille reste dans l'analyse, mais sans fourchette.
 
-Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis avec le Bloc-notes.
+Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis avec Excel.
 
-**`employes.csv`**
+**`employes.xlsx`**
 
 | Colonne | Contenu | Exemple |
 | --- | --- | --- |
@@ -98,9 +99,9 @@ Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis ave
 
 Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne servent à aucun calcul : elles sont simplement recopiées dans les résultats.
 
-**`bands.csv`** : `Job_Family`, `Grade`, puis `Min`, `Mid` (milieu) et `Max` de la grille, en kMAD.
+**`bands.xlsx`** : `Job_Family`, `Grade`, puis `Min`, `Mid` (milieu) et `Max` de la grille, en kMAD.
 
-**`market.csv`** : `Job_Family`, `Grade`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
+**`market.xlsx`** : `Job_Family`, `Grade`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
 
 ## 3. Tout lancer d'un coup
 

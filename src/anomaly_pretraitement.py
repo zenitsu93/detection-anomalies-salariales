@@ -16,7 +16,7 @@ d'anomaly_signal_iforest.py, puis d'anomaly_signal_regression.py.
 Utilisation :
 - depuis Python :
       from anomaly_pretraitement import preparer_employes
-      df = preparer_employes("input/employes.csv", "input/bands.csv", "input/market.csv")
+      df = preparer_employes("input/employes.xlsx", "input/bands.xlsx", "input/market.xlsx")
 - en ligne de commande, depuis le dossier du projet :
       python src/anomaly_pretraitement.py
   Le DataFrame est enregistré dans output/pretraitement/employes_pretraites.xlsx, à ouvrir avec Excel.
@@ -53,7 +53,7 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     """Lit les trois fichiers et rend le DataFrame des salariés prétraité.
 
     Étapes :
-    1. Lire les trois fichiers CSV (séparateur « ; », encodage Windows cp1252).
+    1. Lire les trois fichiers Excel (.xlsx).
     2. Retirer les doublons : matricule en double chez les salariés, métier + grade en double dans la
        grille et le marché (le premier est gardé).
     3. Ajouter la tranche d'ancienneté de chaque salarié (Anciennete_Bucket).
@@ -64,10 +64,11 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
        - RangePenetration = (salaire - Min) / (Max - Min) : 0 veut dire « au Min », 1 « au Max » ;
        - MarketRatio = salaire / médiane du marché : 1 veut dire « payé au niveau du marché ».
     """
-    # 1. Lecture des trois fichiers.
-    emp = pd.read_csv(chemin_employes, sep=";", encoding="cp1252")
-    bands = pd.read_csv(chemin_bands, sep=";", encoding="cp1252")
-    market = pd.read_csv(chemin_market, sep=";", encoding="cp1252")
+    # 1. Lecture des trois fichiers. Ce sont des fichiers Excel : pas de séparateur ni d'encodage à
+    # préciser, les nombres arrivent déjà comme des nombres.
+    emp = pd.read_excel(chemin_employes)
+    bands = pd.read_excel(chemin_bands)
+    market = pd.read_excel(chemin_market)
 
     # 2. Doublons, dans les trois fichiers : on garde toujours le premier.
     cles = ["Job_Family", "Grade"]
@@ -105,9 +106,9 @@ if __name__ == "__main__":
     # Le dossier du projet : deux crans au-dessus de ce fichier (src/anomaly_pretraitement.py).
     projet = Path(__file__).resolve().parent.parent
 
-    df = preparer_employes(projet / "input" / "employes.csv",
-                           projet / "input" / "bands.csv",
-                           projet / "input" / "market.csv")
+    df = preparer_employes(projet / "input" / "employes.xlsx",
+                           projet / "input" / "bands.xlsx",
+                           projet / "input" / "market.xlsx")
     print(df.head(10).to_string(index=False))
 
     # Le DataFrame complet, en fichier Excel (.xlsx) : il s'ouvre directement, sans souci de

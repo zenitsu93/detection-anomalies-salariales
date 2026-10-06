@@ -242,9 +242,9 @@ if __name__ == "__main__":
     projet = Path(__file__).resolve().parent.parent
 
     # Le DataFrame des salariés prétraité (anomaly_pretraitement.py).
-    salaries = preparer_employes(projet / "input" / "employes.csv",
-                                 projet / "input" / "bands.csv",
-                                 projet / "input" / "market.csv")
+    salaries = preparer_employes(projet / "input" / "employes.xlsx",
+                                 projet / "input" / "bands.xlsx",
+                                 projet / "input" / "market.xlsx")
     # Les réglages : la partie « rules: » du fichier de règles.
     with open(projet / "config" / "rules.yaml", encoding="utf-8") as fichier:
         reglages = yaml.safe_load(fichier)["rules"]

@@ -119,9 +119,9 @@ if __name__ == "__main__":
 
     # Les étapes dans l'ordre : la sortie de chacune est l'entrée de la suivante.
     # 1. Prétraitement : lecture, doublons, grille, marché, ratios (anomaly_pretraitement.py).
-    df = preparer_employes(projet / "input" / "employes.csv",
-                           projet / "input" / "bands.csv",
-                           projet / "input" / "market.csv")
+    df = preparer_employes(projet / "input" / "employes.xlsx",
+                           projet / "input" / "bands.xlsx",
+                           projet / "input" / "market.xlsx")
     # 2. Groupes de collègues et écart PeerZ (anomaly_cohortes.py).
     df = former_cohortes(df, rule_params)
     # 3. Règles : étiquettes, points et motifs (ce fichier).

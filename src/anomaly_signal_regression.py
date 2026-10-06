@@ -75,9 +75,9 @@ def predire(profils: pd.DataFrame, reg: dict) -> pd.DataFrame:
 
 if __name__ == "__main__":
     projet = Path(__file__).resolve().parent.parent
-    df = preparer_employes(projet / "input" / "employes.csv",
-                           projet / "input" / "bands.csv",
-                           projet / "input" / "market.csv")
+    df = preparer_employes(projet / "input" / "employes.xlsx",
+                           projet / "input" / "bands.xlsx",
+                           projet / "input" / "market.xlsx")
 
     # 1. Entraîner les deux modèles et les enregistrer
     dossier = projet / "models"

@@ -100,12 +100,12 @@ class DecisionEngine:
         root = Path(root)
         rules = yaml.safe_load((root / "config" / "rules.yaml").read_text(encoding="utf-8"))["rules"]
 
-        # Même lecture que src/anomaly_pretraitement.py : séparateur « ; », encodage Windows cp1252.
+        # Même lecture que src/anomaly_pretraitement.py : les fichiers d'entrée sont des fichiers Excel.
         def read(name):
-            return pd.read_csv(root / "input" / name, sep=";", encoding="cp1252")
+            return pd.read_excel(root / "input" / name)
 
-        market = read("market.csv") if (root / "input" / "market.csv").exists() else None
-        return cls(read("employes.csv"), read("bands.csv"), market, rules)
+        market = read("market.xlsx") if (root / "input" / "market.xlsx").exists() else None
+        return cls(read("employes.xlsx"), read("bands.xlsx"), market, rules)
 
     def metadata(self):
         pairs = self.bands.loc[self.bands.Job_Family.ne("") & self.bands.Grade.ne(""), ["Job_Family", "Grade"]]

@@ -46,7 +46,7 @@ rules:
 
   # Règle « salaire minimum » : salaire annuel minimum de chaque grade (1 à 7), en kMAD comme
   # Fixe_Annuel_MAD. Ce plancher vaut pour tous les métiers d'un même grade, alors que la grille
-  # interne (bands.csv) change d'un métier à l'autre. Un salaire strictement sous le plancher de son
+  # interne (bands.xlsx) change d'un métier à l'autre. Un salaire strictement sous le plancher de son
   # grade lève l'alerte MIN_SALARY : grade 5, plancher 140 : un salaire de 135 la lève, 140 non.
   # Un grade absent de cette liste n'est pas contrôlé. Valeurs à ajuster selon la politique salariale.
   min_salary_by_grade:

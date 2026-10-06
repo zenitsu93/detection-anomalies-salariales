@@ -69,7 +69,7 @@ if __name__ == "__main__":
     # Les étapes dans l'ordre : la sortie de chacune est l'entrée de la suivante. Chacune affiche sa
     # ligne dans le terminal : on voit laquelle tourne et combien de temps elle a pris.
     df = lancer(1, "Prétraitement (lecture, doublons, grille, marché, ratios)", preparer_employes,
-                projet / "input" / "employes.csv", projet / "input" / "bands.csv", projet / "input" / "market.csv")
+                projet / "input" / "employes.xlsx", projet / "input" / "bands.xlsx", projet / "input" / "market.xlsx")
     df = lancer(2, "Groupes de collègues (cohortes)", former_cohortes, df, rule_params)
     df = lancer(3, "Règles", apply_rulebook, df, rule_params)
     df = lancer(4, "Score de l'IA (Isolation Forest)", ml_anomaly, df, rule_params)

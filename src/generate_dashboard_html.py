@@ -864,9 +864,9 @@ if __name__ == "__main__":
         rule_params = yaml.safe_load(fichier)["rules"]
 
     # Les étapes dans l'ordre : la sortie de chacune est l'entrée de la suivante.
-    df = preparer_employes(projet / "input" / "employes.csv",
-                           projet / "input" / "bands.csv",
-                           projet / "input" / "market.csv")
+    df = preparer_employes(projet / "input" / "employes.xlsx",
+                           projet / "input" / "bands.xlsx",
+                           projet / "input" / "market.xlsx")
     gg = gender_gap_analysis(df)
     df = former_cohortes(df, rule_params)
     df = apply_rulebook(df, rule_params)

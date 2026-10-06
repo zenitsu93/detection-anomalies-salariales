@@ -36,9 +36,9 @@ Les couleurs de marque sont regroupées en haut de `static/style.css` (`--brand`
 
 ## Références utilisées
 
-- `input/bands.csv` : ligne exacte **métier + grade**. Les grilles de métiers différents ne sont jamais mélangées.
-- `input/market.csv` : médiane du même métier et grade. Le fichier peut être absent.
-- `input/employes.csv` : les collègues, choisis comme dans `src/anomaly_cohortes.py` : même grade + même métier + même tranche d'ancienneté, sinon même grade + même métier, sinon même grade seul (tous métiers). Le premier groupe qui compte au moins `cohort_min_size` collègues est retenu. Sans ancienneté saisie, le premier niveau est sauté.
+- `input/bands.xlsx` : ligne exacte **métier + grade**. Les grilles de métiers différents ne sont jamais mélangées.
+- `input/market.xlsx` : médiane du même métier et grade. Le fichier peut être absent.
+- `input/employes.xlsx` : les collègues, choisis comme dans `src/anomaly_cohortes.py` : même grade + même métier + même tranche d'ancienneté, sinon même grade + même métier, sinon même grade seul (tous métiers). Le premier groupe qui compte au moins `cohort_min_size` collègues est retenu. Sans ancienneté saisie, le premier niveau est sauté.
 - `config/rules.yaml` : seuils des quatre règles (grille, CompaRatio, marché, écart entre pairs), effectif minimal et groupes de collègues.
 
 Les montants sont en **kMAD par an**, comme dans les fichiers d'entrée.

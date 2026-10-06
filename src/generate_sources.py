@@ -14,7 +14,7 @@ Vue d'ensemble de ce que fait le script :
                 age, anciennete, sexe, etc.) dont le salaire tombe dans la
                 bande. Les postes sont de simples numeros (JT0001, JT0002...)
                 et chacun porte un Hot_job de 0 a 6.
-  4. EXPORT   : ecrit les 3 tables en CSV dans le dossier input/ et affiche
+  4. EXPORT   : ecrit les 3 tables en Excel (.xlsx) dans le dossier input/ et affiche
                 quelques controles de coherence.
 """
 
@@ -25,7 +25,7 @@ from pathlib import Path
 
 # numpy : calcul numerique et tirages aleatoires (loi normale, uniforme, choix...).
 import numpy as np
-# pandas : manipulation de tableaux de donnees (DataFrame) et export CSV.
+# pandas : manipulation de tableaux de donnees (DataFrame) et export Excel.
 import pandas as pd
 
 # ----------------------------------------------------------------------------
@@ -199,7 +199,7 @@ def repartir(n_total, poids_dict):
 # Les N_POSTES postes sont partages entre les couples famille x grade selon
 # leur effectif : une cellule de 400 employes a plus de postes qu'une de 10.
 # Chaque poste recoit au moins un employe, pour retrouver exactement
-# N_POSTES intitules differents dans employes.csv.
+# N_POSTES intitules differents dans employes.xlsx.
 def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
     """Renvoie le numero de poste (1, 2, ...) de chaque employe."""
     # Numero de poste de chaque employe, rempli au fur et a mesure.
@@ -250,7 +250,7 @@ def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
 
 # attribuer_hot_job : donne a chaque poste un Hot_job de 0 a 6 ; tous les
 # employes du poste heritent de cette valeur. Les parts de HOT_JOB_PARTS sont
-# visees sur les EMPLOYES (ce qu'on lit dans employes.csv), pas sur les postes :
+# visees sur les EMPLOYES (ce qu'on lit dans employes.xlsx), pas sur les postes :
 # le poste commun RETAIL BANKING (2000 employes) pese 2000, pas 1.
 # Methode : on prend les postes du plus gros au plus petit, et chacun va dans
 # la valeur la moins remplie par rapport a sa cible, a condition d'y tenir.
@@ -491,19 +491,18 @@ def main():
     # Cree le dossier s'il n'existe pas (sans erreur s'il existe deja).
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # CSV (point-virgule, encodage cp1252), au format attendu par
-    # detect_salary_anomalies_custom_fixed.py --employees/--bands/--market.
+    # Fichiers Excel (.xlsx), lus tels quels par src/anomaly_pretraitement.py.
     # Liste des chemins des fichiers ecrits, pour les afficher ensuite.
     paths = []
     # Boucle sur les 3 tables avec le nom de fichier associe.
     for df, nom in [(bands, "bands"), (employes, "employes"), (market, "market")]:
-        # Chemin complet du fichier, ex. input/bands.csv.
-        csv_path = out_dir / f"{nom}.csv"
-        # Ecrit le tableau en CSV : separateur ";", sans la colonne d'index,
-        # encodage cp1252 (compatible Excel francais sous Windows).
-        df.to_csv(csv_path, sep=";", index=False, encoding="cp1252")
+        # Chemin complet du fichier, ex. input/bands.xlsx.
+        xlsx_path = out_dir / f"{nom}.xlsx"
+        # Ecrit le tableau en Excel, sans la colonne d'index. Plus de separateur
+        # ni d'encodage a choisir : un .xlsx s'ouvre tel quel dans Excel.
+        df.to_excel(xlsx_path, index=False)
         # Memorise le chemin sous forme de texte.
-        paths.append(str(csv_path))
+        paths.append(str(xlsx_path))
 
     # Affiche le dossier de sortie et la liste des fichiers generes.
     print("Fichiers generes dans :", out_dir)
