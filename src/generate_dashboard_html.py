@@ -9,8 +9,9 @@ Ce fichier crée un tableau de bord HTML (graphiques Chart.js) à partir de :
 - df : le DataFrame des salariés rendu par anomaly_recommandations.py, avec le score général
   (RiskScore) et la priorité (Severity) ajoutés par anomaly_score_general.py ;
 - gg : le tableau rendu par anomaly_ecarts_hommes_femmes.py.
-Il ne recalcule rien : il compte et affiche. Un clic sur une barre ou un point affiche les salariés
-concernés, avec un export CSV.
+Il ne recalcule rien : il compte et affiche. Un clic sur une barre, un point ou un nombre de priorité
+affiche les salariés concernés, avec un export Excel. Chaque tableau se filtre et se trie comme dans
+Excel : une recherche au-dessus, et un menu ▾ dans chaque en-tête de colonne.
 
 Un salarié est « à traiter » si sa priorité est Critical, Major ou Minor : les « Info » n'ont rien à
 faire.
@@ -28,7 +29,6 @@ Utilisation :
 
 import json
 from datetime import datetime
-from html import escape
 from pathlib import Path
 
 import numpy as np
@@ -45,6 +45,8 @@ from anomaly_recommandations import recommendations
 from anomaly_ecarts_hommes_femmes import gender_gap_analysis
 
 CHARTJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+# SheetJS écrit le fichier Excel de la liste des salariés directement dans le navigateur.
+XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
 
 # Charte Repères : or et brun pour la marque (brun aussi pour les montants), ardoise pour les effectifs.
 GOLD = "#e9a21b"
@@ -66,6 +68,7 @@ FLAG_FR = {
     "COMPA_RATIO": "Position dans la grille",
     "MARKET_GAP": "Écart au marché",
     "PEER_OUTLIER": "Écart aux collègues",
+    "MIN_SALARY": "Sous le salaire minimum",
     "ML_STRONG_SIGNAL": "Signal statistique fort",
 }
 # Les colonnes de la liste des salariés (clic sur une barre), et leur nom affiché.
@@ -121,7 +124,8 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
         "kpis": {
             "effectif": len(df),
             "a_traiter": int(a_traiter.sum()),
-            **{s: int((df["Severity"] == s).sum()) for s in SEVERITY_ORDER[:3]},
+            # Les quatre priorités, « Info » comprise : la rangée de chiffres clés a un compteur pour chacune.
+            **{s: int((df["Severity"] == s).sum()) for s in SEVERITY_ORDER},
             "cout_total": float(df["Cout_Ajustement"].sum()),
         },
         "pole": {
@@ -141,16 +145,6 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
     }
 
 
-def table_html(entetes, lignes):
-    head = "".join(f"<th>{e}</th>" for e in entetes)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{escape(v)}</td>" if isinstance(v, str) else f'<td class="num">{fmt_num(v)}</td>'
-                         for v in ligne) + "</tr>"
-        for ligne in lignes
-    )
-    return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
-
-
 def build_html(data: dict, maintenant: datetime) -> str:
     kpis = data["kpis"]
     # Un « < » dans un libellé ne doit pas pouvoir fermer la balise <script>.
@@ -161,10 +155,11 @@ def build_html(data: dict, maintenant: datetime) -> str:
     pct = kpis["a_traiter"] / kpis["effectif"] * 100 if kpis["effectif"] else 0.0
 
     s, p = data["scores"], data["pole"]
-    # Plus de tableau des écarts hommes / femmes : le graphique par grade le remplace.
-    tables_html = "".join(
-        f'<details class="data-toggle"><summary>{titre}</summary>'
-        f'<div class="table-wrap">{table_html(entetes, lignes)}</div></details>'
+    # Les tableaux des « Données détaillées » partent en JSON (titre, colonnes, lignes) et non plus en
+    # HTML tout fait : la page les dessine elle-même, avec la même recherche et les mêmes filtres que la
+    # liste des salariés. Plus de tableau des écarts hommes / femmes : le graphique par grade le remplace.
+    tables_json = json.dumps([
+        {"title": titre, "cols": entetes, "rows": list(lignes)}
         for titre, entetes, lignes in [
             ("Anomalies à traiter par pôle", ["Pôle"] + [d["label"] for d in p["datasets"]],
              zip(p["labels"], *[d["data"] for d in p["datasets"]])),
@@ -174,7 +169,7 @@ def build_html(data: dict, maintenant: datetime) -> str:
             ("Score général", ["Tranche"] + [d["label"] for d in s["datasets"]],
              zip(s["labels"], *[d["data"] for d in s["datasets"]])),
         ]
-    )
+    ], ensure_ascii=False).replace("<", "\\u003c")
 
     return f"""<!doctype html>
 <html lang="fr">
@@ -184,6 +179,7 @@ def build_html(data: dict, maintenant: datetime) -> str:
 <title>Repères — Anomalies salariales</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23e9a21b'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23fff'/%3E%3Crect x='15' y='4' width='2' height='24' fill='%234a2c1d'/%3E%3C/svg%3E">
 <script src="{CHARTJS_URL}"></script>
+<script src="{XLSX_URL}"></script>
 <style>
 /* Charte Repères. */
 :root {{
@@ -221,7 +217,7 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 .panel-body {{ padding: 16px; }}
 .note {{ font-size: 12px; color: var(--muted); margin-top: 10px; }}
 
-.kpis {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 0 16px; border-left: 4px solid var(--brand); }}
+.kpis {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0 0 16px; border-left: 4px solid var(--brand); }}
 .kpis div {{ padding: 16px 20px; }}
 .kpis div + div {{ border-left: 1px solid var(--line-soft); }}
 .kpis dt {{ font-size: 12px; color: var(--muted); }}
@@ -229,6 +225,10 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 .kpis dd small {{ display: block; font-size: 12px; font-weight: 400; color: var(--faint); }}
 .kpis .sev {{ display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 2px; }}
 .kpis .critical {{ color: {STATUS['Critical']}; }}
+/* Les nombres de priorité sont des boutons (ils ouvrent la liste des salariés) : même allure que les
+   autres chiffres, soulignés au survol pour montrer qu'on peut cliquer. */
+.kpi-btn {{ font: inherit; color: inherit; height: auto; padding: 0; border: 0; background: none; }}
+.kpi-btn:hover {{ background: none; text-decoration: underline; text-underline-offset: 4px; }}
 .sev-tag {{ display: inline-block; padding: 0 6px; border-radius: 2px; font-size: 12px; font-weight: 600; }}
 
 .grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }}
@@ -251,25 +251,49 @@ th {{ text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); 
 td {{ padding: 8px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }}
 .num {{ text-align: right; }}
 .data-panel summary {{ list-style: none; }}
+/* Tableaux comme dans Excel : une recherche au-dessus, un bouton ▾ par colonne qui ouvre le menu de tri
+   et de filtre. Un bouton foncé avec un entonnoir signale une colonne filtrée. */
+.tv-tools {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 16px 8px; }}
+.tv-tools input {{ width: min(260px, 100%); }}
+.tv-count {{ font-size: 12px; color: var(--muted); }}
+input[type="search"] {{ font: 13px var(--font); height: 32px; padding: 0 10px; color: var(--ink); background: var(--panel);
+  border: 1px solid #c4c9cf; border-radius: var(--radius); }}
+th .tv-btn {{ height: 22px; min-width: 22px; padding: 0 4px; margin-left: 4px; font-size: 11px; color: var(--muted); vertical-align: middle; }}
+th .tv-btn.on {{ background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }}
+.tv-menu {{ position: fixed; z-index: 60; width: min(280px, calc(100vw - 16px)); display: flex; flex-direction: column; gap: 4px;
+  padding: 6px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); }}
+.tv-menu > button {{ text-align: left; border-color: transparent; }}
+.tv-values {{ flex: 1 1 auto; min-height: 60px; max-height: 240px; overflow: auto; padding: 4px 0; border: 1px solid var(--line-soft); }}
+.tv-values label {{ display: flex; align-items: center; gap: 8px; padding: 3px 8px; font-size: 13px; cursor: pointer; }}
+.tv-values label:hover {{ background: var(--panel-head); }}
+.tv-values label[hidden] {{ display: none; }}
+.tv-actions {{ display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }}
+button:disabled {{ opacity: .5; cursor: default; }}
 
 .overlay {{ position: fixed; inset: 0; background: rgba(31,35,40,.45); display: flex; align-items: flex-start; justify-content: center; padding: 5vh 16px; z-index: 50; }}
 .overlay[hidden] {{ display: none; }}
 .overlay .panel {{ width: 100%; max-width: 1100px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.2); }}
 .overlay h3 {{ font-size: 15px; font-weight: 600; }}
 .overlay .sub {{ font-size: 12px; color: var(--muted); }}
-.overlay .panel-body {{ overflow: auto; padding: 0; }}
+/* Dans la liste des salariés, la recherche reste en haut : seul le tableau défile, avec ses en-têtes. */
+.overlay .panel-body {{ display: flex; flex-direction: column; min-height: 0; padding: 0; }}
+.overlay .tv-tools {{ padding: 10px 16px; border-bottom: 1px solid var(--line); }}
+.overlay .table-wrap {{ flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0; }}
 .overlay th {{ position: sticky; top: 0; }}
 .head-actions {{ display: flex; gap: 8px; flex: none; }}
 button {{ font: 500 13px var(--font); height: 32px; padding: 0 12px; background: var(--panel); color: var(--ink);
   border: 1px solid #c4c9cf; border-radius: var(--radius); cursor: pointer; }}
 button:hover {{ background: var(--panel-head); border-color: var(--faint); }}
-button:focus-visible, summary:focus-visible {{ outline: 2px solid var(--brand); outline-offset: 2px; }}
+button:focus-visible, summary:focus-visible, input:focus-visible {{ outline: 2px solid var(--brand); outline-offset: 2px; }}
 
 footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }}
 
+/* Six chiffres clés : trois par ligne sur un écran moyen, deux sur un téléphone. Le premier de chaque
+   ligne n'a pas de trait à gauche. */
 @media (max-width: 1000px) {{
-  .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-  .kpis div:nth-child(odd) {{ border-left: 0; }}
+  .kpis {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+  .kpis div:nth-child(3n+1) {{ border-left: 0; }}
   .kpis div {{ border-top: 1px solid var(--line-soft); }}
   .grid {{ grid-template-columns: 1fr; }}
 }}
@@ -280,6 +304,9 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
   main {{ padding: 16px; }}
   .page-head {{ flex-direction: column; align-items: flex-start; }}
   .kpis dd {{ font-size: 20px; }}
+  .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+  .kpis div:nth-child(even) {{ border-left: 1px solid var(--line-soft); }}
+  .kpis div:nth-child(odd) {{ border-left: 0; }}
 }}
 @media print {{
   body {{ background: #fff; }}
@@ -300,14 +327,15 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 <main>
   <div class="page-head">
     <div><p class="crumb">Rémunération › Anomalies</p><h1>Tableau de bord des anomalies</h1></div>
-    <p class="page-hint">Cliquez une barre ou un point pour afficher les salariés concernés.</p>
+    <p class="page-hint">Cliquez une barre, un point ou un nombre de priorité pour afficher les salariés concernés.</p>
   </div>
 
   <dl class="panel kpis">
     <div><dt>À traiter</dt><dd>{fmt_num(round(pct, 1))} %<small>{fmt_int(kpis['a_traiter'])} salariés</small></dd></div>
-    <div><dt><span class="sev" style="background:{STATUS['Critical']}"></span>Critiques</dt><dd class="critical">{fmt_int(kpis['Critical'])}</dd></div>
-    <div><dt><span class="sev" style="background:{STATUS['Major']}"></span>Majeures</dt><dd>{fmt_int(kpis['Major'])}</dd></div>
-    <div><dt><span class="sev" style="background:{STATUS['Minor']}"></span>Mineures</dt><dd>{fmt_int(kpis['Minor'])}</dd></div>
+    <div><dt><span class="sev" style="background:{STATUS['Critical']}"></span>Critiques</dt><dd class="critical"><button class="kpi-btn" type="button" data-sev="Critical">{fmt_int(kpis['Critical'])}</button></dd></div>
+    <div><dt><span class="sev" style="background:{STATUS['Major']}"></span>Majeures</dt><dd><button class="kpi-btn" type="button" data-sev="Major">{fmt_int(kpis['Major'])}</button></dd></div>
+    <div><dt><span class="sev" style="background:{STATUS['Minor']}"></span>Mineures</dt><dd><button class="kpi-btn" type="button" data-sev="Minor">{fmt_int(kpis['Minor'])}</button></dd></div>
+    <div><dt><span class="sev" style="background:{STATUS['Info']}"></span>{SEVERITY_FR['Info']}</dt><dd><button class="kpi-btn" type="button" data-sev="Info">{fmt_int(kpis['Info'])}</button></dd></div>
     <div><dt>Coût d'ajustement total</dt><dd>{fmt_int(kpis['cout_total'])}<small>unité source</small></dd></div>
   </dl>
 
@@ -347,7 +375,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
     </section>
     <details class="panel full data-panel">
       <summary class="panel-head"><h2 class="panel-title">Données détaillées</h2><span class="panel-unit">afficher</span></summary>
-      {tables_html}
+      <div id="detail-tables"></div>
     </details>
   </div>
 
@@ -358,7 +386,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
     <div class="panel-head">
       <div><h3 id="panel-title">—</h3><div class="sub" id="panel-sub"></div></div>
-      <div class="head-actions"><button id="panel-export" type="button">Exporter (CSV)</button><button id="panel-close" type="button" aria-label="Fermer">Fermer</button></div>
+      <div class="head-actions"><button id="panel-export" type="button">Exporter (Excel)</button><button id="panel-close" type="button" aria-label="Fermer">Fermer</button></div>
     </div>
     <div class="panel-body" id="panel-body"></div>
   </div>
@@ -368,8 +396,9 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 const DATA = {data_json};
 const NAMES = {names_json};
 const STATUS = {json.dumps(STATUS)};
+const TABLES = {tables_json};
 
-// ---- Liste des salariés concernés (clic sur une barre) ----
+// ---- Liste des salariés concernés (clic sur une barre, un point ou un nombre de priorité) ----
 const RCOLS = DATA.records.cols, RROWS = DATA.records.rows, RIDX = {{}};
 RCOLS.forEach((c, i) => RIDX[c] = i);
 const MAX_ROWS_SHOWN = 300;
@@ -380,10 +409,11 @@ const overlay = document.getElementById('panel-overlay');
 const panelTitle = document.getElementById('panel-title');
 const panelSub = document.getElementById('panel-sub');
 const panelBody = document.getElementById('panel-body');
-let lastMatches = [], lastTitle = '';
+let view = null, lastTitle = '';
 document.getElementById('panel-close').addEventListener('click', closePanel);
 overlay.addEventListener('click', e => {{ if (e.target === overlay) closePanel(); }});
-document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closePanel(); }});
+// Échap ferme d'abord le menu d'une colonne s'il est ouvert, et seulement ensuite la liste.
+document.addEventListener('keydown', e => {{ if (e.key === 'Escape') {{ if (menu) closeMenu(true); else closePanel(); }} }});
 
 function closePanel() {{ overlay.hidden = true; }}
 
@@ -392,39 +422,211 @@ function escapeText(value) {{
   cell.textContent = value === null ? '' : String(value);
   return cell.innerHTML;
 }}
+// Le texte affiché d'une case : priorité et signaux en français, nombres au format français. La
+// recherche et les filtres travaillent sur ce texte, pour qu'on retrouve exactement ce qu'on lit.
+function cellText(col, v) {{
+  if (v === null || v === undefined) return '';
+  if (col === 'Severity') return NAMES.sev[v] || v;
+  if (col === 'Rule_Flags') return String(v).split(';').filter(Boolean).map(f => NAMES.flags[f] || f).join(', ');
+  if (typeof v === 'number') return NUM.format(v);
+  return String(v);
+}}
 function cellHtml(col, v) {{
-  if (v === null || v === undefined) return '<td></td>';
-  if (col === 'Severity') return '<td><span class="sev-tag" style="background:' + STATUS[v] + '22;color:' + STATUS[v] + '">' + escapeText(NAMES.sev[v] || v) + '</span></td>';
-  if (col === 'Rule_Flags') return '<td>' + escapeText(String(v).split(';').filter(Boolean).map(f => NAMES.flags[f] || f).join(', ')) + '</td>';
-  if (typeof v === 'number') return '<td class="num">' + NUM.format(v) + '</td>';
-  return '<td>' + escapeText(v) + '</td>';
+  const text = escapeText(cellText(col, v));
+  if (col === 'Severity' && STATUS[v]) return '<td><span class="sev-tag" style="background:' + STATUS[v] + '22;color:' + STATUS[v] + '">' + text + '</span></td>';
+  return typeof v === 'number' ? '<td class="num">' + text + '</td>' : '<td>' + text + '</td>';
 }}
 
 function showPopulation(title, predicate) {{
   const matches = RROWS.filter(predicate);
-  lastMatches = matches; lastTitle = title;
+  lastTitle = title;
   panelTitle.textContent = title;
-  panelSub.textContent = NUM.format(matches.length) + ' salarié(s) concerné(s)'
-    + (matches.length > MAX_ROWS_SHOWN ? ' — ' + MAX_ROWS_SHOWN + ' premiers affichés, export complet en CSV' : '');
+  panelSub.textContent = NUM.format(matches.length) + ' salarié(s) concerné(s)';
   if (!matches.length) {{
+    view = null;
     panelBody.innerHTML = '<p class="note" style="padding:16px">Aucun salarié ne correspond à cette sélection.</p>';
   }} else {{
-    const head = RCOLS.map(c => '<th>' + escapeText(NAMES.cols[c] || c) + '</th>').join('');
-    const body = matches.slice(0, MAX_ROWS_SHOWN).map(r => '<tr>' + r.map((v, i) => cellHtml(RCOLS[i], v)).join('') + '</tr>').join('');
-    panelBody.innerHTML = '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>';
+    // Dessiner des milliers de lignes rendrait la page lente : au-delà de MAX_ROWS_SHOWN, les lignes
+    // ne sont pas dessinées, mais elles restent comptées et exportées.
+    view = tableView(panelBody, RCOLS, matches, MAX_ROWS_SHOWN);
   }}
   overlay.hidden = false;
 }}
 
-// Export de TOUTE la sélection. « ; » et BOM au début : ce qu'attend Excel en français.
+// Export Excel des lignes gardées par la recherche et les filtres, dans l'ordre du tri, TOUTES (même
+// au-delà des MAX_ROWS_SHOWN dessinées). Les nombres restent des nombres : Excel peut les additionner
+// ou les trier tout de suite. Priorité et signaux gardent leur code d'origine (Critical, OUT_OF_BAND...),
+// comme dans les fichiers de résultats.
 document.getElementById('panel-export').addEventListener('click', () => {{
-  const q = v => {{ const s = v === null || v === undefined ? '' : String(v); return /[";\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }};
-  const lines = [RCOLS.map(c => q(NAMES.cols[c] || c)).join(';')]
-    .concat(lastMatches.map(r => r.map(v => q(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
-  const url = URL.createObjectURL(new Blob(['\\ufeff' + lines.join('\\r\\n')], {{ type: 'text/csv;charset=utf-8' }}));
-  const a = document.createElement('a'); a.href = url;
-  a.download = 'salaries_' + lastTitle.normalize('NFD').replace(/[^\\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() + '.csv';
-  a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([RCOLS.map(c => NAMES.cols[c] || c)].concat(view ? view.rows() : [])), 'Salariés');
+  XLSX.writeFile(book, 'salaries_' + lastTitle.normalize('NFD').replace(/[^\\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() + '.xlsx');
+}});
+
+// Les nombres de priorité (Critiques, Majeures, Mineures, Info) ouvrent la liste de leurs salariés.
+document.querySelectorAll('.kpi-btn').forEach(b => b.addEventListener('click', () =>
+  showPopulation('Priorité : ' + NAMES.sev[b.dataset.sev], r => r[RIDX.Severity] === b.dataset.sev)));
+
+// ---- Tableaux comme dans Excel : recherche, tri et filtre par colonne ----
+// Sans accents ni majuscules, pour que « ecart » trouve « Écart ». Les espaces des nombres français
+// (12 345) sont des espaces spéciaux : ils deviennent des espaces ordinaires, comme ceux qu'on tape.
+const norm = s => s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\s/g, ' ').toLowerCase();
+// L'ordre alphabétique français, où « 9 » vient avant « 10 » même au milieu d'un texte (« 90-100 »).
+const COLLATOR = new Intl.Collator('fr', {{ numeric: true }});
+const FUNNEL = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M0 1h10L6 5.5V10L4 9V5.5z" fill="currentColor"/></svg>';
+
+// Range deux lignes selon la colonne c : les nombres comme des nombres, le reste selon le texte affiché.
+// Les cases vides vont toujours à la fin, dans un sens comme dans l'autre, comme dans Excel.
+function order(x, y, c, dir) {{
+  const vide = (x.t[c] === '') - (y.t[c] === '');
+  if (vide || x.t[c] === '') return vide;
+  const a = x.r[c], b = y.r[c];
+  return dir * (typeof a === 'number' && typeof b === 'number' ? a - b : COLLATOR.compare(x.t[c], y.t[c]));
+}}
+
+// Un seul menu de colonne ouvert à la fois, pour toute la page.
+let menu = null, menuBtn = null;
+function closeMenu(refocus) {{
+  if (!menu) return;
+  menu.remove();
+  menuBtn.setAttribute('aria-expanded', 'false');
+  // Au clavier, on revient sur le bouton ▾ de la colonne, pour ne pas perdre sa place.
+  if (refocus) menuBtn.focus();
+  menu = menuBtn = null;
+}}
+// Le menu se pose sous son bouton, ou au-dessus s'il y a plus de place, sans déborder de l'écran.
+function placeMenu() {{
+  const r = menuBtn.getBoundingClientRect(), below = innerHeight - r.bottom - 12, above = r.top - 12;
+  const down = below >= 320 || below >= above;
+  menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+  menu.style.top = down ? r.bottom + 4 + 'px' : '';
+  menu.style.bottom = down ? '' : innerHeight - r.top + 4 + 'px';
+  menu.style.maxHeight = (down ? below : above) + 'px';
+}}
+// Un clic à côté ferme le menu ; si la page défile ou change de taille, il reste collé à son bouton.
+document.addEventListener('pointerdown', e => {{ if (menu && !menu.contains(e.target) && !menuBtn.contains(e.target)) closeMenu(false); }});
+addEventListener('scroll', () => {{ if (menu) placeMenu(); }}, true);
+addEventListener('resize', () => {{ if (menu) placeMenu(); }});
+
+// Dessine dans box un tableau avec sa recherche, son compteur, son bouton « Effacer les filtres » et un
+// bouton ▾ par colonne. cols : les codes des colonnes (le nom affiché vient de NAMES.cols, sinon c'est
+// le code lui-même) ; rows : les lignes ; limit : le nombre maximal de lignes dessinées. Renvoie de quoi
+// relire les lignes gardées, dans l'ordre affiché (pour l'export).
+function tableView(box, cols, rows, limit) {{
+  const labels = cols.map(c => NAMES.cols[c] || c);
+  // Le texte affiché de chaque case est calculé une seule fois : la recherche le relit à chaque frappe.
+  const items = rows.map(r => {{ const t = r.map((v, i) => cellText(cols[i], v)); return {{ r, t, k: t.map(norm) }}; }});
+  const filters = new Map();  // numéro de colonne -> valeurs gardées (texte affiché)
+  let sort = null, shown = items;
+  box.innerHTML = '<div class="tv-tools"><input type="search" placeholder="Rechercher dans le tableau" aria-label="Rechercher dans le tableau">'
+    + '<span class="tv-count" aria-live="polite"></span><button type="button" hidden>Effacer les filtres</button></div>'
+    + '<div class="table-wrap"><table><thead><tr>'
+    + labels.map(l => '<th>' + escapeText(l) + '<button type="button" class="tv-btn" aria-haspopup="dialog" aria-expanded="false"></button></th>').join('')
+    + '</tr></thead><tbody></tbody></table></div>';
+  const search = box.querySelector('.tv-tools input'), count = box.querySelector('.tv-count');
+  const clear = box.querySelector('.tv-tools button'), tbody = box.querySelector('tbody');
+  const ths = [...box.querySelectorAll('th')], btns = ths.map(th => th.querySelector('button'));
+
+  // Une ligne est gardée si l'une de ses cases contient le texte cherché, et si elle passe le filtre de
+  // chaque colonne, sauf celui de la colonne skip (voir openMenu).
+  const keep = (it, q, skip) => (!q || it.k.some(s => s.includes(q)))
+    && [...filters].every(([c, vals]) => c === skip || vals.has(it.t[c]));
+
+  function render() {{
+    const q = norm(search.value.trim());
+    shown = items.filter(it => keep(it, q, -1));
+    if (sort) shown.sort((x, y) => order(x, y, sort.c, sort.dir));
+    tbody.innerHTML = shown.slice(0, limit).map(it => '<tr>' + it.r.map((v, i) => cellHtml(cols[i], v)).join('') + '</tr>').join('');
+    count.textContent = NUM.format(shown.length) + (shown.length > 1 ? ' lignes' : ' ligne') + ' sur ' + NUM.format(items.length)
+      + (shown.length > limit ? " — les " + limit + " premières sont affichées, l'export les contient toutes" : '');
+    clear.hidden = !q && !filters.size;
+    btns.forEach((b, c) => {{
+      const on = filters.has(c), dir = sort && sort.c === c ? sort.dir : 0;
+      // Comme l'entonnoir d'Excel : une colonne filtrée se voit sur son bouton ; une flèche montre le tri.
+      b.classList.toggle('on', on);
+      b.innerHTML = (on ? FUNNEL : '') + (dir > 0 ? '↑' : dir < 0 ? '↓' : '') + '▾';
+      b.setAttribute('aria-label', 'Trier et filtrer : ' + labels[c] + (on ? ' (filtrée)' : ''));
+      if (dir) ths[c].setAttribute('aria-sort', dir > 0 ? 'ascending' : 'descending'); else ths[c].removeAttribute('aria-sort');
+    }});
+  }}
+
+  function openMenu(c, btn) {{
+    closeMenu(false);
+    // Comme dans Excel, le menu liste les valeurs des lignes que laissent passer la recherche et les
+    // filtres des AUTRES colonnes : celui de cette colonne est justement en train d'être choisi.
+    const q = norm(search.value.trim()), first = new Map();
+    items.forEach(it => {{ if (!first.has(it.t[c]) && keep(it, q, c)) first.set(it.t[c], it); }});
+    const vals = [...first.keys()].sort((a, b) => order(first.get(a), first.get(b), c, 1));
+    const isNum = items.some(it => typeof it.r[c] === 'number'), checked = filters.get(c);
+    menu = document.createElement('div');
+    menu.className = 'tv-menu';
+    menu.setAttribute('role', 'dialog');
+    menu.setAttribute('aria-label', 'Trier et filtrer : ' + labels[c]);
+    menu.innerHTML = '<button type="button">' + (isNum ? 'Trier du plus petit au plus grand' : 'Trier de A à Z') + '</button>'
+      + '<button type="button">' + (isNum ? 'Trier du plus grand au plus petit' : 'Trier de Z à A') + '</button>'
+      + '<input type="search" placeholder="Rechercher" aria-label="Rechercher une valeur">'
+      + '<div class="tv-values"><label><input type="checkbox"> (Tout sélectionner)</label>'
+      + vals.map((v, i) => '<label><input type="checkbox" data-i="' + i + '"' + (!checked || checked.has(v) ? ' checked' : '') + '> '
+        + (v === '' ? '(Vides)' : escapeText(v)) + '</label>').join('')
+      + '</div><div class="tv-actions"><button type="button">OK</button><button type="button">Annuler</button></div>';
+    menuBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    box.appendChild(menu);
+    placeMenu();
+
+    const [asc, desc, ok, cancel] = menu.querySelectorAll('button');
+    const find = menu.querySelector('input[type="search"]'), all = menu.querySelector('.tv-values input');
+    const boxes = [...menu.querySelectorAll('[data-i]')];
+    // Les cases visibles : celles que laisse la petite recherche du menu.
+    const visible = () => boxes.filter(x => !x.parentNode.hidden);
+    // « (Tout sélectionner) » est coché quand tout est coché, à moitié quand une partie l'est. Sans
+    // aucune valeur cochée, le tableau serait vide : OK est alors grisé, comme dans Excel.
+    const sync = () => {{
+      const v = visible(), n = v.filter(x => x.checked).length;
+      all.checked = n > 0 && n === v.length;
+      all.indeterminate = n > 0 && n < v.length;
+      ok.disabled = !n;
+    }};
+    menu.querySelector('.tv-values').addEventListener('change', e => {{
+      if (e.target === all) visible().forEach(x => x.checked = all.checked);
+      sync();
+    }});
+    find.addEventListener('input', () => {{
+      const s = norm(find.value.trim());
+      boxes.forEach(x => x.parentNode.hidden = !norm(x.parentNode.textContent).includes(s));
+      sync();
+    }});
+    asc.addEventListener('click', () => {{ sort = {{ c, dir: 1 }}; closeMenu(true); render(); }});
+    desc.addEventListener('click', () => {{ sort = {{ c, dir: -1 }}; closeMenu(true); render(); }});
+    // OK garde les valeurs cochées ET visibles : chercher « fin » puis valider ne garde que les valeurs
+    // qui contiennent « fin », comme dans Excel. Tout garder revient à ne plus filtrer la colonne.
+    ok.addEventListener('click', () => {{
+      const kept = visible().filter(x => x.checked).map(x => vals[x.dataset.i]);
+      if (kept.length === vals.length) filters.delete(c); else filters.set(c, new Set(kept));
+      closeMenu(true);
+      render();
+    }});
+    cancel.addEventListener('click', () => closeMenu(true));
+    sync();
+    asc.focus();
+  }}
+
+  search.addEventListener('input', render);
+  // « Effacer les filtres » vide aussi la recherche : le tableau revient complet (le tri, lui, reste).
+  clear.addEventListener('click', () => {{ filters.clear(); search.value = ''; render(); search.focus(); }});
+  btns.forEach((b, c) => b.addEventListener('click', () => {{ if (menuBtn === b) closeMenu(false); else openMenu(c, b); }}));
+  render();
+  return {{ rows: () => shown.map(it => it.r) }};
+}}
+
+// ---- Données détaillées : un tableau repliable par graphique ----
+// Ces tableaux sont courts : toutes leurs lignes sont dessinées (pas de limite).
+TABLES.forEach(t => {{
+  const d = document.createElement('details');
+  d.className = 'data-toggle';
+  d.innerHTML = '<summary>' + escapeText(t.title) + '</summary><div></div>';
+  document.getElementById('detail-tables').appendChild(d);
+  tableView(d.lastChild, t.cols, t.rows, Infinity);
 }});
 
 // ---- Graphiques ----
