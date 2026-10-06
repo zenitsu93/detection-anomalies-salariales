@@ -111,8 +111,15 @@ function renderFigures(data) {
   } else {
     items.push(['CompaRatio cible', mid && p.target != null ? fmt(Math.round(p.target / mid * 100) / 100) : '—']);
   }
-  $('summary-figures').replaceChildren(...items.map(([label, value, cls]) => {
-    const cell = node('div', ''); cell.append(node('dt', label), node('dd', value, cls)); return cell;
+  // Repère de la régression, en plus : le salaire prédit et la fourchette où le vrai salaire tombe
+  // 9 fois sur 10. Il ne change ni le verdict ni la fourchette proposée.
+  const r = data.regression;
+  items.push([r.model === 'salarie' ? 'Salaire prédit (salarié revu)' : 'Salaire prédit (nouvel embauché)',
+    dash(r.predicted), '', r.predicted == null ? 'Âge et Hot job à renseigner' : `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`]);
+  $('summary-figures').replaceChildren(...items.map(([label, value, cls, note]) => {
+    const cell = node('div', ''), dd = node('dd', value, cls);
+    if (note) dd.append(node('small', note, 'range'));
+    cell.append(node('dt', label), dd); return cell;
   }));
 }
 function render(data) {
