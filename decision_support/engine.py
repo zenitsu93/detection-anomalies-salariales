@@ -183,7 +183,7 @@ class DecisionEngine:
             raise ValueError("Matricule absent du fichier employés. Vérifier la saisie ou laisser le champ vide.")
         age = number(payload.get("age"), "Âge", optional=True)
         hot_job = number(payload.get("hot_job"), "Hot job", optional=True)
-        if hot_job is not None and hot_job > 6:
+        if hot_job is not None and hot_job > 2:
             raise ValueError("Hot job : valeur hors limites.")
         profile = {"job_family": job, "grade": grade, "seniority": seniority, "employee_id": employee_id}
         salary = number(payload.get("salary"), "Salaire envisagé", strict=True) if mode == "evaluate" else None

@@ -19,7 +19,7 @@ Si le port est occupé, ajouter `--port 8766`. Aucune dépendance supplémentair
 
 1. Choisir le mode, le métier et le grade.
 2. Renseigner l'ancienneté si une comparaison plus fine est souhaitée.
-3. Pour un nouvel embauché, renseigner l'âge et le Hot job (de 0 à 6) pour obtenir le salaire prédit par la régression.
+3. Pour un nouvel embauché, renseigner l'âge et le Hot job (de 0 à 2) pour obtenir le salaire prédit par la régression.
 4. Pour vérifier un salaire, saisir le montant annuel en **kMAD** : 200 signifie 200 000 MAD.
 5. Pour un salarié existant, saisir son matricule afin de l'exclure des pairs ; le salaire prédit utilise alors ses données du fichier (âge, ancienneté, compétence, 9Box, Hot job).
 6. Consulter les comparaisons et, si disponible, la fourchette et la cible indicative.

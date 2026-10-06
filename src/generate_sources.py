@@ -13,7 +13,8 @@ Vue d'ensemble de ce que fait le script :
   3. EMPLOYES : genere des employes fictifs (famille, grade, poste, salaire,
                 age, anciennete, sexe, etc.) dont le salaire tombe dans la
                 bande. Les postes sont de simples numeros (JT0001, JT0002...)
-                et chacun porte un Hot_job de 0 a 6.
+                et chacun porte un Hot_job de 0 a 2. Chaque employe recoit
+                une case 9-Box de 0 a 6.
   4. EXPORT   : ecrit les 3 tables en Excel (.xlsx) dans le dossier input/ et affiche
                 quelques controles de coherence.
 """
@@ -128,10 +129,13 @@ RETAIL_TITRE_UNIQUE_PART = 0.40
 # Nombre de postes (Job_Title) differents. Un poste n'a pas de libelle :
 # c'est un numero incremente, JT0001, JT0002, ..., JT2000.
 N_POSTES = 2000
-# Hot_job : tension du metier sur le marche, de 0 (faible) a 6 (forte).
-# Part des employes visee pour chaque valeur (total = 100%).
+# Hot_job : tension du metier sur le marche, de 0 (faible) a 2 (forte).
+# Part des employes visee pour chaque valeur (total = 100%) : un tiers chacune.
 # Tous les employes d'un meme poste ont le meme Hot_job.
-HOT_JOB_PARTS = {0: 0.14, 1: 0.06, 2: 0.35, 3: 0.03, 4: 0.21, 5: 0.14, 6: 0.07}
+HOT_JOB_PARTS = {0: 1 / 3, 1: 1 / 3, 2: 1 / 3}
+# Positionnement 9-Box : case de 0 a 6, donnee a chaque employe (pas au poste :
+# le 9-Box evalue une personne). Part des employes pour chaque case (total = 100%).
+PARTS_9BOX = {0: 0.14, 1: 0.06, 2: 0.35, 3: 0.03, 4: 0.21, 5: 0.14, 6: 0.07}
 
 # Distribution des grades : identique pour toutes les familles (pyramide)
 # Probabilite d'avoir le grade 1, 2, ..., 7 (peu de directeurs, beaucoup de juniors).
@@ -248,22 +252,23 @@ def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
     return poste_emp
 
 
-# attribuer_hot_job : donne a chaque poste un Hot_job de 0 a 6 ; tous les
+# attribuer_hot_job : donne a chaque poste un Hot_job de 0 a 2 ; tous les
 # employes du poste heritent de cette valeur. Les parts de HOT_JOB_PARTS sont
 # visees sur les EMPLOYES (ce qu'on lit dans employes.xlsx), pas sur les postes :
 # le poste commun RETAIL BANKING (2000 employes) pese 2000, pas 1.
 # Methode : on prend les postes du plus gros au plus petit, et chacun va dans
 # la valeur la moins remplie par rapport a sa cible, a condition d'y tenir.
-# Exemple : le poste commun (2000) ne tient que dans 2 (cible 3500) ou 4 (2100) ;
-# il va dans 2, qui a le plus de place. Les autres postes (quelques employes
-# chacun) remplissent ensuite toutes les valeurs au meme rythme.
+# Exemple : le poste commun (2000) tient dans chacune des trois valeurs (cible
+# 3333) ; il prend la premiere, et les deux autres ont alors plus de place.
+# Les autres postes (quelques employes chacun) remplissent ensuite toutes les
+# valeurs au meme rythme, jusqu'a un tiers des employes chacune.
 def attribuer_hot_job(taille_poste, rng):
     """Renvoie {numero de poste: Hot_job}."""
     # Somme des parts (1.00), pour tolerer des parts qui ne tomberaient pas pile a 100%.
     total = sum(HOT_JOB_PARTS.values())
     # Nombre total d'employes (somme des tailles de postes).
     n_emp = sum(taille_poste.values())
-    # Nombre d'employes vise par valeur, ex. 35% x 10000 = 3500 pour Hot_job = 2.
+    # Nombre d'employes vise par valeur, ex. 1/3 x 10000 = 3333 pour Hot_job = 2.
     cible = {h: p / total * n_emp for h, p in HOT_JOB_PARTS.items()}
     # Nombre d'employes deja places dans chaque valeur.
     deja = {h: 0 for h in HOT_JOB_PARTS}
@@ -400,16 +405,24 @@ def main():
     poste_emp = attribuer_postes(fam_emp, grade_emp, commun_emp, rng)
     # Nombre d'employes par poste, ex. {1: 2000, 2: 5, 3: 3, ...}.
     taille_poste = Counter(poste_emp)
-    # Hot_job de chaque poste, ex. {1: 2, 2: 0, 3: 4, ...}.
+    # Hot_job de chaque poste, ex. {1: 0, 2: 2, 3: 1, ...}.
     hot_poste = attribuer_hot_job(taille_poste, rng)
 
-    # 3c. Autres attributs, employe par employe
+    # 3c. Case 9-Box de chaque employe
+    # Nombre d'employes par case, ex. {0: 1400, 1: 600, 2: 3500, ...} pour 10000 :
+    # repartir donne exactement les parts de PARTS_9BOX, sans employe perdu.
+    n_9box = repartir(len(fam_emp), PARTS_9BOX)
+    # Liste des cases (1400 fois 0, puis 600 fois 1, ...), melangee pour que
+    # chaque employe tombe sur une case au hasard.
+    box_emp = rng.permutation(np.repeat(list(n_9box), list(n_9box.values())))
+
+    # 3d. Autres attributs, employe par employe
     # Liste qui va recevoir une ligne par employe.
     emp_rows = []
     # Compteur servant a numeroter les matricules (Mat00001, Mat00002, ...).
     matricule = 1
-    # Boucle sur chaque employe : sa famille, son grade et son numero de poste.
-    for fam, g, poste in zip(fam_emp, grade_emp, poste_emp):
+    # Boucle sur chaque employe : sa famille, son grade, son numero de poste et sa case 9-Box.
+    for fam, g, poste, box in zip(fam_emp, grade_emp, poste_emp, box_emp):
         # Pole / entite
         # Pole de la famille ; si None (TRANSVERSE), on tire un pole entre 1 et 5.
         # (rng.integers(1, 6) renvoie un entier de 1 a 5, 6 exclu.)
@@ -462,9 +475,9 @@ def main():
             "Date_Effet_Paie": DATE_EFFET,
             # Note de competence : loi normale bornee entre 0 et 5, arrondie a 2 decimales.
             "Competence_N1": round(float(np.clip(rng.normal(COMP_MU, COMP_SD), 0, 5)), 2),
-            # Case de la matrice 9-Box (performance x potentiel), entier de 0 a 8.
-            "Positionnement_9BOX": int(rng.integers(0, 9)),
-            # Hot_job herite du poste : de 0 (metier peu tendu) a 6 (tres tendu).
+            # Case de la matrice 9-Box (performance x potentiel), de 0 a 6, tiree en 3c.
+            "Positionnement_9BOX": int(box),
+            # Hot_job herite du poste : de 0 (metier peu tendu) a 2 (tres tendu).
             "Hot_job": hot_poste[poste],
         })
         # Passe au numero de matricule suivant.
@@ -542,6 +555,13 @@ def main():
     total = sum(HOT_JOB_PARTS.values())
     for h, p in HOT_JOB_PARTS.items():
         print(f"  {h} : {pct_emp.get(h, 0):7.1%} | {pct_postes.get(h, 0):7.1%} | {p / total:7.1%}")
+
+    # Meme comparaison pour la case 9-Box, cote employes seulement (elle n'est pas donnee au poste).
+    print("\n9-Box : % employes | cible")
+    pct_9box = employes.Positionnement_9BOX.value_counts(normalize=True)
+    total = sum(PARTS_9BOX.values())
+    for b, p in PARTS_9BOX.items():
+        print(f"  {b} : {pct_9box.get(b, 0):7.1%} | {p / total:7.1%}")
 
 
 # Ce bloc ne s'execute que si on lance directement le fichier

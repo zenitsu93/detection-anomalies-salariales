@@ -108,8 +108,8 @@ Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fictifs ave
 | `Anciennete` | ancienneté, en années | `8` |
 | `Sexe` | `F` ou `M` (exactement) | `F` |
 | `Competence_N1` | note de compétences de l'année précédente | `4.09` |
-| `Positionnement_9BOX` | case de la grille 9Box | `6` |
-| `Hot_job` | tension du métier sur le marché, de 0 (faible) à 6 (forte) | `4` |
+| `Positionnement_9BOX` | case de la grille 9Box, de 0 à 6 | `6` |
+| `Hot_job` | tension du métier sur le marché, de 0 (faible) à 2 (forte) ; la même valeur pour tous les salariés d'un poste | `2` |
 
 Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne servent à aucun calcul : elles sont simplement recopiées dans les résultats.
 
