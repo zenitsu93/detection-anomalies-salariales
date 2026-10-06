@@ -72,7 +72,13 @@ input/
 └── market.xlsx    le marché : une ligne par métier + grade
 ```
 
-Le dépôt contient déjà trois fichiers fictifs (10 000 salariés) : le projet se lance tel quel. Pour analyser de vraies données, il suffit de les remplacer.
+Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de vraies données salariales n'y partent jamais. Pour essayer le projet sans données réelles, fabriquer d'abord trois fichiers fictifs (10 000 salariés, dont quelques anomalies volontaires : salaires hors grille ou très bas, matricules en double) :
+
+```powershell
+python src/generate_sources_anomalies.py
+```
+
+Pour analyser de vraies données, déposer vos trois fichiers à la place.
 
 Format des trois fichiers :
 
@@ -81,7 +87,7 @@ Format des trois fichiers :
 - les salaires, âges et notes sont saisis comme des nombres, pas comme du texte ;
 - le métier (`Job_Family`) et le grade (`Grade`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + grade manque dans la grille reste dans l'analyse, mais sans fourchette.
 
-Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fournis avec Excel.
+Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fictifs avec Excel.
 
 **`employes.xlsx`**
 
@@ -122,6 +128,8 @@ Les résultats arrivent dans `output/detection/` :
 - `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + grade.
 
 Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic).
+
+Le dossier `output/` n'est pas envoyé sur GitHub non plus : chaque lancement refait les résultats.
 
 ## 4. Lancer étape par étape
 
