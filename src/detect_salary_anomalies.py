@@ -87,7 +87,8 @@ if __name__ == "__main__":
     df = df[front_cols + [c for c in df.columns if c not in front_cols]]
 
     # Tous les tableaux de bord au même endroit, quel que soit le programme qui les crée.
-    tableau_de_bord = lancer(9, "Tableau de bord", generate_dashboard, df, gg, projet / "output" / "dashboard")
+    tableau_de_bord = lancer(9, "Tableau de bord", generate_dashboard, df, gg, rule_params,
+                             projet / "output" / "dashboard")
 
     # En fichiers Excel (.xlsx) : ils s'ouvrent directement, sans souci de séparateur, de virgule
     # décimale ou d'accents.

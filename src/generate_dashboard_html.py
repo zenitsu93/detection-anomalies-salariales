@@ -8,7 +8,8 @@ TABLEAU DE BORD HTML DES ANOMALIES
 Ce fichier crée un tableau de bord HTML (graphiques Chart.js) à partir de :
 - df : le DataFrame des salariés rendu par anomaly_recommandations.py, avec le score général
   (RiskScore) et la priorité (Severity) ajoutés par anomaly_score_general.py ;
-- gg : le tableau rendu par anomaly_ecarts_hommes_femmes.py.
+- gg : le tableau rendu par anomaly_ecarts_hommes_femmes.py ;
+- rule_params : les réglages de config/rules.yaml, pour afficher les seuils de la règle CompaRatio.
 Il ne recalcule rien : il compte et affiche. Un clic sur une barre, un point ou un nombre de priorité
 affiche les salariés concernés, avec un export Excel. Chaque tableau se filtre et se trie comme dans
 Excel : une recherche au-dessus, et un menu ▾ dans chaque en-tête de colonne.
@@ -19,7 +20,7 @@ faire.
 Utilisation :
 - depuis Python :
       from generate_dashboard_html import generate_dashboard
-      generate_dashboard(df, gg, "output/dashboard")
+      generate_dashboard(df, gg, rule_params, "output/dashboard")
 - en ligne de commande, depuis le dossier du projet :
       python src/generate_dashboard_html.py
   Le tableau de bord est enregistré dans output/dashboard/, sous un nom daté
@@ -62,6 +63,17 @@ SEVERITY_FR = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "
 # pour l'IA. Trois teintes choisies pour rester distinctes, y compris pour un lecteur daltonien.
 SCORE_COLORS = {"RiskScore": "#9a5530", "Rule_Score": GOLD, "ML_AnomalyScore": "#3d6fa8"}
 
+# Les montants des fichiers d'entrée sont en kMAD (238.34 = 238 340 MAD) : c'est l'unité affichée.
+UNITE = "kMAD"
+
+# Les deux recommandations qui coûtent, avec leur nom à l'écran et leur couleur : brun foncé pour la
+# remise au Min, brun clair pour le rapprochement du Mid (deux bruns, puisque ce sont deux montants).
+ACTIONS = {"Ajuster au MIN": ("Remise au Min", BROWN), "Ajuster vers MID": ("Rapprochement du Mid", "#b07d55")}
+
+# Position dans la grille : ardoise pour les tranches hors de la zone normale du CompaRatio (celles qui
+# comptent), gris clair pour celles qui sont dedans.
+ZONE_IN = "#cfd5dc"
+
 # Les étiquettes traduites pour l'écran ; le code d'origine reste visible dans l'infobulle.
 FLAG_FR = {
     "OUT_OF_BAND": "Hors grille",
@@ -77,7 +89,7 @@ COL_FR = {
     "Grade": "Grade", "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
     "Rule_Score": "Score de règles", "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
-    "Cout_Ajustement": "Coût d'ajustement",
+    "Cout_Ajustement": f"Coût d'ajustement ({UNITE})",
 }
 
 
@@ -90,7 +102,12 @@ def fmt_num(x):
     return f"{x:,.2f}".rstrip("0").rstrip(".").replace(",", " ").replace(".", ",")
 
 
-def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
+def virgule(x):
+    """0.85 -> « 0,85 »."""
+    return f"{x:.2f}".replace(".", ",")
+
+
+def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
     """Compte ce que les graphiques affichent."""
     a_traiter = df["Severity"] != "Info"
     flags = df["Rule_Flags"].str.split(";").explode()
@@ -101,6 +118,31 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
     pole = pole.loc[pole.sum(axis=1).sort_values(ascending=False).index]
     job = df.loc[a_traiter, "Job_Family"].value_counts().head(10)
     cost = df.groupby("Entite_N1")["Cout_Ajustement"].sum().sort_values(ascending=False)
+    # Le même coût, séparé selon l'action qui le crée, avec le nombre de salariés de chaque action.
+    payant = df[df["Reco"].isin(list(ACTIONS))]
+    cout_action = (payant.pivot_table(index="Entite_N1", columns="Reco", values="Cout_Ajustement", aggfunc="sum")
+                   .reindex(index=cost.index, columns=list(ACTIONS)).fillna(0))
+    nb_action = pd.crosstab(payant["Entite_N1"], payant["Reco"]).reindex(index=cost.index, columns=list(ACTIONS),
+                                                                         fill_value=0)
+
+    # Position dans la grille : les CompaRatio (arrondis comme dans la liste, pour que les comptes
+    # collent) par tranches de 0,05, de « moins de 0,60 » (tranche 0) à « 1,40 et plus » (tranche 17).
+    # Une tranche est dans la zone si elle tient entre les deux seuils de la règle CompaRatio. Les
+    # salariés sans grille n'ont pas de CompaRatio : ils ne sont pas comptés.
+    lo, hi = rule_params["compa_ratio_low"], rule_params["compa_ratio_high"]
+    compa = df["CompaRatio"].round(2).dropna()
+    tranche_cr = (np.floor(((compa - 0.60) / 0.05).round(6)) + 1).clip(0, 17).astype(int)
+    debuts = [round(0.60 + 0.05 * k, 2) for k in range(16)]
+    # Le nombre hors zone se compte sur les valeurs exactes, comme la règle CompaRatio : il est égal au
+    # nombre de salariés qui ont le signal « Position dans la grille ».
+    hors_zone = int(((df["CompaRatio"] < lo) | (df["CompaRatio"] > hi)).sum())
+
+    # Carte métier × grade : pour chaque case, l'effectif et le nombre de salariés de chaque priorité.
+    carte = pd.crosstab([df["Job_Family"], df["Grade"]], df["Severity"]).reindex(columns=SEVERITY_ORDER, fill_value=0)
+    metiers, grades = sorted(df["Job_Family"].unique()), sorted(df["Grade"].unique())
+    cases = [[{"n": int(carte.loc[(m, g)].sum()), "C": int(carte.loc[(m, g), "Critical"]),
+               "M": int(carte.loc[(m, g), "Major"]), "m": int(carte.loc[(m, g), "Minor"])}
+              if (m, g) in carte.index else None for g in grades] for m in metiers]
     # Les trois scores comptés par tranches de 10 (tout ce qui dépasse 90 va dans la dernière). Même
     # arrondi et même calcul que la liste affichée au clic, pour que les deux comptes collent.
     scores = [{"code": col, "label": COL_FR[col], "color": couleur,
@@ -136,7 +178,19 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame) -> dict:
                           "data": pole[s].astype(int).tolist()} for s in SEVERITY_ORDER[:3]],
         },
         "job": {"labels": job.index.tolist(), "data": job.tolist()},
-        "cost": {"labels": cost.index.tolist(), "data": cost.round(1).tolist()},
+        "cost": {"labels": cost.index.tolist(), "data": cost.round(1).tolist(),
+                 "datasets": [{"code": code, "label": nom, "color": couleur,
+                               "data": cout_action[code].round(1).tolist(), "n": nb_action[code].astype(int).tolist()}
+                              for code, (nom, couleur) in ACTIONS.items()]},
+        "compa": {
+            "labels": [f"< {virgule(0.60)}"] + [virgule(d) for d in debuts] + [f"≥ {virgule(1.40)}"],
+            "ranges": [f"moins de {virgule(0.60)}"] + [f"de {virgule(d)} à moins de {virgule(d + 0.05)}" for d in debuts]
+                      + [f"{virgule(1.40)} et plus"],
+            "data": tranche_cr.value_counts().reindex(range(18), fill_value=0).tolist(),
+            "inside": [False] + [lo - 1e-9 <= d and d + 0.05 <= hi + 1e-9 for d in debuts] + [False],
+            "lo": virgule(lo), "hi": virgule(hi), "hors": hors_zone, "total": len(compa),
+        },
+        "carte": {"metiers": metiers, "grades": [int(g) for g in grades], "cases": cases},
         "flags": {"labels": [FLAG_FR.get(f, f) for f in flags.index], "codes": flags.index.tolist(),
                   "data": flags.tolist()},
         "scores": {"labels": [f"{b}-{b + 10}" for b in range(0, 100, 10)], "datasets": scores},
@@ -154,20 +208,23 @@ def build_html(data: dict, maintenant: datetime) -> str:
     generated = maintenant.strftime("%d/%m/%Y à %H:%M")
     pct = kpis["a_traiter"] / kpis["effectif"] * 100 if kpis["effectif"] else 0.0
 
-    s, p = data["scores"], data["pole"]
+    p, c, cr = data["pole"], data["cost"], data["compa"]
+    pct_hors = cr["hors"] / cr["total"] * 100 if cr["total"] else 0.0
     # Les tableaux des « Données détaillées » partent en JSON (titre, colonnes, lignes) et non plus en
     # HTML tout fait : la page les dessine elle-même, avec la même recherche et les mêmes filtres que la
-    # liste des salariés. Plus de tableau des écarts hommes / femmes : le graphique par grade le remplace.
+    # liste des salariés. Pas de tableau des écarts hommes / femmes (le graphique par grade le remplace)
+    # ni du score général (ses trois courbes et leur infobulle donnent déjà les nombres).
     tables_json = json.dumps([
         {"title": titre, "cols": entetes, "rows": list(lignes)}
         for titre, entetes, lignes in [
             ("Anomalies à traiter par pôle", ["Pôle"] + [d["label"] for d in p["datasets"]],
              zip(p["labels"], *[d["data"] for d in p["datasets"]])),
             ("Top métiers", ["Métier", "Salariés à traiter"], zip(data["job"]["labels"], data["job"]["data"])),
-            ("Coût par pôle", ["Pôle", "Coût d'ajustement"], zip(data["cost"]["labels"], data["cost"]["data"])),
+            ("Coût par pôle et par action", ["Pôle"] + [d["label"] for d in c["datasets"]] + [f"Total ({UNITE})"],
+             zip(c["labels"], *[d["data"] for d in c["datasets"]], c["data"])),
+            ("Position dans la grille (CompaRatio)", ["Tranche", "Salariés", "Zone"],
+             zip(cr["ranges"], cr["data"], ["dans la zone" if z else "hors zone" for z in cr["inside"]])),
             ("Signaux déclencheurs", ["Signal", "Salariés"], zip(data["flags"]["labels"], data["flags"]["data"])),
-            ("Score général", ["Tranche"] + [d["label"] for d in s["datasets"]],
-             zip(s["labels"], *[d["data"] for d in s["datasets"]])),
         ]
     ], ensure_ascii=False).replace("<", "\\u003c")
 
@@ -241,6 +298,18 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 /* Boutons de choix des écarts hommes / femmes : celui qui est affiché est foncé. */
 .views {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }}
 .views button[aria-pressed="true"] {{ background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }}
+/* Petite légende écrite au-dessus d'un graphique : un carré de couleur devant chaque libellé. */
+.legend {{ display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }}
+.legend i {{ display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }}
+/* Carte métier × grade : une case par métier et grade, plus foncée quand la part est forte. */
+.heat {{ overflow-x: auto; }}
+.heat th, .heat td {{ padding: 5px 6px; text-align: center; border: 0; }}
+.heat th:first-child, .heat td:first-child {{ text-align: left; padding-left: 0; }}
+.heat td.cell {{ cursor: pointer; font-weight: 600; font-size: 12px; border: 2px solid var(--panel); }}
+.heat td.cell:hover, .heat td.cell:focus-visible {{ outline: 2px solid var(--brand-dark); outline-offset: -2px; }}
+.heat td.empty {{ color: var(--faint); }}
+.heat-legend {{ display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--muted); }}
+.heat-legend .bar {{ width: 140px; height: 10px; background: linear-gradient(90deg, rgb(238,241,244), rgb(47,61,76)); }}
 
 details.data-toggle {{ border-top: 1px solid var(--line-soft); }}
 details.data-toggle summary {{ cursor: pointer; padding: 10px 16px; font-size: 13px; }}
@@ -320,7 +389,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
   <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Détection des anomalies salariales</span></div>
   <dl class="context">
     <div><dt>Effectif analysé</dt><dd>{fmt_int(kpis['effectif'])} salariés</dd></div>
-    <div><dt>Montants</dt><dd>Unité source</dd></div>
+    <div><dt>Montants</dt><dd>{UNITE} (milliers de MAD)</dd></div>
     <div><dt>Généré le</dt><dd>{generated}</dd></div>
   </dl>
 </header>
@@ -336,7 +405,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
     <div><dt><span class="sev" style="background:{STATUS['Major']}"></span>Majeures</dt><dd><button class="kpi-btn" type="button" data-sev="Major">{fmt_int(kpis['Major'])}</button></dd></div>
     <div><dt><span class="sev" style="background:{STATUS['Minor']}"></span>Mineures</dt><dd><button class="kpi-btn" type="button" data-sev="Minor">{fmt_int(kpis['Minor'])}</button></dd></div>
     <div><dt><span class="sev" style="background:{STATUS['Info']}"></span>{SEVERITY_FR['Info']}</dt><dd><button class="kpi-btn" type="button" data-sev="Info">{fmt_int(kpis['Info'])}</button></dd></div>
-    <div><dt>Coût d'ajustement total</dt><dd>{fmt_int(kpis['cout_total'])}<small>unité source</small></dd></div>
+    <div><dt>Coût d'ajustement total</dt><dd>{fmt_int(kpis['cout_total'])}<small>{UNITE}</small></dd></div>
   </dl>
 
   <div class="grid">
@@ -349,8 +418,28 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
       <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-job"></canvas></div></div>
     </section>
     <section class="panel">
-      <div class="panel-head"><h2 class="panel-title">Coût d'ajustement par pôle</h2><span class="panel-unit">unité source</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-cost"></canvas></div></div>
+      <div class="panel-head"><h2 class="panel-title">Coût d'ajustement par pôle et par action</h2><span class="panel-unit">{UNITE}</span></div>
+      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-cost"></canvas></div>
+        <p class="note">Remise au Min : salaires sous le Min de la grille. Rapprochement du Mid : salaires trop bas
+          dans la grille (CompaRatio sous {cr['lo']}).</p></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Position dans la grille</h2><span class="panel-unit">salariés par tranche de CompaRatio</span></div>
+      <div class="panel-body">
+        <div class="legend"><span><i style="background:{SLATE}"></i>Hors de la zone {cr['lo']} – {cr['hi']}</span><span><i style="background:{ZONE_IN}"></i>Dans la zone</span></div>
+        <div class="chart-box h-xl"><canvas id="chart-compa"></canvas></div>
+        <p class="note">{fmt_num(round(pct_hors, 1))} % des salariés sont hors de la zone ({fmt_int(cr['hors'])} sur
+          {fmt_int(cr['total'])}). CompaRatio = salaire ÷ milieu de la grille : 1 veut dire pile au milieu. Les
+          salariés sans grille ne sont pas comptés.</p></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Carte métier × grade</h2><span class="panel-unit">part des salariés de la case</span></div>
+      <div class="panel-body">
+        <div class="views" id="heat-views" role="group" aria-label="Priorités à afficher"></div>
+        <div class="heat" id="heat"></div>
+        <div class="heat-legend"><span>0 %</span><span class="bar"></span><span id="heat-max"></span></div>
+        <p class="note">Plus la case est foncée, plus la part de salariés concernés est forte. Survolez une case pour
+          voir l'effectif ; cliquez pour afficher les salariés.</p></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Signaux déclencheurs</h2><span class="panel-unit">salariés</span></div>
@@ -662,7 +751,7 @@ function baseOptions(extra) {{
 const shortTicks = {{ callback(v) {{ const l = this.getLabelForValue(v); return innerWidth < 600 && l.length > 16 ? l.slice(0, 15) + '…' : l; }} }};
 const hbar = (color, extra) => merge({{ backgroundColor: color, borderRadius: 2, maxBarThickness: 18 }}, extra || {{}});
 const pick = (els, fn) => {{ if (els.length) fn(els[0].index, els[0].datasetIndex); }};
-// Réglages des barres horizontales (tous les graphiques sauf le score général).
+// Réglages des barres horizontales (tous les graphiques sauf le score général et la position dans la grille).
 const hOptions = extra => baseOptions(merge({{ indexAxis: 'y', scales: {{ y: {{ grid: {{ display: false }}, ticks: shortTicks }} }} }}, extra));
 
 // Une barre par pôle, découpée par priorité ; une priorité sans aucun salarié n'est pas affichée.
@@ -690,14 +779,93 @@ new Chart(document.getElementById('chart-job'), {{
   }}) }}),
 }});
 
+// Une barre par pôle, découpée par action : on voit ce que coûte chaque cible d'ajustement.
+const costSets = DATA.cost.datasets;
 new Chart(document.getElementById('chart-cost'), {{
   type: 'bar',
-  data: {{ labels: DATA.cost.labels, datasets: [hbar('{BROWN}', {{ data: DATA.cost.data }})] }},
-  options: hOptions({{ onClick: (evt, els) => pick(els, i => {{
-    const label = DATA.cost.labels[i];
-    showPopulation("Coût d'ajustement : " + label, r => r[RIDX.Entite_N1] === label && r[RIDX.Cout_Ajustement] > 0);
-  }}) }}),
+  data: {{ labels: DATA.cost.labels, datasets: costSets.map(d => hbar(d.color, {{ label: d.label, data: d.data }})) }},
+  options: hOptions({{
+    plugins: {{ legend: {{ display: true, position: 'top', align: 'start', labels: {{ boxWidth: 10, boxHeight: 10, padding: 16 }} }},
+               tooltip: {{ displayColors: true, callbacks: {{
+                 label: c => c.dataset.label + ' : ' + NUM.format(c.parsed.x) + ' {UNITE} (' + NUM.format(costSets[c.datasetIndex].n[c.dataIndex]) + ' salariés)',
+               }} }} }},
+    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
+    onClick: (evt, els) => pick(els, (i, d) => {{
+      const pole = DATA.cost.labels[i], action = costSets[d];
+      showPopulation(pole + ' — ' + action.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Reco] === action.code);
+    }}),
+  }}),
 }});
+
+// ---- Position dans la grille : combien de salariés par tranche de CompaRatio ----
+const CR = DATA.compa;
+// La tranche d'un CompaRatio, calculée comme en Python (tranches de 0,05, de 0 à 17).
+const trancheCR = v => Math.min(Math.max(Math.floor(+((v - 0.6) / 0.05).toFixed(6)) + 1, 0), 17);
+new Chart(document.getElementById('chart-compa'), {{
+  type: 'bar',
+  data: {{ labels: CR.labels, datasets: [{{ data: CR.data, borderRadius: 2, maxBarThickness: 28,
+    backgroundColor: CR.inside.map(dedans => dedans ? '{ZONE_IN}' : '{SLATE}') }}] }},
+  options: baseOptions({{
+    plugins: {{ tooltip: {{ callbacks: {{
+      title: items => 'CompaRatio ' + CR.ranges[items[0].dataIndex],
+      label: c => NUM.format(c.parsed.y) + ' salariés' + (CR.inside[c.dataIndex] ? ' (dans la zone)' : ' (hors zone)'),
+    }} }} }},
+    scales: {{
+      // Étiquettes droites : quand elles manquent de place, Chart.js n'en écrit qu'une sur deux.
+      x: {{ grid: {{ display: false }}, ticks: {{ maxRotation: 0, autoSkipPadding: 8 }},
+            title: {{ display: true, text: 'CompaRatio (salaire ÷ milieu de la grille)' }} }},
+      y: {{ beginAtZero: true, title: {{ display: true, text: 'Nombre de salariés' }} }},
+    }},
+    onClick: (evt, els) => pick(els, i => showPopulation('CompaRatio ' + CR.ranges[i],
+      r => r[RIDX.CompaRatio] !== null && trancheCR(r[RIDX.CompaRatio]) === i)),
+  }}),
+}});
+
+// ---- Carte métier × grade : la part des salariés concernés dans chaque case ----
+const CARTE = DATA.carte, heat = document.getElementById('heat');
+const MODES = [
+  {{ name: 'Toutes priorités à traiter', count: c => c.C + c.M + c.m, test: r => aTraiter(r) }},
+  {{ name: 'Critiques et majeures', count: c => c.C + c.M, test: r => ['Critical', 'Major'].includes(r[RIDX.Severity]) }},
+];
+// Teinte d'une case, du gris très clair (0) à l'ardoise foncée (la case la plus touchée de la carte).
+const CLAIR = [238, 241, 244], FONCE = [47, 61, 76];
+const teinte = t => 'rgb(' + CLAIR.map((v, k) => Math.round(v + (FONCE[k] - v) * t)).join(',') + ')';
+let carteMode = MODES[0];
+function showCarte(mode, button) {{
+  carteMode = mode;
+  // L'échelle va de 0 à la part la plus forte de la carte : sinon, avec peu de critiques, tout serait pâle.
+  const parts = CARTE.cases.flat().filter(Boolean).map(c => mode.count(c) / c.n);
+  const max = Math.max(...parts) || 1;
+  const tete = '<tr><th>Métier</th>' + CARTE.grades.map(g => '<th>Grade ' + g + '</th>').join('') + '</tr>';
+  const lignes = CARTE.metiers.map((m, i) => '<tr><td>' + escapeText(m) + '</td>' + CARTE.cases[i].map((c, j) => {{
+    if (!c) return '<td class="empty">—</td>';
+    const k = mode.count(c), t = k / c.n / max;
+    const bulle = m + ' · grade ' + CARTE.grades[j] + ' : ' + NUM.format(k) + ' sur ' + NUM.format(c.n) + ' salariés';
+    return '<td class="cell" tabindex="0" role="button" data-i="' + i + '" data-j="' + j + '" title="' + escapeText(bulle)
+      + '" style="background:' + teinte(t) + ';color:' + (t > 0.55 ? '#fff' : 'var(--ink)') + '">'
+      + NUM.format(Math.round(k / c.n * 100)) + ' %</td>';
+  }}).join('') + '</tr>').join('');
+  heat.innerHTML = '<table><thead>' + tete + '</thead><tbody>' + lignes + '</tbody></table>';
+  document.getElementById('heat-max').textContent = NUM.format(Math.round(max * 100)) + ' %';
+  carteButtons.forEach(b => b.setAttribute('aria-pressed', b === button));
+}}
+// Clic (ou Entrée au clavier) sur une case : la liste de ses salariés concernés.
+function openCase(td) {{
+  const m = CARTE.metiers[td.dataset.i], g = CARTE.grades[td.dataset.j];
+  showPopulation(m + ' · grade ' + g + ' — ' + carteMode.name,
+    r => r[RIDX.Job_Family] === m && r[RIDX.Grade] === g && carteMode.test(r));
+}}
+heat.addEventListener('click', e => {{ const td = e.target.closest('td.cell'); if (td) openCase(td); }});
+heat.addEventListener('keydown', e => {{ const td = e.target.closest('td.cell'); if (td && e.key === 'Enter') openCase(td); }});
+const carteButtons = MODES.map(mode => {{
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = mode.name;
+  b.addEventListener('click', () => showCarte(mode, b));
+  document.getElementById('heat-views').appendChild(b);
+  return b;
+}});
+showCarte(MODES[0], carteButtons[0]);
 
 new Chart(document.getElementById('chart-flags'), {{
   type: 'bar',
@@ -793,8 +961,8 @@ const gapChart = new Chart(document.getElementById('chart-gap'), {{
       title: items => gapName(gapRows[items[0].dataIndex], true),
       label: c => {{
         const r = gapRows[c.dataIndex];
-        return ['Médiane femmes : ' + NUM.format(r.Median_F) + ' (' + plural(r.F, 'femme') + ')',
-                'Médiane hommes : ' + NUM.format(r.Median_M) + ' (' + plural(r.M, 'homme') + ')',
+        return ['Médiane femmes : ' + NUM.format(r.Median_F) + ' {UNITE} (' + plural(r.F, 'femme') + ')',
+                'Médiane hommes : ' + NUM.format(r.Median_M) + ' {UNITE} (' + plural(r.M, 'homme') + ')',
                 'Les hommes touchent ' + NUM.format(Math.abs(r.Ecart_pct)) + ' % de ' + (r.Ecart_pct < 0 ? 'moins' : 'plus') + ' que les femmes'];
       }},
     }} }} }},
@@ -839,8 +1007,8 @@ showGapView(gapViews[0], viewButtons[0]);
 """
 
 
-def generate_dashboard(df: pd.DataFrame, gg: pd.DataFrame, dossier) -> Path:
-    """Crée le tableau de bord à partir des deux tableaux et l'enregistre dans dossier.
+def generate_dashboard(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict, dossier) -> Path:
+    """Crée le tableau de bord à partir des deux tableaux et des réglages, et l'enregistre dans dossier.
 
     Le nom du fichier porte la date et l'heure (dashboard_anomalies_2026-10-02_14-35-08.html) : un
     nouveau lancement ne remplace pas le tableau de bord précédent, et les noms se rangent d'eux-mêmes
@@ -849,7 +1017,7 @@ def generate_dashboard(df: pd.DataFrame, gg: pd.DataFrame, dossier) -> Path:
     maintenant = datetime.now()
     out_html = Path(dossier) / f"dashboard_anomalies_{maintenant:%Y-%m-%d_%H-%M-%S}.html"
     out_html.parent.mkdir(parents=True, exist_ok=True)
-    out_html.write_text(build_html(build_data(df, gg), maintenant), encoding="utf-8")
+    out_html.write_text(build_html(build_data(df, gg, rule_params), maintenant), encoding="utf-8")
     return out_html
 
 
@@ -875,5 +1043,5 @@ if __name__ == "__main__":
     df = aggregate_risk(df, rule_params)
     df = recommendations(df, rule_params)
 
-    sortie = generate_dashboard(df, gg, projet / "output" / "dashboard")
+    sortie = generate_dashboard(df, gg, rule_params, projet / "output" / "dashboard")
     print(f"Tableau de bord enregistré dans : {sortie}")
