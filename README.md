@@ -123,7 +123,7 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 | --- | --- | --- | --- |
 | 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié | `output/pretraitement/employes_pretraites.xlsx` |
 | 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.xlsx` |
-| 3 | `python src/anomaly_regles.py` | alertes des quatre règles et leurs points | `output/regles/employes_regles.xlsx` |
+| 3 | `python src/anomaly_regles.py` | alertes des cinq règles et leurs points | `output/regles/employes_regles.xlsx` |
 | 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.xlsx` |
 | 5 | `python src/anomaly_signal_fort.py` | signal ML_STRONG_SIGNAL pour les 5 % de profils les plus atypiques pour l'IA (sans points) | `output/signal_fort/employes_signal_fort.xlsx` |
 | 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.xlsx` |

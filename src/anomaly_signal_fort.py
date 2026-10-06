@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-SIGNAL FORT DE L'IA : UN CINQUIÈME SIGNAL POUR LES PROFILS TRÈS ATYPIQUES
-=========================================================================
+SIGNAL FORT DE L'IA : UN SIXIÈME SIGNAL POUR LES PROFILS TRÈS ATYPIQUES
+=======================================================================
 
-Les quatre règles regardent le salaire sous un angle précis (grille, CompaRatio, marché, collègues).
-L'IA, elle, regarde tout le profil d'un coup (ML_AnomalyScore). Ce fichier fait remonter ce qu'elle
-voit comme un cinquième signal : les salariés parmi les plus atypiques pour l'IA reçoivent
-l'étiquette ML_STRONG_SIGNAL et un motif, en plus des signaux des règles.
+Les cinq règles regardent le salaire sous un angle précis (grille, CompaRatio, marché, collègues,
+salaire minimum). L'IA, elle, regarde tout le profil d'un coup (ML_AnomalyScore). Ce fichier fait
+remonter ce qu'elle voit comme un sixième signal : les salariés parmi les plus atypiques pour l'IA
+reçoivent l'étiquette ML_STRONG_SIGNAL et un motif, en plus des signaux des règles.
 
 Ce signal n'ajoute aucun point : Rule_Score ne change pas. Le score de l'IA compte déjà dans le
 score général (ml_weight dans config/rules.yaml) ; lui donner aussi des points le compterait deux

@@ -227,13 +227,16 @@ class DecisionEngine:
         return {"low": low, "high": high, "target": target, "reason": "available"}
 
     def _checks(self, salary, band, market, peers):
-        # Pourquoi PeerZ : les quatre règles de src/anomaly_regles.py en ont besoin, dont celle des collègues.
+        # Pourquoi PeerZ : les cinq règles de src/anomaly_regles.py en ont besoin, dont celle des collègues.
+        # Pourquoi Grade et Fixe_Annuel_MAD : la règle du salaire minimum les lit. Le grade reste vide,
+        # donc elle ne se déclenche pas ici : cette aide n'a pas de contrôle « salaire minimum ».
         ratios = {"CompaRatio": salary / band["Mid"] if band else np.nan,
                   "RangePenetration": (salary - band["Min"]) / (band["Max"] - band["Min"])
                   if band and band["Max"] > band["Min"] else np.nan,
                   "MarketRatio": salary / market["Median"] if market else np.nan,
                   "PeerZ": (salary - peers["center"]) / peers["scale"]
-                  if peers["available"] and peers["scale"] > 0 else np.nan}
+                  if peers["available"] and peers["scale"] > 0 else np.nan,
+                  "Grade": np.nan, "Fixe_Annuel_MAD": salary}
         for column, bounds in [("CompaRatio", ("compa_ratio_low", "compa_ratio_high")),
                                ("MarketRatio", ("market_low", "market_high"))]:
             for bound in bounds:

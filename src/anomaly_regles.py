@@ -32,11 +32,11 @@ from anomaly_cohortes import former_cohortes
 
 
 def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
-    """Applique les quatre règles à chaque salarié et rend un NOUVEAU DataFrame (celui reçu n'est pas
+    """Applique les cinq règles à chaque salarié et rend un NOUVEAU DataFrame (celui reçu n'est pas
     modifié).
 
     Ce qu'on lui donne : le DataFrame rendu par former_cohortes (anomaly_cohortes.py), qui contient les
-    ratios et l'écart aux collègues (PeerZ).
+    ratios, l'écart aux collègues (PeerZ), le grade (Grade) et le salaire (Fixe_Annuel_MAD).
 
     """
     # Les réglages, lus dans le fichier de règles (la valeur par défaut s'ils n'y sont pas).
@@ -49,6 +49,7 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     market_hi = rule_params.get("market_high")
     z_minor = rule_params.get("peer_z_threshold_minor")
     z_major = rule_params.get("peer_z_threshold_major")
+    planchers = rule_params.get("min_salary_by_grade")
 
     df = df.copy()
 
@@ -62,6 +63,10 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # abs() enlève le signe : payé nettement plus OU nettement moins que ses collègues, les deux comptent.
     pairs_minor = df["PeerZ"].abs() >= z_minor
     pairs_major = df["PeerZ"].abs() >= z_major
+    # Le plancher du grade de chaque salarié. Un grade absent du fichier de règles reste vide : jamais
+    # d'alerte. Exemple : grade 5, plancher 140 : un salaire de 135 déclenche l'alerte, 140 non.
+    plancher = df["Grade"].map(planchers)
+    sous_plancher = df["Fixe_Annuel_MAD"] < plancher
 
     # Étiquettes et points : pour chaque règle déclenchée, on ajoute « ;ETIQUETTE » et ses points.
     df["Rule_Flags"] = ""
@@ -74,6 +79,8 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df.loc[marche_bas | marche_haut, "Rule_Score"] += weights.get("market_gap")
     df.loc[pairs_minor, "Rule_Flags"] += ";PEER_OUTLIER"
     df.loc[pairs_major, "Rule_Score"] += weights.get("peer_outlier")
+    df.loc[sous_plancher, "Rule_Flags"] += ";MIN_SALARY"
+    df.loc[sous_plancher, "Rule_Score"] += weights.get("min_salary")
 
     df["Rule_Flags"] = df["Rule_Flags"].str.lstrip(";")
 
@@ -82,6 +89,8 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # (df.apply), ce qui est très lent sur 10 000 personnes. Ici, chaque motif est ajouté d'un coup à
     # tous les salariés concernés. Le texte obtenu est le même.
     compa_txt = df["CompaRatio"].map("{:.2f}".format)
+    # « {:g} » écrit le plancher sans décimale inutile : 140 et non 140.0.
+    plancher_txt = plancher.map("{:g}".format)
     df["Reason_Principale"] = ""
     df.loc[sous_min, "Reason_Principale"] += " & Salaire sous MIN interne"
     df.loc[au_dessus_max, "Reason_Principale"] += " & Salaire au-dessus du MAX interne"
@@ -90,6 +99,8 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df.loc[marche_bas, "Reason_Principale"] += " & Sous la mediane marche"
     df.loc[marche_haut, "Reason_Principale"] += " & Au-dessus de la mediane marche"
     df.loc[pairs_major, "Reason_Principale"] += f" & Outlier vs pairs (|Z|> ou = {z_major:.1f})"
+    df.loc[sous_plancher, "Reason_Principale"] += (" & Salaire sous le minimum du grade ("
+                                                   + plancher_txt[sous_plancher] + ")")
     # Le « & » du début ne sert à rien non plus.
     df["Reason_Principale"] = df["Reason_Principale"].str.removeprefix(" & ")
 

@@ -1,11 +1,14 @@
 rules:
   # Points ajoutés au score des règles (Rule_Score) chaque fois qu'une règle se déclenche.
   # Plus le nombre est grand, plus cette règle pèse dans la priorité finale du dossier.
+  # Le total fait 100 (30 + 20 + 15 + 15 + 20) : un salarié qui déclenche toutes les règles a 100
+  # points, si bien que le score des règles et le score final ne dépassent jamais 100.
   severity_weights:
     out_of_band: 30        # hors des bornes Min/Max internes (RangePenetration)
     compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
     market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
     peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
+    min_salary: 20         # salaire sous le plancher de son grade (min_salary_by_grade)
 
   # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
   # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
@@ -40,6 +43,20 @@ rules:
   # au-dessus de 1.20 : alerte.
   market_low: 0.90
   market_high: 1.20
+
+  # Règle « salaire minimum » : salaire annuel minimum de chaque grade (1 à 7), en kMAD comme
+  # Fixe_Annuel_MAD. Ce plancher vaut pour tous les métiers d'un même grade, alors que la grille
+  # interne (bands.csv) change d'un métier à l'autre. Un salaire strictement sous le plancher de son
+  # grade lève l'alerte MIN_SALARY : grade 5, plancher 140 : un salaire de 135 la lève, 140 non.
+  # Un grade absent de cette liste n'est pas contrôlé. Valeurs à ajuster selon la politique salariale.
+  min_salary_by_grade:
+    1: 400
+    2: 300
+    3: 240
+    4: 180
+    5: 140
+    6: 110
+    7: 85
 
   # Taille minimale du groupe de collègues : un groupe doit compter au moins 15 personnes pour que la comparaison ait du sens.
   cohort_min_size: 15
