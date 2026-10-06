@@ -40,6 +40,7 @@ Le projet repart du code d'origine et le réécrit fichier par fichier.
 | [`6c7ecc2`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/6c7ecc2feb86af3152510e795b89fff0d11bc083) | docs: mettre à jour la capture d'écran de l'aide à la décision | `decision_support/static/apercu.png` : la capture d'écran montre le nouveau bandeau, avec le salaire prédit par la régression. |
 | [`5f75537`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/5f755379fe9445b408131c41def7a70b41d229f9) | feat: générer des données fictives avec des anomalies volontaires | `src/generate_sources_anomalies.py` : lance le générateur, puis ajoute des anomalies volontaires (400 salaires hors grille ou très bas, 10 matricules en double) pour que la détection ait de quoi travailler. |
 | [`0aa040f`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/0aa040fac847bb64860317c2c53b2602ca0a98c6) | chore: ne plus envoyer input/ et output/ sur GitHub | `.gitignore` : `input/` et `output/` ne sont plus envoyés sur GitHub (pour que de vraies données salariales n'y partent jamais) ; le README dit comment fabriquer les fichiers fictifs. |
+| [`2f142a6`](https://github.com/zenitsu93/detection-anomalies-salariales/commit/2f142a6a4ae803b258143fcfbbe2eefb45eb1799) | docs: adapter le notebook à la régression avec fourchette (plus de Reg_Z ni de seuil) | `notebooks/exploration_regression.ipynb` : plus de Reg_Z ni de seuil ; le dernier graphe vérifie que le vrai salaire tombe dans la fourchette 9 fois sur 10, grade par grade. |
 
 # Lancer le projet
 
