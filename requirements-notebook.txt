@@ -1,0 +1,6 @@
+# Bibliothèques en plus pour relancer le notebook notebooks/exploration_regression.ipynb
+# (voir « En dehors du programme principal » dans le README).
+-r requirements.txt
+matplotlib==3.10.9
+seaborn==0.13.2
+ipykernel==7.3.0
