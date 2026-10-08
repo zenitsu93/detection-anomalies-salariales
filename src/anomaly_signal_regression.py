@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """Régression du salaire : le modèle apprend sur 80 % des salariés, il est vérifié sur les 20 %
-restants, puis il prédit un salaire avec une fourchette, pour un nouvel embauché ou un salarié dont
-on revoit le salaire."""
+restants, puis il prédit un salaire avec une fourchette, pour un salarié dont on revoit le
+salaire."""
 
 from pathlib import Path
 
@@ -16,19 +16,14 @@ from sklearn.model_selection import train_test_split
 
 from anomaly_pretraitement import preparer_employes
 
-# Ce qu'on connaît d'un nouvel embauché, et d'un salarié déjà dans l'entreprise.
-COLONNES_EMBAUCHE = ["Job_Family", "Grade", "Age", "Hot_job"]
-COLONNES_SALARIE = ["Job_Family", "Grade", "Anciennete", "Age", "Competence_N1",
-                    "Positionnement_9BOX", "Hot_job"]
+# Ce qu'on connaît d'un salarié déjà dans l'entreprise.
+COLONNES = ["Job_Family", "Grade", "Anciennete", "Age", "Competence_N1", "Positionnement_9BOX",
+            "Hot_job"]
 
 
-def construire_X(df: pd.DataFrame, colonnes: list) -> pd.DataFrame:
+def entrainer(df: pd.DataFrame):
     # Métier et grade en colonnes 0/1
-    return pd.get_dummies(df[colonnes], columns=["Job_Family", "Grade"], dtype=float)
-
-
-def entrainer(df: pd.DataFrame, colonnes: list):
-    X = construire_X(df, colonnes)
+    X = pd.get_dummies(df[COLONNES], columns=["Job_Family", "Grade"], dtype=float)
     # Log du salaire : l'écart se lit en %, comparable d'un grade à l'autre
     Y = np.log(df["Fixe_Annuel_MAD"])
 
@@ -52,7 +47,6 @@ def entrainer(df: pd.DataFrame, colonnes: list):
     bas, haut = np.quantile(Y_test - Y_pred, [0.05, 0.95])
     reg = {
         "modele": modele,
-        "colonnes": colonnes,
         "colonnes_X": list(X.columns),
         "fourchette": (bas, haut),
     }
@@ -63,7 +57,8 @@ def predire(profils: pd.DataFrame, reg: dict) -> pd.DataFrame:
     """profils : les colonnes du modèle."""
     profils = profils.copy()
     # Mêmes colonnes 0/1 qu'à l'entraînement
-    X = construire_X(profils, reg["colonnes"]).reindex(columns=reg["colonnes_X"], fill_value=0)
+    X = pd.get_dummies(profils[COLONNES], columns=["Job_Family", "Grade"],
+                       dtype=float).reindex(columns=reg["colonnes_X"], fill_value=0)
     log_predit = reg["modele"].predict(X)
     bas, haut = reg["fourchette"]
 
@@ -79,21 +74,15 @@ if __name__ == "__main__":
                            projet / "input" / "bands.xlsx",
                            projet / "input" / "market.xlsx")
 
-    # 1. Entraîner les deux modèles et les enregistrer
+    # 1. Entraîner le modèle et l'enregistrer
     dossier = projet / "models"
     dossier.mkdir(exist_ok=True)
-    for nom, colonnes in [("embauche", COLONNES_EMBAUCHE), ("salarie", COLONNES_SALARIE)]:
-        reg, metriques = entrainer(df, colonnes)
-        joblib.dump(reg, dossier / f"regression_{nom}.joblib")
-        print(nom, metriques)
+    reg, metriques = entrainer(df)
+    joblib.dump(reg, dossier / "regression.joblib")
+    print(metriques)
 
-    # 2. Nouvel embauché : salaire prédit et sa fourchette
-    reg = joblib.load(dossier / "regression_embauche.joblib")
-    nouveau = pd.DataFrame([{"Job_Family": "FINANCE", "Grade": 4, "Age": 30, "Hot_job": 0}])
-    print(predire(nouveau, reg).round(1).to_string(index=False))
-
-    # 3. Salarié existant : salaire prédit et sa fourchette pour le premier salarié du fichier
-    reg = joblib.load(dossier / "regression_salarie.joblib")
+    # 2. Salaire prédit et sa fourchette pour le premier salarié du fichier
+    reg = joblib.load(dossier / "regression.joblib")
     revu = df.head(1)
     print(predire(revu, reg)[["Matricule", "Fixe_Annuel_MAD", "Salaire_Predit", "Fourchette_Basse",
                               "Fourchette_Haute"]].round(1).to_string(index=False))

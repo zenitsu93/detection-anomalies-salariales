@@ -159,7 +159,7 @@ Les seuils des règles, les poids et les niveaux de priorité se règlent dans `
 
 | Commande | Ce qu'elle fait |
 | --- | --- |
-| `python src/anomaly_signal_regression.py` | entraîne les deux modèles de régression (nouvel embauché, salarié revu) sur 80 % des salariés, les vérifie sur les 20 % restants, les enregistre dans `models/` et affiche deux exemples de salaire prédit avec sa fourchette. |
+| `python src/anomaly_signal_regression.py` | entraîne le modèle de régression sur 80 % des salariés, le vérifie sur les 20 % restants, l'enregistre dans `models/` et affiche le salaire prédit du premier salarié du fichier, avec sa fourchette. |
 | `python -m pip install -r requirements-notebook.txt` | installe, une seule fois, ce qu'il faut pour relancer [`notebooks/exploration_regression.ipynb`](notebooks/exploration_regression.ipynb) : les graphes qui aident à choisir les colonnes de la régression. Ensuite, ouvrir le notebook dans VS Code et choisir `.venv` comme noyau (« Select Kernel »). Les graphes sont déjà enregistrés dedans : pour seulement les lire, il n'y a rien à installer. |
 | `python -m decision_support.app` | ouvre l'aide à la décision sur **http://127.0.0.1:8765** (arrêter avec `Ctrl+C`) ; mode d'emploi dans [`decision_support/README.md`](decision_support/README.md). |
 | `python src/generate_sources.py` | fabrique de nouvelles données fictives, sans anomalie. **Attention :** il réécrit les trois fichiers de `input/` et remplace donc les vôtres. |

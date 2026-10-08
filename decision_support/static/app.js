@@ -114,8 +114,8 @@ function renderFigures(data) {
   // Repère de la régression, en plus : le salaire prédit et la fourchette où le vrai salaire tombe
   // 9 fois sur 10. Il ne change ni le verdict ni la fourchette proposée.
   const r = data.regression;
-  items.push([r.model === 'salarie' ? 'Salaire prédit (salarié revu)' : 'Salaire prédit (nouvel embauché)',
-    dash(r.predicted), '', r.predicted == null ? 'Âge et Hot job à renseigner' : `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`]);
+  items.push(['Salaire prédit', dash(r.predicted), '',
+    r.predicted == null ? 'Matricule à renseigner' : `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`]);
   $('summary-figures').replaceChildren(...items.map(([label, value, cls, note]) => {
     const cell = node('div', ''), dd = node('dd', value, cls);
     if (note) dd.append(node('small', note, 'range'));

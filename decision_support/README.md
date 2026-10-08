@@ -19,16 +19,15 @@ Si le port est occupé, ajouter `--port 8766`. Aucune dépendance supplémentair
 
 1. Choisir le mode, le métier et le grade.
 2. Renseigner l'ancienneté si une comparaison plus fine est souhaitée.
-3. Pour un nouvel embauché, renseigner l'âge et le Hot job (de 0 à 2) pour obtenir le salaire prédit par la régression.
-4. Pour vérifier un salaire, saisir le montant annuel en **kMAD** : 200 signifie 200 000 MAD.
-5. Pour un salarié existant, saisir son matricule afin de l'exclure des pairs ; le salaire prédit utilise alors ses données du fichier (âge, ancienneté, compétence, 9Box, Hot job).
-6. Consulter les comparaisons et, si disponible, la fourchette et la cible indicative.
+3. Pour vérifier un salaire, saisir le montant annuel en **kMAD** : 200 signifie 200 000 MAD.
+4. Pour un salarié existant, saisir son matricule afin de l'exclure des pairs et d'obtenir le salaire prédit par la régression, à partir de ses données du fichier (âge, ancienneté, compétence, 9Box, Hot job).
+5. Consulter les comparaisons et, si disponible, la fourchette et la cible indicative.
 
 ## Lire le résultat
 
 Chaque chiffre n'apparaît qu'à un seul endroit :
 
-- **Bandeau de synthèse** : verdict (cohérent, points à examiner dès qu'une des cinq règles se déclenche, références incomplètes), fourchette proposée et cible. En vérification, il donne aussi l'écart du salaire à la cible, en % ; en proposition, le CompaRatio de la cible. Enfin, le salaire prédit par la régression et sa fourchette, où le vrai salaire tombe 9 fois sur 10 : un repère en plus, qui ne change ni le verdict ni la fourchette proposée.
+- **Bandeau de synthèse** : verdict (cohérent, points à examiner dès qu'une des cinq règles se déclenche, références incomplètes), fourchette proposée et cible. En vérification, il donne aussi l'écart du salaire à la cible, en % ; en proposition, le CompaRatio de la cible. Enfin, pour un salarié existant, le salaire prédit par la régression et sa fourchette, où le vrai salaire tombe 9 fois sur 10 : un repère en plus, qui ne change ni le verdict ni la fourchette proposée.
 - **Positionnement** : une règle place sur la même échelle la grille (min–max et milieu), la médiane du marché, les collègues (P25–P75 et médiane), la fourchette proposée et, en vérification, le salaire évalué (trait brun). Les montants sont écrits sur les barres. Une phrase indique le nombre de collègues comparés et le périmètre retenu.
 
 Aucun profil saisi n'est enregistré sur le serveur. Les fichiers d'entrée ne sont pas modifiés.
@@ -41,7 +40,7 @@ Les couleurs de marque sont regroupées en haut de `static/style.css` (`--brand`
 - `input/market.xlsx` : médiane du même métier et grade. Le fichier peut être absent.
 - `input/employes.xlsx` : les collègues, choisis comme dans `src/anomaly_cohortes.py` : même grade + même métier + même tranche d'ancienneté, sinon même grade + même métier, sinon même grade seul (tous métiers). Le premier groupe qui compte au moins `cohort_min_size` collègues est retenu. Sans ancienneté saisie, le premier niveau est sauté.
 - `config/rules.yaml` : seuils des cinq règles (grille, CompaRatio, marché, écart entre pairs, salaire minimum du grade), effectif minimal et groupes de collègues.
-- `src/anomaly_signal_regression.py` : les deux modèles de régression (nouvel embauché, salarié revu), entraînés au démarrage de la même façon qu'en ligne de commande, donc avec les mêmes résultats.
+- `src/anomaly_signal_regression.py` : le modèle de régression, entraîné au démarrage de la même façon qu'en ligne de commande, donc avec les mêmes résultats.
 
 Les montants sont en **kMAD par an**, comme dans les fichiers d'entrée.
 
