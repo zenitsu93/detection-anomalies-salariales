@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-rem Ouvre notebooks\exploration_regression.ipynb dans le navigateur, avec le Python du venv du projet.
+rem Ouvre notebooks\EDA_Positionnement_Salarial_Comite.ipynb dans le navigateur, avec le Python du venv du projet.
 rem Il suffit de double-cliquer sur ce fichier : il prépare tout ce qui manque, puis ouvre le notebook.
 rem Pourquoi un .bat et pas un script PowerShell : sur beaucoup de PC d'entreprise, PowerShell refuse
 rem de lancer des scripts (« l'exécution de scripts est désactivée ») ; un .bat, lui, se lance toujours.
@@ -32,7 +32,7 @@ rem    --sys-prefix range cette déclaration dans .venv : rien n'est écrit aill
 rem 4. Ouvrir le notebook dans le navigateur. Fermer cette fenêtre (ou Ctrl+C dedans) arrête Jupyter.
 echo.
 echo Le notebook s'ouvre dans le navigateur. Gardez cette fenêtre ouverte tant que vous l'utilisez.
-".venv\Scripts\python.exe" -m notebook notebooks\exploration_regression.ipynb
+".venv\Scripts\python.exe" -m notebook notebooks\EDA_Positionnement_Salarial_Comite.ipynb
 exit /b 0
 
 
