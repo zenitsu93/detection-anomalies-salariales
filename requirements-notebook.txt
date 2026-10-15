@@ -1,8 +1,9 @@
 # Bibliothèques en plus pour relancer le notebook notebooks/EDA_Positionnement_Salarial_Comite.ipynb
 # (voir « En dehors du programme principal » dans le README).
 -r requirements.txt
-matplotlib==3.10.9
-seaborn==0.13.2
+# Pour les graphes interactifs du notebook (zoom, échelle logarithmique, infos du salarié au survol).
+# Remplace matplotlib et seaborn, qui ne dessinaient que des images figées.
+plotly==6.9.0
 # Pour la régression expliquée (OLS) et le contrôle des variables redondantes (VIF) du notebook.
 statsmodels==0.15.0
 ipykernel==7.3.0
