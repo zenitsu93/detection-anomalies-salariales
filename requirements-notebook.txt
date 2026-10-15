@@ -4,7 +4,7 @@
 # Pour les graphes interactifs du notebook (zoom, échelle logarithmique, infos du salarié au survol).
 # Remplace matplotlib et seaborn, qui ne dessinaient que des images figées.
 plotly==6.9.0
-# Pour la régression expliquée (OLS) et le contrôle des variables redondantes (VIF) du notebook.
+# Pour le contrôle des variables redondantes (VIF) du notebook, et les courbes de tendance de ses graphes.
 statsmodels==0.15.0
 ipykernel==7.3.0
 # Pour ouvrir le notebook dans le navigateur (lancer_notebook.bat), sans avoir besoin de l'extension
