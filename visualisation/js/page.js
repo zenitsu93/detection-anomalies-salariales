@@ -107,8 +107,21 @@
 
   // ---------- Boutons ----------
 
+  // La fenêtre qui choisit le dossier ou demande l'autorisation appartient au navigateur : aucune page ne peut changer
+  // son apparence. Pendant qu'elle est ouverte, la page affiche donc par-dessus ce qu'il faut y répondre.
+  async function demander(titre, etapes, action) {
+    $('demande-titre').textContent = titre;
+    $('demande-etapes').innerHTML = etapes.map(e => `<li>${e}</li>`).join('');
+    $('demande').hidden = false;
+    try { return await action(); }
+    finally { $('demande').hidden = true; }
+  }
+
   const choisirDossier = () => executer(async () => {
-    const dossier = await window.showDirectoryPicker({ id: 'exploration-salaires', mode: 'read' });
+    const dossier = await demander('Choisir le dossier des fichiers', [
+      'Dans la fenêtre qui s\'ouvre, sélectionner le dossier qui contient <b>employes.xlsx</b>, <b>bands.xlsx</b> et <b>market.xlsx</b>.',
+      'Edge demande ensuite s\'il peut laisser la page lire ce dossier : accepter.',
+    ], () => window.showDirectoryPicker({ id: 'exploration-salaires', mode: 'read' }));
     await Fi.ecrire('dossier', dossier);
     $('relancer').hidden = false;
     await charger(await Fi.depuisDossier(dossier));
@@ -119,7 +132,12 @@
   $('relancer').onclick = () => executer(async () => {
     const dossier = await Fi.lire('dossier');
     if (!dossier) throw new Error('Aucun dossier mémorisé : cliquez sur « Choisir le dossier ».');
-    if (await dossier.requestPermission({ mode: 'read' }) !== 'granted') throw new Error('Le navigateur n\'a pas reçu l\'autorisation de lire le dossier.');
+    // La fenêtre d'explication ne s'affiche que si Edge va vraiment poser la question.
+    const autorise = await dossier.queryPermission({ mode: 'read' }) === 'granted' || await demander('Autoriser la lecture du dossier', [
+      `Edge demande, en haut de la fenêtre, s'il peut laisser la page lire le dossier <b>${echapper(dossier.name)}</b> : accepter.`,
+      'S\'il propose de l\'autoriser à chaque visite, choisir cette réponse : la page n\'aura plus à le demander et s\'ouvrira directement avec les fichiers du dossier.',
+    ], () => dossier.requestPermission({ mode: 'read' })) === 'granted';
+    if (!autorise) throw new Error('Le navigateur n\'a pas reçu l\'autorisation de lire le dossier.');
     await charger(await Fi.depuisDossier(dossier));
   });
 

@@ -39,6 +39,18 @@
 
   <div id="notice" class="notice" role="status" hidden></div>
 
+  <!-- Affichée pendant que le navigateur ouvre sa propre fenêtre (choix du dossier, autorisation) : ce qu'il faut y répondre -->
+  <div class="demande" id="demande" hidden>
+    <div class="demande-carte" role="dialog" aria-modal="true" aria-labelledby="demande-titre">
+      <div class="demande-tete">
+        <svg class="demande-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1.5 4.5v8h13v-6.5h-6.5l-1.5-1.5z"/></svg>
+        <h2 id="demande-titre"></h2>
+      </div>
+      <ol class="demande-etapes" id="demande-etapes"></ol>
+      <p class="note">Les fichiers ne quittent pas cet ordinateur : la page les lit, sans rien modifier ni envoyer.</p>
+    </div>
+  </div>
+
   <!-- Accueil : affiché tant qu'aucune donnée n'a été lue -->
   <section class="panel empty-state" id="accueil">
     <div class="sources" aria-hidden="true">
