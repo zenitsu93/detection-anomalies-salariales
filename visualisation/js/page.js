@@ -58,6 +58,9 @@
     const sal = C.colonne(df, 'Fixe_Annuel_MAD');
     chiffresCles(controles, { asym: [C.asymetrie(sal), C.asymetrie(sal.map(A.logPositif))], ecarts: A.ecartsFH(df) });
     qualite(controles);
+    // Les nombres de salariés des chiffres clés et des contrôles ouvrent la liste de ces salariés.
+    const listes = listesDeControle(df, tables.employes);
+    document.querySelectorAll('[data-liste]').forEach(b => b.onclick = () => E.liste.ouvrir(...listes[b.dataset.liste]));
 
     // Chaque graphe et ses filtres ; l'ordre d'affichage, lui, se règle dans la page HTML.
     filtrer('f-masse', df, { grade: true }, sel => P.masseSalariale(df, sel));
@@ -73,13 +76,16 @@
     filtrer('f-equite', df, { metier: true }, sel => A.equite(df, sel));
   }
 
+  // Un nombre de salariés qui ouvre leur liste (voir listesDeControle) ; sans salarié, un simple texte.
+  const versListe = (cle, n, texte) => n ? `<button type="button" class="lien" data-liste="${cle}">${texte}</button>` : texte;
+
   function chiffresCles(c, r) {
     const cellule = (titre, valeur, detail, lien) =>
       `<div><dt>${titre}</dt><dd><a href="${lien}">${valeur}</a><small>${detail}</small></dd></div>`;
     $('vue').innerHTML = [
-      cellule('Salariés analysés', fr(c.lignesRetenues), `sur ${fr(c.lignesInitiales)} lignes lues`, '#qualite'),
-      cellule('Sous le Min de la grille', pct(c.sousMin, c.lignesRetenues), `${fr(c.sousMin)} salariés`, '#hors-grille'),
-      cellule('Au-dessus du Max', pct(c.surMax, c.lignesRetenues), `${fr(c.surMax)} salariés`, '#hors-grille'),
+      cellule('Salariés analysés', fr(c.lignesRetenues), `sur ${fr(c.lignesInitiales)} lignes lues · ${versListe('tous', c.lignesRetenues, 'voir la liste')}`, '#qualite'),
+      cellule('Sous le Min de la grille', pct(c.sousMin, c.lignesRetenues), versListe('sousMin', c.sousMin, `${fr(c.sousMin)} salariés`), '#hors-grille'),
+      cellule('Au-dessus du Max', pct(c.surMax, c.lignesRetenues), versListe('surMax', c.surMax, `${fr(c.surMax)} salariés`), '#hors-grille'),
       cellule('Asymétrie du salaire', `${fr(r.asym[0], 2)} → ${fr(r.asym[1], 2)}`, 'brut → logarithme', '#distribution'),
       cellule('Écart H / F non corrigé', signe(r.ecarts[0]), 'salaire moyen, M vs F', '#equite'),
       cellule('Écart H / F à grille égale', signe(r.ecarts[1]), 'Compa-Ratio moyen, M vs F', '#equite'),
@@ -93,16 +99,35 @@
     const ligne = (titre, detail, n, texte) => `<tr><td>${titre}<span class="detail">${detail}</span></td><td>${texte}</td><td>${statut(n)}</td></tr>`;
     $('controles').innerHTML = [
       ligne('Doublons de matricule', 'La première ligne de chaque matricule est gardée.', c.doublons,
-        c.doublons ? `${fr(c.doublons)} lignes en double écartées` : 'Aucun doublon'),
+        c.doublons ? versListe('doublons', c.doublons, `${fr(c.doublons)} lignes en double écartées`) : 'Aucun doublon'),
       ligne('Rattachement à la grille interne', 'Chaque métier + grade doit exister dans bands.xlsx.', c.sansGrille,
-        c.sansGrille ? `${fr(c.sansGrille)} salariés sans grille` : 'Tous les salariés ont une grille'),
+        c.sansGrille ? versListe('sansGrille', c.sansGrille, `${fr(c.sansGrille)} salariés sans grille`) : 'Tous les salariés ont une grille'),
       ligne('Rattachement au marché', 'Chaque métier + grade doit exister dans market.xlsx.', c.sansMarche,
-        c.sansMarche ? `${fr(c.sansMarche)} salariés sans médiane de marché` : 'Tous les salariés ont une médiane de marché'),
+        c.sansMarche ? versListe('sansMarche', c.sansMarche, `${fr(c.sansMarche)} salariés sans médiane de marché`) : 'Tous les salariés ont une médiane de marché'),
       ligne('Cohérence âge / ancienneté', "L'âge d'embauche (Age − Anciennete) doit être d'au moins 18 ans.", c.ageEmbaucheIncoherent,
-        c.ageEmbaucheIncoherent ? `${fr(c.ageEmbaucheIncoherent)} salariés embauchés avant 18 ans` : 'Aucune incohérence'),
+        c.ageEmbaucheIncoherent ? versListe('ageEmbauche', c.ageEmbaucheIncoherent, `${fr(c.ageEmbaucheIncoherent)} salariés embauchés avant 18 ans`) : 'Aucune incohérence'),
       ligne('Tension métier par poste', 'Un poste (Job_Title) doit avoir une seule valeur de Hot_job.', c.postesPlusieursHotjob,
-        c.postesPlusieursHotjob ? `${fr(c.postesPlusieursHotjob)} postes avec plusieurs valeurs` : 'Une seule valeur par poste'),
+        c.postesPlusieursHotjob ? versListe('postes', c.postesPlusieursHotjob, `${fr(c.postesPlusieursHotjob)} postes avec plusieurs valeurs`) : 'Une seule valeur par poste'),
     ].join('');
+  }
+
+  // Les listes ouvertes par les nombres de salariés, [titre, lignes, origine, unité] : les mêmes tests que les contrôles (calculs.js).
+  function listesDeControle(df, employes) {
+    const compte = new Map(), hotjob = new Map();
+    for (const e of employes) compte.set(e.Matricule, (compte.get(e.Matricule) || 0) + 1);
+    for (const l of df) if (l.Job_Title !== null && l.Job_Title !== undefined && Number.isFinite(l.Hot_job)) hotjob.set(l.Job_Title, (hotjob.get(l.Job_Title) || new Set()).add(l.Hot_job));
+    const chiffres = 'Chiffres clés', controle = 'Qualité des données';
+    return {
+      tous: ['Tous les salariés analysés', df, chiffres],
+      sousMin: ['Sous le Min de leur grille', df.filter(l => l.Fixe_Annuel_MAD < l.Min), chiffres],
+      surMax: ['Au-dessus du Max de leur grille', df.filter(l => l.Fixe_Annuel_MAD > l.Max), chiffres],
+      // Toutes les lignes des matricules en double, celle gardée comme celles écartées, pour les comparer.
+      doublons: ['Matricules en double (toutes leurs lignes)', employes.filter(e => compte.get(e.Matricule) > 1), controle, 'ligne'],
+      sansGrille: ['Salariés sans grille interne', df.filter(l => !Number.isFinite(l.Mid)), controle],
+      sansMarche: ['Salariés sans médiane de marché', df.filter(l => !Number.isFinite(l.Median)), controle],
+      ageEmbauche: ['Salariés embauchés avant 18 ans', df.filter(l => l.Age_Embauche < 18), controle],
+      postes: ['Salariés des postes à plusieurs valeurs de Hot_job', df.filter(l => (hotjob.get(l.Job_Title) || new Set()).size > 1), controle],
+    };
   }
 
   // ---------- Boutons ----------

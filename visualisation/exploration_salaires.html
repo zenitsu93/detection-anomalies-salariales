@@ -101,6 +101,7 @@
     </nav>
 
     <div class="sections">
+      <p class="indice">Cliquez sur une barre, une boîte, une case ou un point d'un graphe pour voir la liste des salariés concernés.</p>
       <dl class="panel kpis" id="vue"></dl>
 
       <section class="panel" id="qualite">
@@ -381,6 +382,7 @@
             <li><strong>Voir un graphe en grand :</strong> bouton « Agrandir » en haut à droite du panneau ; le graphe occupe tout l'écran, ses filtres restent utilisables. « Réduire » ou la touche Échap ramène à la page.</li>
             <li><strong>Filtrer :</strong> boutons et listes au-dessus de certains graphes. Le constat sous le graphe suit le filtre ; les chiffres clés du haut de page restent calculés sur tous les salariés.</li>
             <li><strong>Savoir à qui correspond un point :</strong> passer la souris dessus ; le matricule, le nom, le poste, le grade et le salaire s'affichent.</li>
+            <li><strong>Voir la liste des salariés :</strong> cliquer sur une barre, une boîte, une case, une bulle ou un point (ou sur un nombre de salariés des chiffres clés et de la qualité des données). La liste s'ouvre comme dans Excel : recherche, tri et filtre par colonne avec le bouton ▾, puis « Exporter (Excel) » pour l'enregistrer.</li>
             <li><strong>Cacher une série :</strong> cliquer sur son nom dans la légende ; double-cliquer pour n'afficher qu'elle.</li>
             <li><strong>Enregistrer un graphe en image</strong> (pour un support de comité) : icône d'appareil photo de la barre d'outils. L'image garde le zoom en cours.</li>
           </ul>
@@ -392,12 +394,29 @@
   <footer>Calculs refaits dans le navigateur à partir des trois fichiers, comme dans le notebook EDA_Positionnement_Salarial_Comite.ipynb. Aucune donnée n'est envoyée sur internet.</footer>
 </main>
 
+<!-- Liste des salariés derrière un clic sur un graphe, un chiffre clé ou un contrôle de qualité -->
+<div class="liste" id="liste" hidden>
+  <div class="panel liste-carte" role="dialog" aria-modal="true" aria-labelledby="liste-titre">
+    <div class="panel-head">
+      <div><h2 class="liste-titre" id="liste-titre">—</h2><p class="liste-sous" id="liste-sous"></p></div>
+      <div class="head-actions">
+        <button id="liste-export" type="button">
+          <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+          Exporter (Excel)</button>
+        <button id="liste-fermer" type="button">Fermer</button>
+      </div>
+    </div>
+    <div class="liste-corps" id="liste-corps"></div>
+  </div>
+</div>
+
 <!-- Bibliothèques (copies locales : la page marche sans internet), puis les scripts de la page, dans l'ordre où ils s'appuient les uns sur les autres. -->
 <script src="vendor/plotly.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="js/calculs.js"></script>
 <script src="js/communs.js"></script>
 <script src="js/filtres.js"></script>
+<script src="js/liste.js"></script>
 <script src="js/analyses.js"></script>
 <script src="js/pilotage.js"></script>
 <script src="js/fichiers.js"></script>

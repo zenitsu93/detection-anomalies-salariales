@@ -3,7 +3,7 @@
   'use strict';
   const C = E.calculs, F = E.filtres;
   const { fr, signe, echapper, constat, COULEURS: K, transparent,
-    nomAxe, titreAxe, grille, montrer, boite, barresEtCourbe, ligneH, indices, texteGrade } = E.communs;
+    nomAxe, titreAxe, grille, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteGrade } = E.communs;
   const logPositif = x => x > 0 ? Math.log(x) : NaN;
 
   // Écart hommes / femmes en % : salaire moyen, puis Compa-Ratio moyen (à grille et métier constants).
@@ -28,7 +28,13 @@
       L['yaxis' + haut].title = titreAxe('Nombre de salariés');
       Object.assign(L['yaxis' + bas], { showticklabels: false, showgrid: false });
     });
-    montrer('g-distribution', traces, L, 560);
+    // Clic : une barre donne les salariés de cette tranche de salaire ; la boîte, tous les salariés ; un point isolé, son salarié.
+    const clic = p => {
+      const log = ['x2', 'x4'].includes(p.data.xaxis), v = log ? logsal : sal, nom = log ? 'Logarithme du salaire' : 'Salaire brut';
+      if (p.data.type === 'box') return p.hoverOnBox ? { titre: nom, lignes: df } : salarie(df[p.pointNumber]);
+      return { titre: `${nom} de ${fr(p.customdata[0], 2)} à ${fr(p.customdata[1], 2)}`, lignes: df.filter((l, i) => dansBarre(p, v[i])) };
+    };
+    montrer('g-distribution', traces, L, 560, clic);
     constat('s-distribution', `asymétrie de ${fr(asym[0], 2)} pour le salaire brut et de ${fr(asym[1], 2)} pour son logarithme. Plus le coefficient est proche de 0, plus la distribution est symétrique.`);
   }
 
@@ -64,7 +70,14 @@
       L.annotations.push({ text: texte, x, xref: 'x2', y: 1, yref: 'y2 domain', xanchor: cote, yanchor: 'top', xshift: cote === 'left' ? 4 : -4,
         showarrow: false, font: { size: 11, color: K.GRIS } });
     }
-    montrer('g-grille', traces, L, 520);
+    // Clic : une boîte (ou un point du Mid, de la médiane) donne les salariés du grade ; une barre de droite, ceux de cette position dans la bande.
+    const parGrade = gr => ({ titre: 'Grade ' + gr, lignes: lignes.filter(l => texteGrade(l.Grade) === gr) });
+    const clic = p => {
+      if (p.data.type === 'box') return p.hoverOnBox ? parGrade(p.x) : salarie(lignes[p.pointNumber]);
+      if (p.data.xaxis !== 'x2') return parGrade(p.x);
+      return { titre: `Position dans la bande de ${fr(p.customdata[0], 2)} à ${fr(p.customdata[1], 2)}`, lignes: lignes.filter(l => dansBarre(p, l.Range_Penetration)) };
+    };
+    montrer('g-grille', traces, L, 520, clic, F.libelle(sel));
     // Le décompte des salariés hors grille n'est pas répété ici : il est dans les chiffres clés et dans le graphe « Salaires hors grille ».
     const position = lignes.map(l => l.Range_Penetration);
     constat('s-grille', `${F.libelle(sel)} (${fr(lignes.length)} salariés) : position médiane dans la bande ${fr(C.mediane(position), 2)} (0 = Min, 1 = Max) ; la moitié des salariés se situe entre ${fr(C.quantile(position, 0.25), 2)} et ${fr(C.quantile(position, 0.75), 2)}. Le détail des salariés hors grille est dans le graphe « Salaires hors grille ».`);
@@ -90,7 +103,12 @@
     L.shapes.push(ligneH('', 1, K.BRUN, { name: 'Cible : milieu de grille (Compa-Ratio = 1)', showlegend: true }),
                   ligneH('2', 1, K.PALE, { name: 'Parité grille = marché (Mid = Median)', showlegend: true }));
     L.boxmode = 'overlay';   // une seule boîte par métier, centrée sur son nom
-    montrer('g-metiers', traces, L, 760);
+    // Clic : une boîte donne les salariés du métier ; un point isolé, son salarié.
+    const clic = p => {
+      const idx = indices(lignes, l => l.Job_Family === p.data.name);
+      return p.hoverOnBox ? { titre: 'Métier ' + p.data.name, lignes: idx.map(i => lignes[i]) } : salarie(lignes[idx[p.pointNumber]]);
+    };
+    montrer('g-metiers', traces, L, 760, clic, F.libelle(sel));
     const med = ordre.map(jf => [jf, C.mediane(lignes.filter(l => l.Job_Family === jf).map(l => l.Compa_Ratio))]);
     constat('s-metiers', med.length ? `${F.libelle(sel)} : Compa-Ratio médian le plus haut pour ${echapper(med[0][0])} (${fr(med[0][1], 2)}), le plus bas pour ${echapper(med[med.length - 1][0])} (${fr(med[med.length - 1][1], 2)}). Les métiers sont rangés du plus haut au plus bas.` : 'Aucun salarié pour ce filtre.');
   }
@@ -116,7 +134,16 @@
     Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: C.TRANCHES, title: titreAxe("Ancienneté (tranches d'années)") });
     L.xaxis2.title = titreAxe("Âge à l'embauche (années)");
     for (const s of ['', '2']) { L['yaxis' + s].title = titreAxe('Compa-Ratio (Salaire / Mid)'); L.shapes.push(ligneH(s, 1, K.PALE)); }
-    montrer('g-anciennete', traces, L, 520);
+    // Clic, dans l'ordre des courbes : boîte (la tranche, ou le salarié d'un point isolé), médianes (la tranche),
+    // nuage (le salarié), tendance (les salariés embauchés à cet âge).
+    const parTranche = t => ({ titre: `Ancienneté ${t} ans`, lignes: lignes.filter(l => l.Tranche_Anciennete === t) });
+    const clic = p => [
+      () => p.hoverOnBox ? parTranche(p.x) : salarie(lignes[p.pointNumber]),
+      () => parTranche(p.x),
+      () => salarie(lignes[p.pointNumber]),
+      () => ({ titre: `Embauchés à ${String(p.x).replace('.', ',')} ans`, lignes: lignes.filter(l => l.Age_Embauche === p.x) }),
+    ][p.curveNumber]();
+    montrer('g-anciennete', traces, L, 520, clic, F.libelle(sel));
     const corr = [C.correlation(lignes.map(l => l.Age), lignes.map(l => l.Anciennete)), C.correlation(x, lignes.map(l => l.Anciennete))];
     const lecture = C.TRANCHES.map((t, i) => `${t} ans : ${fr(medianes[i][0], 2)}`).join(' · ');
     constat('s-anciennete', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Compa-Ratio médian par tranche : ${lecture}.
@@ -132,9 +159,10 @@
   function performance(df, survol, sel) {
     const { lignes, survol: surv } = F.sousEnsemble(df, survol, sel);
     const L = grille({ titres: ['Compa-Ratio selon la note Competence_N1, par tension du métier'] });
-    const traces = [], pentes = [];
+    const traces = [], pentes = [], parCourbe = [];
     C.modalites(lignes, 'Hot_job').forEach((h, k) => {
       const idx = indices(lignes, l => l.Hot_job === h), nom = `Hot_job = ${h}`, couleur = TENSION[k] || K.ARDOISE;
+      parCourbe.push([nom, idx], [nom, idx]);   // le nuage et la droite de cette tension
       const x = idx.map(i => lignes[i].Competence_N1), y = idx.map(i => lignes[i].Compa_Ratio), d = C.droite(x, y);
       pentes.push(`${nom} : ${fr(d.pente, 3)}`);
       // Les points restent discrets ; ce sont les droites, bien visibles, qui portent la légende.
@@ -147,7 +175,12 @@
     L.xaxis.title = titreAxe('Competence_N1');
     L.yaxis.title = titreAxe('Compa-Ratio');
     L.legend = { title: { text: 'Tension : ', font: { size: 12, color: K.GRIS } } };
-    montrer('g-competences', traces, L, 500);
+    // Clic : un point donne son salarié ; une droite, tous les salariés de sa tension.
+    const clic = p => {
+      const [nom, idx] = parCourbe[p.curveNumber];
+      return p.data.mode === 'markers' ? salarie(lignes[idx[p.pointNumber]]) : { titre: nom, lignes: idx.map(i => lignes[i]) };
+    };
+    montrer('g-competences', traces, L, 500, clic, F.libelle(sel));
     constat('s-competences', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Pente de la droite Competence_N1 → Compa-Ratio, par tension : ${pentes.join(' · ') || '–'}.`);
   }
 
@@ -157,8 +190,9 @@
     const lignes = df.filter(l => F.garder(l, sel));
     const L = grille({ colonnes: 2, titres: ['Compa-Ratio des femmes et des hommes, à grade égal', 'Compa-Ratio par pôle (Entite_N1)'] });
     const grades = C.modalites(lignes, 'Grade').map(String), couleurs = { F: K.OR, M: K.BLEU }, noms = { F: 'Femmes', M: 'Hommes' }, traces = [];
+    const sexes = C.modalites(lignes, 'Sexe');
     // Pas de points isolés sur ces boîtes, comme dans le notebook.
-    C.modalites(lignes, 'Sexe').forEach(s => {
+    sexes.forEach(s => {
       const g = lignes.filter(l => l.Sexe === s);
       traces.push(boite(couleurs[s] || K.ARDOISE, { x: g.map(l => texteGrade(l.Grade)), y: g.map(l => l.Compa_Ratio), name: noms[s] || String(s), boxpoints: false,
         alignmentgroup: 'sexe', offsetgroup: String(s) }));
@@ -173,7 +207,13 @@
     L.yaxis2.title = titreAxe('Compa-Ratio');
     L.shapes.push(ligneH('', 1, K.BRUN, { name: 'Milieu de grille (Compa-Ratio = 1)', showlegend: true }), ligneH('2', 1, K.BRUN));
     L.boxmode = 'group';   // les boîtes F et M d'un même grade se placent côte à côte
-    montrer('g-equite', traces, L, 520);
+    // Clic : une boîte de gauche donne les femmes (ou les hommes) du grade ; une boîte de droite, les salariés du pôle.
+    const clic = p => {
+      if (p.data.xaxis === 'x2') return { titre: 'Pôle ' + p.x, lignes: lignes.filter(l => String(l.Entite_N1) === p.x) };
+      const s = sexes[p.curveNumber];
+      return { titre: `${noms[s] || s}, grade ${p.x}`, lignes: lignes.filter(l => l.Sexe === s && texteGrade(l.Grade) === p.x) };
+    };
+    montrer('g-equite', traces, L, 520, clic, F.libelle(sel));
     const e = ecartsFH(lignes);
     constat('s-equite', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Écart salarial moyen non corrigé (M vs F) : ${signe(e[0])} ; à grille et métier constants (Compa-Ratio) : ${signe(e[1])}.`);
   }

@@ -68,7 +68,12 @@
   // En plein écran, le graphe prend toute la place que lui laisse son panneau (voir plein-ecran.js).
   const hauteurDisponible = div => Math.max(360, Math.floor(div.getBoundingClientRect().height));
 
-  function montrer(id, traces, L, hauteur = 520) {
+  // Le nom du graphe, tel qu'écrit en tête de son panneau (sans son numéro) : il est rappelé en haut de la liste des salariés.
+  const nomGraphe = div => [...div.closest('section').querySelector('.panel-title').childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+
+  // clic(point) : les salariés derrière la barre, la boîte, la case ou le point cliqué, { titre, lignes } (null : rien à montrer).
+  // filtre : le filtre en cours du graphe, rappelé avec son nom en haut de la liste.
+  function montrer(id, traces, L, hauteur = 520, clic = null, filtre = 'Tous les salariés') {
     const div = $(id);
     div.dataset.hauteur = hauteur;   // la hauteur normale, reprise en sortant du plein écran
     if (document.fullscreenElement && document.fullscreenElement.contains(div)) hauteur = hauteurDisponible(div);
@@ -78,8 +83,21 @@
       hoverlabel: { bgcolor: COULEURS.ENCRE, bordercolor: COULEURS.ENCRE, font: { family: POLICE, size: 12, color: '#fff' }, align: 'left' },
       legend: { orientation: 'h', x: 0, xanchor: 'left', y: -0.14, yanchor: 'top', font: { size: 12, color: COULEURS.ENCRE }, ...(L.legend || {}) },
     });
-    Plotly.react(id, traces, L, CONFIG);
+    Plotly.react(id, traces, L, CONFIG).then(gd => {
+      // Chaque dessin remplace le clic du précédent : la liste suit toujours le filtre affiché.
+      gd.removeAllListeners('plotly_click');
+      if (clic) gd.on('plotly_click', e => {
+        const choix = e.points[0] && clic(e.points[0]);
+        if (choix) E.liste.ouvrir(choix.titre, choix.lignes, `${echapper(nomGraphe(gd))} · ${filtre}`);
+      });
+    });
   }
+
+  // Un seul salarié : celui du point cliqué.
+  const salarie = l => ({ titre: 'Salarié ' + l.Matricule, lignes: [l] });
+  // Une valeur dans la barre cliquée d'un histogramme (barresEtCourbe) : du bord gauche (compris) au bord droit
+  // (exclu, sauf pour la dernière barre), exactement comme le calcul de l'histogramme.
+  const dansBarre = (p, x) => x >= p.customdata[0] && (x < p.customdata[1] || p.pointNumber === p.data.x.length - 1);
 
   // Boîte à moustaches aux couleurs de la page.
   const boite = (couleur, extra) => ({ type: 'box', marker: { color: couleur, size: 4, opacity: 0.7 }, line: { color: couleur, width: 1.5 },
@@ -108,6 +126,6 @@
 
   E.communs = {
     $, fr, pct, signe, echapper, constat, COULEURS, transparent,
-    nomAxe, titreAxe, grille, hauteurDisponible, montrer, boite, barresEtCourbe, ligneH, indices, texteGrade,
+    nomAxe, titreAxe, grille, hauteurDisponible, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteGrade,
   };
 })(window.Exploration = window.Exploration || {});

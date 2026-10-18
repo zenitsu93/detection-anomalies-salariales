@@ -34,7 +34,9 @@
     const plusGrand = v => Math.max(0, ...v.filter(Number.isFinite));
     [['', stats.map(s => s.n)], ['2', masses], ['3', stats.map(s => s.moyen)]].forEach(([s, v]) =>
       Object.assign(L['xaxis' + s], { range: [0, plusGrand(v) * 1.45 || 1], showgrid: false, showticklabels: false }));
-    montrer('g-masse', traces, L, 150 + 46 * Math.max(4, stats.length));
+    // Clic sur une barre, dans l'un des trois graphes : les salariés du pôle.
+    const clic = p => ({ titre: 'Pôle ' + p.y, lignes: lignes.filter(l => String(l.Entite_N1) === p.y) });
+    montrer('g-masse', traces, L, 150 + 46 * Math.max(4, stats.length), clic, F.libelle(sel));
     if (!stats.length) return constat('s-masse', 'Aucun salarié pour ce filtre.');
     const lourd = stats[stats.length - 1], cher = [...stats].sort((a, b) => b.moyen - a.moyen)[0];
     constat('s-masse', `${F.libelle(sel)} : ${fr(effectif)} salariés, ${fr(total / 1000, 1)} millions de MAD de masse salariale. Pôle le plus lourd : ${echapper(lourd.pole)} (${pct(lourd.masse, total, 0)} de la masse, ${pct(lourd.n, effectif, 0)} des effectifs). Salaire moyen le plus haut : ${echapper(cher.pole)} (${fr(cher.moyen, 1)} kMAD).`);
@@ -61,7 +63,12 @@
       Object.assign(L['yaxis' + s], { type: 'category', showgrid: false, autorange: 'reversed' });
     }
     L.yaxis2.showticklabels = false;
-    montrer('g-hors-grille', traces, L, 130 + 52 * Math.max(4, poles.length));
+    // Clic sur une case : les salariés de ce pôle et de ce grade sous le Min (carte de gauche) ou au-dessus du Max (carte de droite).
+    const clic = p => {
+      const [i, j] = p.pointNumber, [test, quoi] = p.curveNumber ? [surMax, 'Au-dessus du Max'] : [sousMin, 'Sous le Min'];
+      return { titre: `${quoi} de leur grille : ${poles[i]}, grade ${grades[j]}`, lignes: lignes.filter(l => l.Entite_N1 === poles[i] && l.Grade === grades[j] && test(l)) };
+    };
+    montrer('g-hors-grille', traces, L, 130 + 52 * Math.max(4, poles.length), clic, F.libelle(sel));
     const n = lignes.length, ns = lignes.filter(sousMin).length, nm = lignes.filter(surMax).length;
     // La case où la part sous le Min est la plus forte.
     let pire = null;
@@ -106,7 +113,12 @@
       ticktext: ['100 %', '75 %', '50 %', '25 %', 'Médiane', '25 %', '50 %', '75 %', '100 %'], zeroline: true, zerolinecolor: K.ENCRE, zerolinewidth: 1.5 });
     Object.assign(L.yaxis, { type: 'category', showgrid: false });
     L.legend = { traceorder: 'normal' };
-    montrer('g-marche', traces, L, 150 + 32 * Math.max(5, groupes.length));
+    // Clic sur un morceau de barre : les salariés de ce pôle (ou métier) dans cette position face au marché.
+    const clic = p => {
+      const pos = SEGMENTS[p.curveNumber][0];
+      return { titre: `${p.y} · ${pos}`, lignes: lignes.filter(l => String(l[axe]) === p.y && l.Position_Marche === pos) };
+    };
+    montrer('g-marche', traces, L, 150 + 32 * Math.max(5, groupes.length), clic, F.libelle(sel));
     if (!groupes.length) return constat('s-marche', 'Aucun salarié pour ce filtre.');
     const sous = lignes.filter(l => l.Position_Marche === 'Sous le P25' || l.Position_Marche === 'Entre P25 et médiane').length;
     const bas = groupes[0], haut = groupes[groupes.length - 1];
@@ -124,13 +136,16 @@
     const bulles = new Map();
     for (const l of lignes) {
       const t = Math.floor(l.Compa_Ratio / PAS), cle = l.Positionnement_9BOX + '|' + t;
-      if (!bulles.has(cle)) bulles.set(cle, { y: l.Positionnement_9BOX, de: t * PAS, n: 0 });
+      if (!bulles.has(cle)) bulles.set(cle, { y: l.Positionnement_9BOX, de: t * PAS, n: 0, lignes: [] });
       bulles.get(cle).n++;
+      bulles.get(cle).lignes.push(l);   // les salariés de la bulle, pour la liste qui s'ouvre au clic
     }
     const toutes = [...bulles.values()], plusGrosse = Math.max(1, ...toutes.map(b => b.n));
     const zone = b => b.de + PAS / 2 < COMPA_BAS ? 0 : b.de + PAS / 2 > COMPA_HAUT ? 2 : 1;
+    const parZone = [];
     const traces = ZONES.map(([nom, couleur], z) => {
       const bs = toutes.filter(b => zone(b) === z);
+      parZone.push(bs);
       return { type: 'scatter', mode: 'markers', name: nom, x: bs.map(b => b.de + PAS / 2), y: bs.map(b => b.y),
         marker: { size: bs.map(b => b.n), sizemode: 'area', sizeref: 2 * plusGrosse / (36 ** 2), sizemin: 3, color: transparent(couleur, 0.8), line: { color: '#fff', width: 1 } },
         customdata: bs.map(b => [fr(b.de, 2), fr(b.de + PAS, 2), b.n]),
@@ -148,7 +163,12 @@
     const cases = C.modalites(lignes, 'Positionnement_9BOX');
     Object.assign(L.xaxis, { range: [0.55, 1.45], dtick: 0.1, title: titreAxe('Compa-Ratio (Salaire / Mid)') });
     Object.assign(L.yaxis, { dtick: 1, range: [Math.min(0, ...cases) - 0.7, Math.max(6, ...cases) + 0.7], title: titreAxe('Positionnement 9-Box (0 à 6)') });
-    montrer('g-talents', traces, L, 580);
+    // Clic sur une bulle : ses salariés.
+    const clic = p => {
+      const b = parZone[p.curveNumber][p.pointNumber];
+      return { titre: `9-Box ${b.y} · Compa-Ratio de ${fr(b.de, 2)} à ${fr(b.de + PAS, 2)}`, lignes: b.lignes };
+    };
+    montrer('g-talents', traces, L, 580, clic, F.libelle(sel));
     if (!lignes.length) return constat('s-talents', 'Aucun salarié pour ce filtre.');
     const haut = Math.max(...cases), bas = Math.min(...cases);
     const sous = lignes.filter(l => l.Compa_Ratio < COMPA_BAS), sur = lignes.filter(l => l.Compa_Ratio > COMPA_HAUT);
@@ -180,7 +200,9 @@
     const L = grille({ titres: ['Compa-Ratio moyen et salaire moyen (kMAD) par métier et tension du métier'] });
     Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Hot_job : 0 = tension faible, 2 = forte') });
     Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed' });
-    montrer('g-tension', traces, L, 140 + 40 * Math.max(5, familles.length));
+    // Clic sur une case : les salariés de ce métier et de cette tension.
+    const clic = p => { const [i, j] = p.pointNumber; return { titre: `${familles[i]} · Hot_job ${tensions[j]}`, lignes: cases[i][j] }; };
+    montrer('g-tension', traces, L, 140 + 40 * Math.max(5, familles.length), clic, F.libelle(sel));
     if (!familles.length) return constat('s-tension', 'Aucun salarié pour ce filtre.');
     const forte = tensions.length - 1, enRetrait = familles.filter((f, i) => compa[i][forte] !== null && compa[i][forte] < 1);
     constat('s-tension', `${F.libelle(sel)} : métiers dont le Compa-Ratio moyen est sous 1 pour la tension la plus forte (Hot_job ${tensions[forte]}) : ${enRetrait.length ? enRetrait.map(echapper).join(', ') : 'aucun'}.`);
