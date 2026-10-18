@@ -160,10 +160,13 @@
     // Pas de points isolés sur ces boîtes, comme dans le notebook.
     C.modalites(lignes, 'Sexe').forEach(s => {
       const g = lignes.filter(l => l.Sexe === s);
-      traces.push(boite(couleurs[s] || K.ARDOISE, { x: g.map(l => texteGrade(l.Grade)), y: g.map(l => l.Compa_Ratio), name: noms[s] || String(s), boxpoints: false }));
+      traces.push(boite(couleurs[s] || K.ARDOISE, { x: g.map(l => texteGrade(l.Grade)), y: g.map(l => l.Compa_Ratio), name: noms[s] || String(s), boxpoints: false,
+        alignmentgroup: 'sexe', offsetgroup: String(s) }));
     });
     const ordre = C.ordreParMediane(lignes, 'Entite_N1', 'Compa_Ratio');
-    traces.push(boite(K.ARDOISE, { x: lignes.map(l => l.Entite_N1), y: lignes.map(l => l.Compa_Ratio), name: 'Pôles', boxpoints: false, showlegend: false, xaxis: 'x2', yaxis: 'y2' }));
+    // Un groupe à part : sinon plotly réserve aussi aux pôles une place de femmes et d'hommes, et leurs boîtes se décalent de leur nom.
+    traces.push(boite(K.ARDOISE, { x: lignes.map(l => l.Entite_N1), y: lignes.map(l => l.Compa_Ratio), name: 'Pôles', boxpoints: false, showlegend: false, xaxis: 'x2', yaxis: 'y2',
+      alignmentgroup: 'poles', offsetgroup: 'poles' }));
     Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: grades, title: titreAxe('Grade') });
     Object.assign(L.xaxis2, { type: 'category', categoryorder: 'array', categoryarray: ordre, tickangle: -30, title: titreAxe('Pôle, du Compa-Ratio médian le plus haut au plus bas') });
     L.yaxis.title = titreAxe('Compa-Ratio');
