@@ -132,16 +132,6 @@
           <div class="filtres" id="f-masse"></div>
           <div class="graphe" id="g-masse"></div>
           <p class="constat" id="s-masse"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Montrer où va l'argent : le poids de chaque pôle dans les effectifs et dans la masse salariale fixe, et son salaire moyen.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>Les trois graphiques sont alignés sur les mêmes pôles, du plus lourd en masse salariale (en haut) au plus léger.</li>
-                <li>Un pôle dont la part de masse salariale dépasse nettement sa part d'effectifs paie plus que la moyenne. Pour savoir si c'est parce que ses grilles sont plus hautes ou parce qu'il paie haut dans ses grilles, voir le Compa-Ratio par pôle au <a href="#equite">graphe 11</a>.</li></ul></div>
-              <div><h3>Usage</h3><p>Arbitrages budgétaires entre pôles et suivi de l'équité inter-pôles. Les trois mesures sont dans des graphiques séparés plutôt que sur un seul graphique à deux échelles, qui se lit mal.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -151,19 +141,6 @@
           <p class="question">La distribution des salaires est-elle symétrique, et le passage au logarithme la rééquilibre-t-il ?</p>
           <div class="graphe" id="g-distribution"></div>
           <p class="constat" id="s-distribution"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Les structures salariales présentent généralement une asymétrie vers les hautes rémunérations : la majorité des effectifs se concentre sur les grades opérationnels et intermédiaires, tandis que les fonctions de direction étirent la distribution vers la droite. Or, un modèle de régression linéaire standard est sensible aux valeurs extrêmes.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li><strong>À gauche (salaire brut) :</strong> l'étalement de la distribution et le poids des hauts salaires (points au-delà de la moustache supérieure).</li>
-                <li><strong>À droite (logarithme du salaire) :</strong> le passage au logarithme normalise-t-il la distribution (courbe en cloche symétrique, coefficient d'asymétrie proche de zéro) ?</li></ul></div>
-              <div><h3>Pour la régression</h3><ul>
-                <li>Si la distribution logarithmique est plus symétrique, nous avons tout intérêt à modéliser <code>Log(Fixe_Annuel_MAD)</code>.</li>
-                <li><strong>Intérêt métier :</strong> en prédisant le logarithme du salaire, le modèle raisonne en variations relatives (%) : une année d'ancienneté ou un niveau de performance en plus génère +X % de rémunération.</li></ul>
-                <p>Passer au logarithme compresse les grands écarts en dirhams du haut de la pyramide et met en évidence les petits salaires, en proportion trois à quatre fois plus bas que le cœur de l'entreprise.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -176,18 +153,6 @@
           <div class="filtres" id="f-grille"></div>
           <div class="graphe" id="g-grille"></div>
           <p class="constat" id="s-grille"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Confronter les salaires réellement pratiqués aux repères de notre politique de rémunération (<code>Min</code>, <code>Mid</code>, <code>Max</code>) ainsi qu'à la médiane du marché (<code>Median</code>), grade par grade.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li><strong>À gauche :</strong> la pente de progression salariale d'un grade à l'autre, et l'écart éventuel entre notre milieu de grille (<code>Mid</code>) et le marché (<code>Median</code>). Avec un métier choisi, la bande et les courbes sont exactement celles de ce métier.</li>
-                <li><strong>À droite (Range Penetration) :</strong> sous <code>0</code>, le salarié est sous le minimum de sa bande ; à <code>0,5</code>, pile au milieu (<code>Mid</code>) ; au-dessus de <code>1</code>, il dépasse le plafond de son grade.</li></ul></div>
-              <div><h3>Pour la régression</h3><ul>
-                <li>Le milieu de grille (<code>Mid</code>) et la médiane marché (<code>Median</code>) synthétisent déjà le croisement entre le niveau de responsabilité (<code>Grade</code>) et le métier (<code>Job_Family</code>). Ils constitueront le socle d'ancrage de la régression.</li>
-                <li>L'examen des collaborateurs hors bornes permet de décider si certains cas extrêmes relèvent d'anomalies ponctuelles à écarter de l'échantillon d'apprentissage.</li></ul></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -198,17 +163,6 @@
           <div class="filtres" id="f-hors-grille"></div>
           <div class="graphe" id="g-hors-grille"></div>
           <p class="constat" id="s-hors-grille"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Repérer, avant toute campagne de revalorisation, les pôles et les grades où des salariés sont hors des bornes de leur grille.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>Chaque case donne la part des salariés du pôle et du grade hors de leur grille, puis leur nombre. Plus la case est foncée, plus la part est forte.</li>
-                <li><strong>Sous le Min :</strong> salaire à régulariser en priorité (c'est la recommandation « Ajuster au Min » de la détection).</li>
-                <li><strong>Au-dessus du Max :</strong> le salarié n'a plus de marge de progression sur son fixe dans sa grille.</li></ul></div>
-              <div><h3>Usage</h3><p>Point de départ de la revue des anomalies : les cases foncées montrent où regarder d'abord. La liste nominative des salariés est dans le tableau de bord de la détection.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -219,16 +173,6 @@
           <div class="filtres" id="f-metiers"></div>
           <div class="graphe" id="g-metiers"></div>
           <p class="constat" id="s-metiers"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Bien que chaque famille de métier dispose de sa propre grille (<code>Mid</code>), vérifier si certaines filières se positionnent systématiquement plus haut dans leur bande que d'autres, et si ce phénomène s'explique par un décalage entre la grille interne et le marché (<code>Mid / Median</code>).</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li><strong>En haut (Compa-Ratio = Salaire / Mid) :</strong> le positionnement réel des équipes par rapport au milieu de leur grille (cible théorique = <code>1</code>).</li>
-                <li><strong>En bas (Mid / Median) :</strong> la compétitivité de nos grilles face au marché. Quand une grille est en retrait (<code>&lt; 1</code>), la pression au recrutement pousse souvent les salaires vers le haut de la grille (Compa-Ratio <code>&gt; 1</code>).</li></ul></div>
-              <div><h3>Pour la régression</h3><p>Si des écarts de Compa-Ratio apparaissent entre les familles de métier, l'inclusion conjointe de <code>Job_Family</code> et du ratio structurel <code>Ratio_Grille_Marche</code> (<code>Mid / Median</code>) dans la régression est indispensable pour capter ces pratiques différenciées.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -241,16 +185,6 @@
           <div class="filtres" id="f-marche"></div>
           <div class="graphe" id="g-marche"></div>
           <p class="constat" id="s-marche"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Se comparer à la grille interne ne suffit pas : le marché bouge. Ce graphe place chaque salaire dans la fourchette du marché de son métier et de son grade (<code>P25</code>, <code>Median</code>, <code>P75</code> de market.xlsx).</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>À gauche de la médiane, en bleu, la part des salariés payés sous la médiane du marché (foncé : sous le P25). À droite, en cuivre, la part payée au-dessus (foncé : au-dessus du P75).</li>
-                <li>Les lignes sont rangées de la moins bien placée (en bas) à la mieux placée (en haut).</li></ul></div>
-              <div><h3>Usage</h3><p>Stratégie de positionnement salarial : par exemple viser la médiane du marché pour les fonctions cœur et le P75 pour les métiers en tension.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -261,17 +195,6 @@
           <div class="filtres" id="f-tension"></div>
           <div class="graphe" id="g-tension"></div>
           <p class="constat" id="s-tension"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Croiser la tension du métier sur le marché (<code>Hot_job</code>) et la rémunération interne, métier par métier.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>Chaque case donne le Compa-Ratio moyen, puis le salaire moyen (en kMAD), des salariés du métier pour ce niveau de tension. Le nombre de salariés s'affiche au survol.</li>
-                <li>Rouge : Compa-Ratio moyen sous 0,90. Gris : de 0,90 à 1,00. Vert : au-dessus de 1,00.</li>
-                <li>Un métier en forte tension avec un Compa-Ratio sous 1 est exposé aux départs et aux difficultés de recrutement.</li></ul></div>
-              <div><h3>Usage</h3><p>Recrutement et rétention ciblée sur les métiers critiques.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -284,21 +207,6 @@
           <div class="filtres" id="f-anciennete"></div>
           <div class="graphe" id="g-anciennete"></div>
           <p class="constat" id="s-anciennete"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><ol>
-                <li><strong>Colinéarité :</strong> l'âge et l'ancienneté évoluent dans le même sens. Avec <code>Age_Embauche = Age - Anciennete</code>, on isole l'expérience acquise avant l'embauche et la séniorité acquise en interne.</li>
-                <li><strong>Rendements d'ancienneté et compression :</strong> la courbe des médianes par tranche d'ancienneté montre si la progression dans la grille ralentit après quelques années, ou si les nouveaux recrutés sont embauchés plus haut que les collaborateurs ayant 3 à 5 ans d'ancienneté.</li></ol></div>
-              <div><h3>Comment lire</h3><ul>
-                <li><strong>À gauche :</strong> une boîte par tranche d'ancienneté (0-2, 3-5, 6-12, 13-20, plus de 20 ans, les mêmes que pour les groupes de collègues de la détection) et la courbe de leurs médianes. Un plafonnement de la courbe indique un rendement décroissant de l'ancienneté. Une médiane plus basse pour 3-5 ans que pour 0-2 ans signale une compression salariale à l'embauche.</li>
-                <li><strong>À droite :</strong> comment l'expérience externe préalable est valorisée dans la bande salariale (tendance non linéaire Lowess).</li>
-                <li><strong>Filtres de grade et de métier :</strong> refaire la lecture à poste égal (même grade, même métier).</li></ul></div>
-              <div><h3>Pour la régression</h3><ul>
-                <li>Remplacer le couple <code>(Age, Anciennete)</code> par le couple <code>(Age_Embauche, Anciennete)</code>.</li>
-                <li>Ajouter un terme quadratique (<code>Anciennete²</code>) dans la régression si la courbe de gauche plafonne nettement.</li></ul></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -309,18 +217,6 @@
           <div class="filtres" id="f-competences"></div>
           <div class="graphe" id="g-competences"></div>
           <p class="constat" id="s-competences"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Vérifier dans quelle mesure la performance et le potentiel (<code>Competence_N1</code>, <code>Positionnement_9BOX</code>) et la rareté du poste sur le marché (<code>Hot_job</code>) se traduisent par une différenciation salariale effective au sein des grilles.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>La pente des droites mesure la sensibilité du salaire à l'évaluation des compétences de l'année précédente, selon la tension du métier : une droite plate veut dire que la note ne change rien à la position dans la grille.</li>
-                <li>Le croisement 9-Box x Hot_job (la matrice du notebook) se lit au <a href="#talents">graphe 10</a>, avec son filtre Hot_job : il montre, en plus de la tendance, les salariés isolés.</li></ul></div>
-              <div><h3>Pour la régression</h3><ul>
-                <li>Intégration de <code>Competence_N1</code>, <code>Positionnement_9BOX</code> et <code>Hot_job</code>.</li>
-                <li>Si le graphe 10 révèle un effet multiplicatif sur les profils à haut potentiel occupant des postes critiques : terme d'interaction <code>Positionnement_9BOX * Hot_job</code>.</li></ul></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -331,17 +227,6 @@
           <div class="filtres" id="f-talents"></div>
           <div class="graphe" id="g-talents"></div>
           <p class="constat" id="s-talents"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><p>Croiser la position dans la grille (Compa-Ratio) et l'évaluation (case 9-Box) pour repérer les écarts entre rémunération et performance.</p></div>
-              <div><h3>Comment lire</h3><ul>
-                <li>Chaque bulle regroupe les salariés d'une même case 9-Box et d'une même tranche de Compa-Ratio (de 0,05) ; sa taille dit combien ils sont.</li>
-                <li>Zones de couleur : sous 0,85 et au-dessus de 1,15, les seuils de la règle CompaRatio de la détection.</li>
-                <li><strong>En haut à gauche :</strong> bien évalués mais bas dans leur grille, à risque de départ. <strong>En bas à droite :</strong> évaluation basse mais haut dans la grille, à examiner avec le management.</li></ul></div>
-              <div><h3>Usage</h3><p>Arbitrer la campagne d'augmentation au mérite et cibler les actions de rétention.</p></div>
-            </div>
-          </details>
         </div>
       </section>
 
@@ -354,20 +239,6 @@
           <div class="filtres" id="f-equite"></div>
           <div class="graphe" id="g-equite"></div>
           <p class="constat" id="s-equite"></p>
-          <details class="methode">
-            <summary>Comprendre ce graphe</summary>
-            <div class="methode-grille">
-              <div><h3>Objectif</h3><ol>
-                <li><strong>Équité professionnelle :</strong> une comparaison globale des salaires moyens entre hommes et femmes est biaisée par les effets de structure (grade, filière). Le Compa-Ratio à grade identique isole l'écart résiduel à responsabilité comparable.</li>
-                <li><strong>Effet organisationnel :</strong> le Compa-Ratio par pôle neutralise la structure des emplois et met en lumière d'éventuelles différences d'historique budgétaire entre entités.</li></ol></div>
-              <div><h3>Comment lire</h3><ul>
-                <li><strong>À gauche :</strong> l'alignement des distributions F et M au sein de chaque grade.</li>
-                <li><strong>À droite :</strong> la dispersion des médianes de Compa-Ratio entre les pôles (<code>Entite_N1</code>).</li></ul></div>
-              <div><h3>Pour la régression</h3><ul>
-                <li><strong>Entite_N1 :</strong> à inclure (encodage catégoriel) si des écarts significatifs entre pôles sont constatés.</li>
-                <li><strong>Sexe, selon la finalité du modèle :</strong> audit d'équité, on l'inclut pour mesurer l'écart toutes choses égales par ailleurs ; recommandation salariale, on l'exclut pour garantir des prédictions neutres.</li></ul></div>
-            </div>
-          </details>
         </div>
       </section>
 
