@@ -1,5 +1,5 @@
-# Bibliothèques en plus pour relancer le notebook notebooks/EDA_Positionnement_Salarial_Comite.ipynb
-# (voir « En dehors du programme principal » dans le README).
+# Bibliothèques en plus pour relancer les notebooks notebooks/EDA_Positionnement_Salarial_Comite.ipynb
+# et fiabilisation_diplomes/Fiabilisation_Diplomes_pas_a_pas_v12.ipynb (voir « En dehors du programme principal » dans le README).
 -r requirements.txt
 # Pour les graphes interactifs du notebook (zoom, échelle logarithmique, infos du salarié au survol).
 # Remplace matplotlib et seaborn, qui ne dessinaient que des images figées.

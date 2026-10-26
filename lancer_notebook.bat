@@ -1,6 +1,8 @@
 @echo off
 chcp 65001 >nul
 rem Ouvre notebooks\EDA_Positionnement_Salarial_Comite.ipynb dans le navigateur, avec le Python du venv du projet.
+rem Un autre .bat peut lui demander d'ouvrir un autre notebook, en donnant son chemin à la suite :
+rem c'est ce que fait fiabilisation_diplomes\lancer_notebook.bat, pour ne pas recopier tout ce qui suit.
 rem Il suffit de double-cliquer sur ce fichier : il prépare tout ce qui manque, puis ouvre le notebook.
 rem Pourquoi un .bat et pas un script PowerShell : sur beaucoup de PC d'entreprise, PowerShell refuse
 rem de lancer des scripts (« l'exécution de scripts est désactivée ») ; un .bat, lui, se lance toujours.
@@ -30,9 +32,12 @@ rem    --sys-prefix range cette déclaration dans .venv : rien n'est écrit aill
 ".venv\Scripts\python.exe" -m ipykernel install --sys-prefix --name salaires-venv --display-name "Python (.venv salaires)" >nul || goto :fin_erreur
 
 rem 4. Ouvrir le notebook dans le navigateur. Fermer cette fenêtre (ou Ctrl+C dedans) arrête Jupyter.
+rem    Le notebook demandé par un autre .bat (voir en tête) ; sinon, celui de l'EDA.
+set "NOTEBOOK=%~1"
+if not defined NOTEBOOK set "NOTEBOOK=notebooks\EDA_Positionnement_Salarial_Comite.ipynb"
 echo.
 echo Le notebook s'ouvre dans le navigateur. Gardez cette fenêtre ouverte tant que vous l'utilisez.
-".venv\Scripts\python.exe" -m notebook notebooks\EDA_Positionnement_Salarial_Comite.ipynb
+".venv\Scripts\python.exe" -m notebook "%NOTEBOOK%"
 exit /b 0
 
 
