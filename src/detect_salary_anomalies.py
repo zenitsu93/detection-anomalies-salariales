@@ -13,7 +13,7 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 5. anomaly_signal_fort.py          : signal ML_STRONG_SIGNAL pour les profils très atypiques (sans points) ;
 6. anomaly_score_general.py        : score général (règles + IA) et priorité de chaque salarié ;
 7. anomaly_recommandations.py      : recommandation et coût d'ajustement ;
-8. anomaly_ecarts_hommes_femmes.py : médianes femmes / hommes par métier + grade ;
+8. anomaly_ecarts_hommes_femmes.py : médianes femmes / hommes par métier + niveau ;
 9. generate_dashboard_html.py      : tableau de bord HTML.
 
 Utilisation, depuis le dossier du projet :
@@ -76,11 +76,11 @@ if __name__ == "__main__":
     df = lancer(5, "Signal fort de l'IA", apply_ml_strong_signal, df, rule_params)
     df = lancer(6, "Score général et priorité", aggregate_risk, df, rule_params)
     df = lancer(7, "Recommandations et coût d'ajustement", recommendations, df, rule_params)
-    # Un tableau à part : une ligne par métier + grade.
+    # Un tableau à part : une ligne par métier + niveau.
     gg = lancer(8, "Écarts hommes / femmes", gender_gap_analysis, df)
 
     # Les colonnes les plus utiles en premier, toutes les autres ensuite.
-    front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Grade",
+    front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Niveau",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",
                   "Market_Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
                   "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Reco", "Cout_Ajustement"]

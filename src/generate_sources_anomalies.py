@@ -6,11 +6,11 @@ DONNÉES FICTIVES AVEC ANOMALIES
 ===============================
 
 generate_sources.py fabrique des salariés fictifs dont le salaire tombe toujours dans la grille de
-leur métier + grade : la détection n'a presque rien à trouver. Ce fichier lance generate_sources.py,
+leur métier + niveau : la détection n'a presque rien à trouver. Ce fichier lance generate_sources.py,
 puis abîme volontairement quelques salariés de input/employes.xlsx pour que la détection ait de
 vraies anomalies à repérer :
 - des salaires sous le Min de la grille, au-dessus du Max, ou très bas (sous le salaire minimum de
-  leur grade) ;
+  leur niveau) ;
 - des matricules en double (une ligne recopiée à la fin du fichier).
 Les autres salariés, la grille (bands.xlsx) et le marché (market.xlsx) ne changent pas.
 
@@ -35,7 +35,7 @@ ANOMALIES = {
     # Au-dessus de la grille : entre 110 % et 140 % du Max (1,5 % des salariés).
     "AU_DESSUS_MAX": (0.015, 1.10, 1.40, "Max"),
     # Très bas : entre 45 % et 60 % du Min (0,5 % des salariés). Avec les planchers de
-    # min_salary_by_grade (config/rules.yaml), ces salaires tombent tous sous le salaire minimum.
+    # min_salary_by_niveau (config/rules.yaml), ces salaires tombent tous sous le salaire minimum.
     "TRES_BAS": (0.005, 0.45, 0.60, "Min"),
 }
 # Salariés recopiés une deuxième fois à la fin du fichier, avec le même matricule : l'analyse doit
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # le même lancement donne toujours les mêmes anomalies, sur les mêmes salariés.
     rng = np.random.default_rng(generate_sources.SEED + 1)
     # Min et Max de la grille de chaque salarié, dans l'ordre des lignes.
-    bornes = employes.merge(bands, on=["Pays", "Job_Family", "Grade"], how="left")
+    bornes = employes.merge(bands, on=["Pays", "Job_Family", "Niveau"], how="left")
     # Les salariés encore sans anomalie (au départ, tout le monde).
     libres = np.arange(len(employes))
     for nom, (part, bas, haut, borne) in ANOMALIES.items():

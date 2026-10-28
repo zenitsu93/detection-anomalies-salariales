@@ -122,10 +122,10 @@
   const ligneH = (s, y, couleur, extra = {}) => ({ type: 'line', xref: `x${s} domain`, x0: 0, x1: 1, yref: 'y' + s, y0: y, y1: y,
     line: { color: couleur, dash: 'dash', width: 1.5 }, ...extra });
   const indices = (lignes, test) => lignes.reduce((t, l, i) => (test(l) && t.push(i), t), []);
-  const texteGrade = g => Number.isFinite(g) ? String(g) : null;
+  const texteNiveau = g => Number.isFinite(g) ? String(g) : null;
 
   E.communs = {
     $, fr, pct, signe, echapper, constat, COULEURS, transparent,
-    nomAxe, titreAxe, grille, hauteurDisponible, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteGrade,
+    nomAxe, titreAxe, grille, hauteurDisponible, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteNiveau,
   };
 })(window.Exploration = window.Exploration || {});

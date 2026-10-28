@@ -51,7 +51,7 @@
 
     // Les infos du salarié affichées au survol d'un point (seulement les colonnes présentes dans le fichier).
     const presentes = new Set(Object.keys(tables.employes[0] || {}));
-    const infos = ['Matricule', 'Nom', 'Job_Title', 'Grade', 'Fixe_Annuel_MAD'].filter(c => presentes.has(c));
+    const infos = ['Matricule', 'Nom', 'Job_Title', 'Niveau', 'Fixe_Annuel_MAD'].filter(c => presentes.has(c));
     const survol = df.map(l => infos.map(c => `${c} : ${typeof l[c] === 'number' ? fr(l[c], c === 'Fixe_Annuel_MAD' ? 2 : 0) : echapper(l[c] ?? '')}`).join('<br>'));
 
     // Les chiffres clés portent toujours sur tous les salariés, quels que soient les filtres des graphes.
@@ -63,15 +63,15 @@
     document.querySelectorAll('[data-liste]').forEach(b => b.onclick = () => E.liste.ouvrir(...listes[b.dataset.liste]));
 
     // Chaque graphe et ses filtres ; l'ordre d'affichage, lui, se règle dans la page HTML.
-    filtrer('f-masse', df, { grade: true }, sel => P.masseSalariale(df, sel));
+    filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
     A.distribution(df, survol);
     filtrer('f-grille', df, { metier: true }, sel => A.grilleEtMarche(df, survol, sel));
     filtrer('f-hors-grille', df, { metier: true }, sel => P.horsGrille(df, sel));
-    filtrer('f-metiers', df, { grade: true }, sel => A.metiers(df, survol, sel));
-    filtrer('f-marche', df, { vues: [['Entite_N1', 'Par pôle'], ['Job_Family', 'Par métier']], grade: true }, sel => P.marche(df, sel));
-    filtrer('f-tension', df, { grade: true, pole: true }, sel => P.tension(df, sel));
-    filtrer('f-anciennete', df, { grade: true, metier: true }, sel => A.anciennete(df, survol, sel));
-    filtrer('f-competences', df, { grade: true, metier: true }, sel => A.performance(df, survol, sel));
+    filtrer('f-metiers', df, { niveau: true }, sel => A.metiers(df, survol, sel));
+    filtrer('f-marche', df, { vues: [['Entite_N1', 'Par pôle'], ['Job_Family', 'Par métier']], niveau: true }, sel => P.marche(df, sel));
+    filtrer('f-tension', df, { niveau: true, pole: true }, sel => P.tension(df, sel));
+    filtrer('f-anciennete', df, { niveau: true, metier: true }, sel => A.anciennete(df, survol, sel));
+    filtrer('f-competences', df, { niveau: true, metier: true }, sel => A.performance(df, survol, sel));
     filtrer('f-talents', df, { hotjob: true, pole: true, metier: true }, sel => P.talents(df, sel));
     filtrer('f-equite', df, { metier: true }, sel => A.equite(df, sel));
   }
@@ -100,9 +100,9 @@
     $('controles').innerHTML = [
       ligne('Doublons de matricule', 'La première ligne de chaque matricule est gardée.', c.doublons,
         c.doublons ? versListe('doublons', c.doublons, `${fr(c.doublons)} lignes en double écartées`) : 'Aucun doublon'),
-      ligne('Rattachement à la grille interne', 'Chaque métier + grade doit exister dans bands.xlsx.', c.sansGrille,
+      ligne('Rattachement à la grille interne', 'Chaque métier + niveau doit exister dans bands.xlsx.', c.sansGrille,
         c.sansGrille ? versListe('sansGrille', c.sansGrille, `${fr(c.sansGrille)} salariés sans grille`) : 'Tous les salariés ont une grille'),
-      ligne('Rattachement au marché', 'Chaque métier + grade doit exister dans market.xlsx.', c.sansMarche,
+      ligne('Rattachement au marché', 'Chaque métier + niveau doit exister dans market.xlsx.', c.sansMarche,
         c.sansMarche ? versListe('sansMarche', c.sansMarche, `${fr(c.sansMarche)} salariés sans médiane de marché`) : 'Tous les salariés ont une médiane de marché'),
       ligne('Cohérence âge / ancienneté', "L'âge d'embauche (Age − Anciennete) doit être d'au moins 18 ans.", c.ageEmbaucheIncoherent,
         c.ageEmbaucheIncoherent ? versListe('ageEmbauche', c.ageEmbaucheIncoherent, `${fr(c.ageEmbaucheIncoherent)} salariés embauchés avant 18 ans`) : 'Aucune incohérence'),

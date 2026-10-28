@@ -134,7 +134,7 @@
     return annees <= 2 ? '0-2' : annees <= 5 ? '3-5' : annees <= 12 ? '6-12' : annees <= 20 ? '13-20' : '>20';
   }
 
-  // Position du salaire dans la fourchette du marché du métier + grade (P25, médiane, P75).
+  // Position du salaire dans la fourchette du marché du métier + niveau (P25, médiane, P75).
   const POSITIONS_MARCHE = ['Sous le P25', 'Entre P25 et médiane', 'Entre médiane et P75', 'Au-dessus du P75'];
   function positionMarche(l) {
     const s = l.Fixe_Annuel_MAD;
@@ -145,10 +145,10 @@
   // ---------- Étape 0 : sources, doublons, contrôles et indicateurs ----------
 
   const COLONNES_REQUISES = {
-    employes: ['Matricule', 'Job_Family', 'Job_Title', 'Grade', 'Entite_N1', 'Sexe', 'Fixe_Annuel_MAD', 'Age',
+    employes: ['Matricule', 'Job_Family', 'Job_Title', 'Niveau', 'Entite_N1', 'Sexe', 'Fixe_Annuel_MAD', 'Age',
                'Anciennete', 'Competence_N1', 'Positionnement_9BOX', 'Hot_job'],
-    bands: ['Job_Family', 'Grade', 'Min', 'Mid', 'Max'],
-    market: ['Job_Family', 'Grade', 'Median'],
+    bands: ['Job_Family', 'Niveau', 'Min', 'Mid', 'Max'],
+    market: ['Job_Family', 'Niveau', 'Median'],
   };
 
   function colonnesManquantes(tables) {
@@ -166,16 +166,16 @@
     // Dédoublonnage sur le Matricule : la première ligne est gardée.
     const vus = new Set(), emp = [];
     for (const e of employes) { if (vus.has(e.Matricule)) continue; vus.add(e.Matricule); emp.push(e); }
-    // Grille et marché retrouvés par métier + grade.
+    // Grille et marché retrouvés par métier + niveau.
     const grille = new Map(), marche = new Map();
-    for (const b of bands) if (!grille.has(cle(b.Job_Family, b.Grade))) grille.set(cle(b.Job_Family, b.Grade), b);
-    for (const m of market) if (!marche.has(cle(m.Job_Family, m.Grade))) marche.set(cle(m.Job_Family, m.Grade), m);
+    for (const b of bands) if (!grille.has(cle(b.Job_Family, b.Niveau))) grille.set(cle(b.Job_Family, b.Niveau), b);
+    for (const m of market) if (!marche.has(cle(m.Job_Family, m.Niveau))) marche.set(cle(m.Job_Family, m.Niveau), m);
 
     const df = emp.map(e => {
-      const b = grille.get(cle(e.Job_Family, e.Grade)) || {}, m = marche.get(cle(e.Job_Family, e.Grade)) || {};
+      const b = grille.get(cle(e.Job_Family, e.Niveau)) || {}, m = marche.get(cle(e.Job_Family, e.Niveau)) || {};
       const l = {
         Matricule: e.Matricule, Nom: e.Nom, Job_Title: e.Job_Title, Job_Family: e.Job_Family, Entite_N1: e.Entite_N1,
-        Sexe: e.Sexe, Grade: nombre(e.Grade), Fixe_Annuel_MAD: nombre(e.Fixe_Annuel_MAD), Age: nombre(e.Age),
+        Sexe: e.Sexe, Niveau: nombre(e.Niveau), Fixe_Annuel_MAD: nombre(e.Fixe_Annuel_MAD), Age: nombre(e.Age),
         Anciennete: nombre(e.Anciennete), Competence_N1: nombre(e.Competence_N1),
         Positionnement_9BOX: nombre(e.Positionnement_9BOX), Hot_job: nombre(e.Hot_job),
         Min: nombre(b.Min), Mid: nombre(b.Mid), Max: nombre(b.Max), Median: nombre(m.Median),

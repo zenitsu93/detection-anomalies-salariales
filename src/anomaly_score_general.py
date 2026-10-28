@@ -50,19 +50,19 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # - Critical [70, 100] était refusé, car 69,4 < 70 ;
     # - aucun intervalle ne correspondait : le code renvoyait « Info » par défaut.
     # Un score proche de Critical se retrouvait donc à la priorité la plus basse.
-    # On corrige ce trou entre les niveaux en utilisant seulement leurs scores minimums :
+    # On corrige ce trou entre les priorités en utilisant seulement leurs scores minimums :
     # Major commence à 50 et reste valable jusqu'à 70 exclu. Ainsi, 69,4 reste Major.
     # Le calcul du RiskScore ne change pas ; c'est son classement qui est corrigé.
     #
-    # Les niveaux sont déjà rangés dans le YAML : Info, Minor, Major, Critical.
+    # Les priorités sont déjà rangées dans le YAML : Info, Minor, Major, Critical.
     # Il faut conserver cet ordre croissant des bornes basses dans la configuration.
-    # Le niveau suivant remplace le précédent si son seuil est lui aussi atteint.
+    # La priorité suivante remplace la précédente si son seuil est lui aussi atteint.
     # Exemple pour 69,4 : Info, puis Minor, puis Major ; Critical ne s'applique pas.
-    for niveau in buckets:
-        bornes = buckets[niveau]
+    for priorite in buckets:
+        bornes = buckets[priorite]
         borne_basse = bornes[0]
         seuil_atteint = df["RiskScore"] >= borne_basse
-        df.loc[seuil_atteint, "Severity"] = niveau
+        df.loc[seuil_atteint, "Severity"] = priorite
 
     return df
 

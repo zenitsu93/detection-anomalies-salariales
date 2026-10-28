@@ -83,7 +83,7 @@
         <li><a href="#masse"><span class="n">1</span>Masse salariale par pôle</a></li>
         <li><a href="#distribution"><span class="n">2</span>Distribution du salaire</a></li>
         <li class="groupe">Position dans la grille</li>
-        <li><a href="#grille"><span class="n">3</span>Grille et marché par grade</a></li>
+        <li><a href="#grille"><span class="n">3</span>Grille et marché par niveau</a></li>
         <li><a href="#hors-grille"><span class="n">4</span>Salaires hors grille</a></li>
         <li><a href="#metiers"><span class="n">5</span>Familles de métier</a></li>
         <li class="groupe">Position face au marché</li>
@@ -107,7 +107,7 @@
       <section class="panel" id="qualite">
         <div class="panel-head"><h2 class="panel-title"><span class="num">0</span>Qualité des données</h2><span class="panel-unit" id="lignes-lues"></span></div>
         <div class="panel-body">
-          <p class="question">Les trois fichiers sont rapprochés par métier et grade, les doublons de matricule écartés, et la cohérence des données contrôlée avant toute analyse.</p>
+          <p class="question">Les trois fichiers sont rapprochés par métier et niveau, les doublons de matricule écartés, et la cohérence des données contrôlée avant toute analyse.</p>
           <table>
             <thead><tr><th>Contrôle</th><th>Résultat</th><th style="width:130px">Statut</th></tr></thead>
             <tbody id="controles"></tbody>
@@ -116,7 +116,7 @@
             <summary>Méthode</summary>
             <div class="methode-grille">
               <div><h3>Doublons</h3><p>Règle de gestion sur les identifiants (<code>Matricule</code>) : seule la première occurrence est conservée en cas de doublon.</p></div>
-              <div><h3>Rapprochement</h3><p>Croisement avec les grilles internes et les médianes de marché par couple (<code>Job_Family</code>, <code>Grade</code>).</p></div>
+              <div><h3>Rapprochement</h3><p>Croisement avec les grilles internes et les médianes de marché par couple (<code>Job_Family</code>, <code>Niveau</code>).</p></div>
               <div><h3>Cohérence</h3><p>Âge d'embauche (<code>Age - Anciennete</code>) d'au moins 18 ans, et une seule valeur de tension <code>Hot_job</code> par poste <code>Job_Title</code>. Les ratios standards de rémunération sont ensuite calculés.</p></div>
             </div>
           </details>
@@ -126,7 +126,7 @@
       <h2 class="partie">Population et masse salariale</h2>
 
       <section class="panel" id="masse">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">1</span>Masse salariale et effectifs par pôle</h2><span class="panel-unit">filtrable par grade</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">1</span>Masse salariale et effectifs par pôle</h2><span class="panel-unit">filtrable par niveau</span></div>
         <div class="panel-body">
           <p class="question">Où va la masse salariale, et quel est le salaire moyen de chaque pôle ?</p>
           <div class="filtres" id="f-masse"></div>
@@ -149,7 +149,7 @@
       <section class="panel" id="grille">
         <div class="panel-head"><h2 class="panel-title"><span class="num">3</span>Salaires, grille interne et marché</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
-          <p class="question">Les salaires réels suivent-ils la grille interne et le marché, grade par grade ? Comment se répartissent-ils dans leur bande ?</p>
+          <p class="question">Les salaires réels suivent-ils la grille interne et le marché, niveau par niveau ? Comment se répartissent-ils dans leur bande ?</p>
           <div class="filtres" id="f-grille"></div>
           <div class="graphe" id="g-grille"></div>
           <p class="constat" id="s-grille"></p>
@@ -157,7 +157,7 @@
       </section>
 
       <section class="panel" id="hors-grille">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">4</span>Salaires hors grille, par pôle et par grade</h2><span class="panel-unit">filtrable par métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">4</span>Salaires hors grille, par pôle et par niveau</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
           <p class="question">Où se concentrent les salaires sous le Min ou au-dessus du Max de leur grille ?</p>
           <div class="filtres" id="f-hors-grille"></div>
@@ -167,7 +167,7 @@
       </section>
 
       <section class="panel" id="metiers">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">5</span>Familles de métier et compétitivité des grilles</h2><span class="panel-unit">filtrable par grade</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">5</span>Familles de métier et compétitivité des grilles</h2><span class="panel-unit">filtrable par niveau</span></div>
         <div class="panel-body">
           <p class="question">Certaines familles de métier sont-elles mieux placées dans leur grille, et est-ce lié à l'écart entre la grille et le marché ?</p>
           <div class="filtres" id="f-metiers"></div>
@@ -179,9 +179,9 @@
       <h2 class="partie">Position face au marché</h2>
 
       <section class="panel" id="marche">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">6</span>Position face au marché</h2><span class="panel-unit">par pôle ou par métier, filtrable par grade</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">6</span>Position face au marché</h2><span class="panel-unit">par pôle ou par métier, filtrable par niveau</span></div>
         <div class="panel-body">
-          <p class="question">Chaque pôle ou métier paie-t-il au-dessus ou en dessous du marché, à métier et grade égaux ?</p>
+          <p class="question">Chaque pôle ou métier paie-t-il au-dessus ou en dessous du marché, à métier et niveau égaux ?</p>
           <div class="filtres" id="f-marche"></div>
           <div class="graphe" id="g-marche"></div>
           <p class="constat" id="s-marche"></p>
@@ -189,7 +189,7 @@
       </section>
 
       <section class="panel" id="tension">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">7</span>Métiers en tension</h2><span class="panel-unit">filtrable par grade et pôle</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">7</span>Métiers en tension</h2><span class="panel-unit">filtrable par niveau et pôle</span></div>
         <div class="panel-body">
           <p class="question">Les métiers les plus recherchés sur le marché (Hot_job élevé) sont-ils bien placés dans leur grille ?</p>
           <div class="filtres" id="f-tension"></div>
@@ -201,7 +201,7 @@
       <h2 class="partie">Ce qui fait varier la position</h2>
 
       <section class="panel" id="anciennete">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">8</span>Ancienneté, âge à l'embauche et compression</h2><span class="panel-unit">filtrable par grade et métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">8</span>Ancienneté, âge à l'embauche et compression</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
         <div class="panel-body">
           <p class="question">À poste égal, est-on mieux placé dans sa grille selon l'ancienneté (à gauche, par tranche) ou selon l'âge à l'embauche (à droite) ?</p>
           <div class="filtres" id="f-anciennete"></div>
@@ -211,7 +211,7 @@
       </section>
 
       <section class="panel" id="competences">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">9</span>Compétences et tension métier</h2><span class="panel-unit">filtrable par grade et métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">9</span>Compétences et tension métier</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
         <div class="panel-body">
           <p class="question">La note de compétences se traduit-elle dans la position salariale, quelle que soit la tension du métier ?</p>
           <div class="filtres" id="f-competences"></div>
@@ -235,7 +235,7 @@
       <section class="panel" id="equite">
         <div class="panel-head"><h2 class="panel-title"><span class="num">11</span>Équité femmes / hommes et pratiques par pôle</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
-          <p class="question">À grade égal, les femmes et les hommes sont-ils placés de la même façon dans leur grille ? Les pôles ont-ils des pratiques différentes ?</p>
+          <p class="question">À niveau égal, les femmes et les hommes sont-ils placés de la même façon dans leur grille ? Les pôles ont-ils des pratiques différentes ?</p>
           <div class="filtres" id="f-equite"></div>
           <div class="graphe" id="g-equite"></div>
           <p class="constat" id="s-equite"></p>
@@ -252,7 +252,7 @@
             <li><strong>Revenir à la vue de départ :</strong> double-cliquer sur le graphe.</li>
             <li><strong>Voir un graphe en grand :</strong> bouton « Agrandir » en haut à droite du panneau ; le graphe occupe tout l'écran, ses filtres restent utilisables. « Réduire » ou la touche Échap ramène à la page.</li>
             <li><strong>Filtrer :</strong> boutons et listes au-dessus de certains graphes. Le constat sous le graphe suit le filtre ; les chiffres clés du haut de page restent calculés sur tous les salariés.</li>
-            <li><strong>Savoir à qui correspond un point :</strong> passer la souris dessus ; le matricule, le nom, le poste, le grade et le salaire s'affichent.</li>
+            <li><strong>Savoir à qui correspond un point :</strong> passer la souris dessus ; le matricule, le nom, le poste, le niveau et le salaire s'affichent.</li>
             <li><strong>Voir la liste des salariés :</strong> cliquer sur une barre, une boîte, une case, une bulle ou un point (ou sur un nombre de salariés des chiffres clés et de la qualité des données). La liste s'ouvre comme dans Excel : recherche, tri et filtre par colonne avec le bouton ▾, puis « Exporter (Excel) » pour l'enregistrer.</li>
             <li><strong>Cacher une série :</strong> cliquer sur son nom dans la légende ; double-cliquer pour n'afficher qu'elle.</li>
             <li><strong>Enregistrer un graphe en image</strong> (pour un support de comité) : icône d'appareil photo de la barre d'outils. L'image garde le zoom en cours.</li>

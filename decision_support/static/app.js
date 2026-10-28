@@ -18,13 +18,13 @@ function resetResult() {
   $('submit').disabled = !meta;
   $('submit').textContent = submitLabel();
 }
-function updateGrades() {
-  $('grade').replaceChildren(new Option('Choisir un grade', ''));
-  for (const grade of meta.jobs[$('job').value] || []) $('grade').append(new Option(grade, grade));
-  $('grade').disabled = !$('job').value;
+function updateNiveaux() {
+  $('niveau').replaceChildren(new Option('Choisir un niveau', ''));
+  for (const niveau of meta.jobs[$('job').value] || []) $('niveau').append(new Option(niveau, niveau));
+  $('niveau').disabled = !$('job').value;
 }
 form.addEventListener('input', resetResult);
-$('job').addEventListener('change', updateGrades);
+$('job').addEventListener('change', updateNiveaux);
 for (const radio of form.elements.mode) radio.addEventListener('change', () => {
   const evaluate = mode() === 'evaluate';
   $('salary-field').hidden = !evaluate;
@@ -130,7 +130,7 @@ function render(data) {
   $('result-mode').textContent = data.mode === 'evaluate' ? 'Évaluation du salaire' : 'Proposition de référence';
   $('result-mode').hidden = $('result-mode').textContent === data.title;
   const {profile, proposal: p, peers} = data;
-  $('result-profile').textContent = [`${profile.job_family} · Grade ${profile.grade}`,
+  $('result-profile').textContent = [`${profile.job_family} · Niveau ${profile.niveau}`,
     profile.seniority == null ? null : `${fmt(profile.seniority)} ans d’ancienneté`,
     data.salary == null ? null : `${fmt(data.salary)} ${data.unit}`].filter(Boolean).join(' · ');
   renderFigures(data);

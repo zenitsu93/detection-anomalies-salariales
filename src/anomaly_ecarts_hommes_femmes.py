@@ -5,13 +5,13 @@
 ÉCARTS HOMMES / FEMMES
 ======================
 
-Ce fichier compare, pour chaque métier + grade, le salaire du milieu (la médiane) des femmes et des
-hommes. Il rend un tableau à part (une ligne par métier + grade), pas le DataFrame des salariés :
+Ce fichier compare, pour chaque métier + niveau, le salaire du milieu (la médiane) des femmes et des
+hommes. Il rend un tableau à part (une ligne par métier + niveau), pas le DataFrame des salariés :
 - Median_F et Median_M : les médianes des femmes et des hommes ;
 - M_div_F = Median_M / Median_F : au-dessus de 1, les hommes sont mieux payés ; en dessous, les
-  femmes. Vide s'il manque les femmes ou les hommes dans ce métier + grade.
+  femmes. Vide s'il manque les femmes ou les hommes dans ce métier + niveau.
 
-Il n'a besoin que du DataFrame rendu par anomaly_pretraitement.py (salaire, métier, grade, sexe).
+Il n'a besoin que du DataFrame rendu par anomaly_pretraitement.py (salaire, métier, niveau, sexe).
 
 Utilisation :
 - depuis Python :
@@ -30,9 +30,9 @@ from anomaly_pretraitement import preparer_employes
 
 
 def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
-    """Rend le tableau des médianes femmes / hommes par métier + grade, et leur ratio M_div_F."""
+    """Rend le tableau des médianes femmes / hommes par métier + niveau, et leur ratio M_div_F."""
     # Une colonne par sexe (unstack), puis Median_F et Median_M comme noms.
-    med = df.groupby(["Job_Family", "Grade", "Sexe"])["Fixe_Annuel_MAD"].median().unstack()
+    med = df.groupby(["Job_Family", "Niveau", "Sexe"])["Fixe_Annuel_MAD"].median().unstack()
     med = med.rename(columns=lambda x: f"Median_{x}")
     med["M_div_F"] = med["Median_M"] / med["Median_F"]
     return med.reset_index()
@@ -53,4 +53,4 @@ if __name__ == "__main__":
     sortie = projet / "output" / "ecarts_hommes_femmes" / "gender_gap.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
     gg.to_excel(sortie, index=False)
-    print(f"\n{len(gg)} métiers + grades - tableau enregistré dans : {sortie}")
+    print(f"\n{len(gg)} métiers + niveaux - tableau enregistré dans : {sortie}")

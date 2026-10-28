@@ -86,8 +86,8 @@ Les trois fichiers vont dans `input/`, avec exactement ces noms :
 ```text
 input/
 ├── employes.xlsx  les salariés : une ligne par salarié
-├── bands.xlsx     la grille interne : une ligne par métier + grade
-└── market.xlsx    le marché : une ligne par métier + grade
+├── bands.xlsx     la grille interne : une ligne par métier + niveau
+└── market.xlsx    le marché : une ligne par métier + niveau
 ```
 
 Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de vraies données salariales n'y partent jamais. Pour essayer le projet sans données réelles, fabriquer d'abord trois fichiers fictifs (10 000 salariés, dont quelques anomalies volontaires : salaires hors grille ou très bas, matricules en double) :
@@ -103,7 +103,7 @@ Format des trois fichiers :
 - ce sont des classeurs Excel (`.xlsx`), dont seule la première feuille est lue ;
 - la première ligne donne les noms des colonnes, écrits exactement comme ci-dessous (l'ordre des colonnes n'a pas d'importance) ;
 - les salaires, âges et notes sont saisis comme des nombres, pas comme du texte ;
-- le métier (`Job_Family`) et le grade (`Grade`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + grade manque dans la grille reste dans l'analyse, mais sans fourchette.
+- le métier (`Job_Family`) et le niveau (`Niveau`) s'écrivent de la même façon dans les trois fichiers : c'est grâce à eux que chaque salarié retrouve sa grille et son marché. Un salarié dont le métier + niveau manque dans la grille reste dans l'analyse, mais sans fourchette.
 
 Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fictifs avec Excel.
 
@@ -117,7 +117,7 @@ Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fictifs ave
 | `Entite_N2` | entité dans le pôle | `P3-E05` |
 | `Job_Family` | métier | `RETAIL BANKING` |
 | `Job_Title` | poste | `JT1389` |
-| `Grade` | grade | `5` |
+| `Niveau` | niveau | `5` |
 | `Fixe_Annuel_MAD` | salaire fixe annuel, en kMAD | `238.34` |
 | `Age` | âge, en années | `28` |
 | `Anciennete` | ancienneté, en années | `8` |
@@ -128,9 +128,9 @@ Pour voir à quoi un fichier doit ressembler, ouvrir un des fichiers fictifs ave
 
 Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne servent à aucun calcul : elles sont simplement recopiées dans les résultats.
 
-**`bands.xlsx`** : `Job_Family`, `Grade`, puis `Min`, `Mid` (milieu) et `Max` de la grille, en kMAD.
+**`bands.xlsx`** : `Job_Family`, `Niveau`, puis `Min`, `Mid` (milieu) et `Max` de la grille, en kMAD.
 
-**`market.xlsx`** : `Job_Family`, `Grade`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
+**`market.xlsx`** : `Job_Family`, `Niveau`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
 
 ## 3. Tout lancer d'un coup
 
@@ -143,7 +143,7 @@ Pendant le calcul, le terminal affiche chaque étape au moment où elle commence
 Les résultats arrivent dans `output/detection/` :
 
 - `anomalies.xlsx` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
-- `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + grade.
+- `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + niveau.
 
 Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic).
 
@@ -162,10 +162,10 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 | 5 | `python src/anomaly_signal_fort.py` | signal ML_STRONG_SIGNAL pour les 5 % de profils les plus atypiques pour l'IA (sans points) | `output/signal_fort/employes_signal_fort.xlsx` |
 | 6 | `python src/anomaly_score_general.py` | score général et priorité | `output/score_general/employes_score_general.xlsx` |
 | 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.xlsx` |
-| 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + grade | `output/ecarts_hommes_femmes/gender_gap.xlsx` |
+| 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + niveau | `output/ecarts_hommes_femmes/gender_gap.xlsx` |
 | 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies_<date>_<heure>.html` |
 
-Les seuils des règles, les poids et les niveaux de priorité se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.
+Les seuils des règles, les poids et les priorités se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.
 
 ## 5. En dehors du programme principal
 

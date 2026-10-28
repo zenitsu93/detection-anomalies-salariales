@@ -21,7 +21,7 @@ from anomaly_signal_regression import COLONNES, entrainer, predire
 # Même unité que les CSV : aucune conversion.
 UNIT = "kMAD / an"
 # Le périmètre d'un groupe de collègues, écrit en clair colonne par colonne.
-SCOPE = {"Grade": "même grade", "Job_Family": "même métier", "Anciennete_Bucket": "ancienneté {} ans"}
+SCOPE = {"Niveau": "même niveau", "Job_Family": "même métier", "Anciennete_Bucket": "ancienneté {} ans"}
 
 
 def number(value, name, *, optional=False, minimum=0, strict=False):
@@ -53,7 +53,7 @@ class DecisionEngine:
         if self.minimum_peers < 2:
             raise ValueError("cohort_min_size doit être au moins égal à 2.")
         self.steps = self.rules.get("cohort_widening_steps",
-                                    ["Grade|Job_Family|Anciennete_Bucket", "Grade|Job_Family", "Grade"])
+                                    ["Niveau|Job_Family|Anciennete_Bucket", "Niveau|Job_Family", "Niveau"])
         for lo, hi, defaults in [("compa_ratio_low", "compa_ratio_high", (.85, 1.15)),
                                   ("market_low", "market_high", (.9, 1.2))]:
             low = number(self.rules.get(lo, defaults[0]), lo, strict=True)
@@ -63,9 +63,9 @@ class DecisionEngine:
             self.rules.update({lo: low, hi: high})
         self.peer_threshold = number(self.rules.get("peer_z_threshold_minor", 2),
                                      "peer_z_threshold_minor", strict=True)
-        keys = ["Job_Family", "Grade"]
+        keys = ["Job_Family", "Niveau"]
         self.employees = self._prepare(employees, keys + ["Fixe_Annuel_MAD"], "Employés")
-        # Pourquoi drop_duplicates : un métier + grade en double garde sa première ligne, comme dans
+        # Pourquoi drop_duplicates : un métier + niveau en double garde sa première ligne, comme dans
         # src/anomaly_pretraitement.py.
         self.bands = self._prepare(bands, keys + ["Min", "Mid", "Max"], "Grille").drop_duplicates(keys)
         self.market = (self._prepare(market, keys + ["Median"], "Marché").drop_duplicates(keys)
@@ -98,7 +98,7 @@ class DecisionEngine:
             raise ValueError(f"{label} : colonnes absentes : {', '.join(sorted(missing))}.")
         result = table.copy(deep=True)
         result["Job_Family"] = result.Job_Family.map(key)
-        result["Grade"] = result.Grade.map(key)
+        result["Niveau"] = result.Niveau.map(key)
         return result
 
     @classmethod
@@ -114,18 +114,18 @@ class DecisionEngine:
         return cls(read("employes.xlsx"), read("bands.xlsx"), market, rules)
 
     def metadata(self):
-        pairs = self.bands.loc[self.bands.Job_Family.ne("") & self.bands.Grade.ne(""), ["Job_Family", "Grade"]]
-        jobs = {job: sorted(group.Grade.unique().tolist()) for job, group in pairs.groupby("Job_Family")}
+        pairs = self.bands.loc[self.bands.Job_Family.ne("") & self.bands.Niveau.ne(""), ["Job_Family", "Niveau"]]
+        jobs = {job: sorted(group.Niveau.unique().tolist()) for job, group in pairs.groupby("Job_Family")}
         return {"jobs": jobs, "unit": UNIT, "minimum_peers": self.minimum_peers,
                 "employees": len(self.employees)}
 
     def _reference(self, table, profile, columns):
-        # Rend les montants de la grille ou du marché pour ce métier + grade, ou None s'ils manquent ou
+        # Rend les montants de la grille ou du marché pour ce métier + niveau, ou None s'ils manquent ou
         # sont inutilisables (absents, nuls, négatifs, ou Min / Mid / Max dans le désordre).
         if table is None:
             return None
-        rows = table.loc[(table.Job_Family == profile["job_family"]) & (table.Grade == profile["grade"]), columns]
-        # Pourquoi une seule ligne : les doublons de métier + grade sont déjà retirés.
+        rows = table.loc[(table.Job_Family == profile["job_family"]) & (table.Niveau == profile["niveau"]), columns]
+        # Pourquoi une seule ligne : les doublons de métier + niveau sont déjà retirés.
         if rows.empty:
             return None
         result = {c: float(v) for c, v in pd.to_numeric(rows.iloc[0], errors="coerce").items()}
@@ -136,7 +136,7 @@ class DecisionEngine:
         return result
 
     def _peers(self, profile):
-        values = {"Job_Family": profile["job_family"], "Grade": profile["grade"],
+        values = {"Job_Family": profile["job_family"], "Niveau": profile["niveau"],
                   "Anciennete_Bucket": None if profile["seniority"] is None else bucket_anciennete(profile["seniority"])}
         others = self.employees
         if profile["employee_id"]:
@@ -173,22 +173,22 @@ class DecisionEngine:
         mode = payload.get("mode", "evaluate")
         if mode not in {"evaluate", "propose"}:
             raise ValueError("Mode inconnu.")
-        job, grade = key(payload.get("job_family", "")), key(payload.get("grade", ""))
-        if not job or not grade:
-            raise ValueError("Le métier et le grade sont obligatoires.")
+        job, niveau = key(payload.get("job_family", "")), key(payload.get("niveau", ""))
+        if not job or not niveau:
+            raise ValueError("Le métier et le niveau sont obligatoires.")
         seniority = number(payload.get("seniority"), "Ancienneté", optional=True)
         employee_id = key(payload.get("employee_id", ""))
         if employee_id and employee_id not in self.known_ids:
             raise ValueError("Matricule absent du fichier employés. Vérifier la saisie ou laisser le champ vide.")
-        profile = {"job_family": job, "grade": grade, "seniority": seniority, "employee_id": employee_id}
+        profile = {"job_family": job, "niveau": niveau, "seniority": seniority, "employee_id": employee_id}
         salary = number(payload.get("salary"), "Salaire envisagé", strict=True) if mode == "evaluate" else None
         band = self._reference(self.bands, profile, ["Min", "Mid", "Max"])
         market = self._reference(self.market, profile, ["Median"])
         peers = self._peers(profile)
-        # Le plancher du grade (règle du salaire minimum), ou None si le fichier de règles n'en donne pas.
-        floor = self.rules.get("min_salary_by_grade", {}).get(int(grade) if grade.isdigit() else grade)
-        proposal = self._proposal(band, market, peers, grade, floor)
-        checks = self._checks(salary, band, market, peers, grade) if salary is not None else []
+        # Le plancher du niveau (règle du salaire minimum), ou None si le fichier de règles n'en donne pas.
+        floor = self.rules.get("min_salary_by_niveau", {}).get(int(niveau) if niveau.isdigit() else niveau)
+        proposal = self._proposal(band, market, peers, niveau, floor)
+        checks = self._checks(salary, band, market, peers, niveau) if salary is not None else []
         if salary is not None:
             status = "review" if any(c["status"] == "review" for c in checks) else (
                 "coherent" if band and market and peers["available"] else "insufficient")
@@ -206,18 +206,18 @@ class DecisionEngine:
     def _regression(self, profile):
         # Repère en plus, qui ne change ni le verdict ni la fourchette proposée. Seulement pour un
         # salarié existant : ce que le fichier sait de lui (âge, compétence, 9-Box, Hot job), le métier
-        # et le grade saisis, et l'ancienneté saisie s'il y en a une.
+        # et le niveau saisis, et l'ancienneté saisie s'il y en a une.
         if not profile["employee_id"] or self.regression is None:
             return {"predicted": None, "low": None, "high": None}
         ligne = self.employees.loc[self.employees.Matricule == profile["employee_id"]].iloc[[0]].copy()
-        ligne["Job_Family"], ligne["Grade"] = profile["job_family"], profile["grade"]
+        ligne["Job_Family"], ligne["Niveau"] = profile["job_family"], profile["niveau"]
         if profile["seniority"] is not None:
             ligne["Anciennete"] = profile["seniority"]
         r = predire(ligne, self.regression).iloc[0]
         return {"predicted": round(float(r.Salaire_Predit), 2),
                 "low": round(float(r.Fourchette_Basse), 2), "high": round(float(r.Fourchette_Haute), 2)}
 
-    def _proposal(self, band, market, peers, grade, floor):
+    def _proposal(self, band, market, peers, niveau, floor):
         if not band:
             return {"low": None, "high": None, "target": None, "reason": "missing_band"}
         low = max(band["Min"], band["Mid"] * self.rules["compa_ratio_low"])
@@ -234,7 +234,7 @@ class DecisionEngine:
                 high = min(high, peers["center"] + margin)
             else:
                 low, high = max(low, peers["median"]), min(high, peers["median"])
-        # La fourchette ne descend jamais sous le salaire minimum du grade.
+        # La fourchette ne descend jamais sous le salaire minimum du niveau.
         if floor is not None:
             low = max(low, floor)
         # Montants saisissables avec deux décimales ; arrondir les bornes vers l'intérieur.
@@ -248,21 +248,21 @@ class DecisionEngine:
         target = min(high, max(low, round(target, 2)))
         # Dernière vérification : la cible repasse dans les mêmes contrôles que l'évaluation. Si elle
         # déclenchait elle-même une alerte, on ne propose rien plutôt qu'un montant contradictoire.
-        if any(c["status"] == "review" for c in self._checks(target, band, market, peers, grade)):
+        if any(c["status"] == "review" for c in self._checks(target, band, market, peers, niveau)):
             return {"low": None, "high": None, "target": None, "reason": "conflict"}
         return {"low": low, "high": high, "target": target, "reason": "available"}
 
-    def _checks(self, salary, band, market, peers, grade):
+    def _checks(self, salary, band, market, peers, niveau):
         # Pourquoi PeerZ : les cinq règles de src/anomaly_regles.py en ont besoin, dont celle des collègues.
-        # Pourquoi Grade et Fixe_Annuel_MAD : la règle du salaire minimum les lit. Le grade est remis en
-        # nombre, comme dans le fichier de règles (min_salary_by_grade : 5 et non « 5 »).
+        # Pourquoi Niveau et Fixe_Annuel_MAD : la règle du salaire minimum les lit. Le niveau est remis en
+        # nombre, comme dans le fichier de règles (min_salary_by_niveau : 5 et non « 5 »).
         ratios = {"CompaRatio": salary / band["Mid"] if band else np.nan,
                   "RangePenetration": (salary - band["Min"]) / (band["Max"] - band["Min"])
                   if band and band["Max"] > band["Min"] else np.nan,
                   "MarketRatio": salary / market["Median"] if market else np.nan,
                   "PeerZ": (salary - peers["center"]) / peers["scale"]
                   if peers["available"] and peers["scale"] > 0 else np.nan,
-                  "Grade": int(grade) if grade.isdigit() else grade, "Fixe_Annuel_MAD": salary}
+                  "Niveau": int(niveau) if niveau.isdigit() else niveau, "Fixe_Annuel_MAD": salary}
         for column, bounds in [("CompaRatio", ("compa_ratio_low", "compa_ratio_high")),
                                ("MarketRatio", ("market_low", "market_high"))]:
             for bound in bounds:
@@ -274,9 +274,9 @@ class DecisionEngine:
         results = {"Grille interne": "OUT_OF_BAND" not in flags if band else None,
                    "Position dans la grille": "COMPA_RATIO" not in flags if band else None,
                    "Marché": "MARKET_GAP" not in flags if market else None,
-                   # Sans plancher pour ce grade dans le fichier de règles, le contrôle est indisponible.
+                   # Sans plancher pour ce niveau dans le fichier de règles, le contrôle est indisponible.
                    "Salaire minimum": "MIN_SALARY" not in flags
-                   if grade.isdigit() and int(grade) in self.rules.get("min_salary_by_grade", {}) else None}
+                   if niveau.isdigit() and int(niveau) in self.rules.get("min_salary_by_niveau", {}) else None}
         if not peers["available"]:
             results["Collègues comparables"] = None
         elif peers["scale"] > 0:

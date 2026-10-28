@@ -83,7 +83,7 @@ FLAG_FR = {
 # Les colonnes de la liste des salariés (clic sur une barre), et leur nom affiché.
 COL_FR = {
     "Matricule": "Matricule", "Entite_N1": "Pôle", "Job_Family": "Métier", "Job_Title": "Poste",
-    "Grade": "Grade", "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
+    "Niveau": "Niveau", "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
     "Rule_Score": "Score de règles", "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
     "Cout_Ajustement": f"Coût d'ajustement ({UNITE})",
@@ -127,13 +127,13 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
                "data": np.floor(df[col].round(2) / 10).clip(upper=9).astype(int)
                          .value_counts().reindex(range(10), fill_value=0).tolist()}
               for col, couleur in SCORE_COLORS.items()]
-    # Tous les écarts hommes / femmes (le choix des 10 plus marqués ou d'un grade se fait dans la page),
+    # Tous les écarts hommes / femmes (le choix des 10 plus marqués ou d'un niveau se fait dans la page),
     # avec le nombre de femmes et d'hommes : un écart sur 3 personnes ne pèse pas comme un écart sur 300.
-    # Un métier + grade sans femme ou sans homme n'a pas d'écart : il est écarté.
-    effectifs = df.groupby(["Job_Family", "Grade", "Sexe"]).size().unstack(fill_value=0).reset_index()
-    gap = gg.dropna(subset=["M_div_F"]).merge(effectifs, on=["Job_Family", "Grade"])
+    # Un métier + niveau sans femme ou sans homme n'a pas d'écart : il est écarté.
+    effectifs = df.groupby(["Job_Family", "Niveau", "Sexe"]).size().unstack(fill_value=0).reset_index()
+    gap = gg.dropna(subset=["M_div_F"]).merge(effectifs, on=["Job_Family", "Niveau"])
     gap["Ecart_pct"] = (gap["M_div_F"] - 1) * 100
-    gap = gap[["Job_Family", "Grade", "Median_F", "Median_M", "F", "M", "Ecart_pct"]]
+    gap = gap[["Job_Family", "Niveau", "Median_F", "Median_M", "F", "M", "Ecart_pct"]]
     gap = gap.round({"Median_F": 2, "Median_M": 2, "Ecart_pct": 1})
 
     # La liste des salariés : cases vides en None, sinon le JSON serait invalide.
@@ -182,7 +182,7 @@ def build_html(data: dict, maintenant: datetime) -> str:
     p, c = data["pole"], data["cost"]
     # Les tableaux des « Données détaillées » partent en JSON (titre, colonnes, lignes) et non plus en
     # HTML tout fait : la page les dessine elle-même, avec la même recherche et les mêmes filtres que la
-    # liste des salariés. Pas de tableau des écarts hommes / femmes (le graphique par grade le remplace)
+    # liste des salariés. Pas de tableau des écarts hommes / femmes (le graphique par niveau le remplace)
     # ni du score général (ses trois courbes et leur infobulle donnent déjà les nombres).
     tables_json = json.dumps([
         {"title": titre, "cols": entetes, "rows": list(lignes)}
@@ -390,14 +390,14 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
         <p class="note">Le score général réunit le score de règles et le score IA ; c'est lui qui fixe la priorité.</p></div>
     </section>
     <section class="panel full">
-      <div class="panel-head"><h2 class="panel-title">Écarts de salaire hommes / femmes</h2><span class="panel-unit">par métier et grade</span></div>
+      <div class="panel-head"><h2 class="panel-title">Écarts de salaire hommes / femmes</h2><span class="panel-unit">par métier et niveau</span></div>
       <div class="panel-body">
         <div class="views" id="gap-views" role="group" aria-label="Écarts à afficher"></div>
         <div class="chart-box h-xl"><canvas id="chart-gap"></canvas></div>
         <p class="note">Chaque barre compare le salaire médian (celui du milieu) des hommes à celui des femmes, à métier
-          et grade égaux : +10 % veut dire que les hommes touchent 10 % de plus. Sous chaque métier, le nombre de
+          et niveau égaux : +10 % veut dire que les hommes touchent 10 % de plus. Sous chaque métier, le nombre de
           femmes et d'hommes comparés : sur quelques personnes, un seul salaire suffit à créer un gros écart. Un métier
-          sans femme ou sans homme dans le grade n'apparaît pas.</p>
+          sans femme ou sans homme dans le niveau n'apparaît pas.</p>
       </div>
     </section>
     <details class="panel full data-panel">
@@ -778,19 +778,19 @@ new Chart(document.getElementById('chart-risk'), {{
   }}),
 }});
 
-// ---- Écarts hommes / femmes : les 10 plus marqués, puis un bouton par grade ----
+// ---- Écarts hommes / femmes : les 10 plus marqués, puis un bouton par niveau ----
 const GAP = DATA.gap;
 const plural = (n, mot) => n + ' ' + mot + (n > 1 ? 's' : '');
 const pctText = v => (v > 0 ? '+' : '') + NUM.format(v) + ' %';
-const gapName = (r, avecGrade) => r.Job_Family + (avecGrade ? ' · grade ' + r.Grade : '');
+const gapName = (r, avecNiveau) => r.Job_Family + (avecNiveau ? ' · niveau ' + r.Niveau : '');
 // La même échelle pour toutes les vues : deux barres de même longueur montrent le même écart, d'un
-// grade à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
+// niveau à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
 // arrondir à 20 près garde des graduations régulières (-40 %, -20 %, 0 %...).
 const gapMax = Math.ceil(Math.max(...GAP.map(r => Math.abs(r.Ecart_pct))) * 1.2 / 20) * 20;
 const gapViews = [{{ name: 'Les 10 plus marqués', rows: [...GAP].sort((a, b) => Math.abs(b.Ecart_pct) - Math.abs(a.Ecart_pct)).slice(0, 10) }}]
-  .concat([...new Set(GAP.map(r => r.Grade))].sort((a, b) => a - b).map(g => ({{
-    // Dans un grade, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
-    name: 'Grade ' + g, grade: g, rows: GAP.filter(r => r.Grade === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
+  .concat([...new Set(GAP.map(r => r.Niveau))].sort((a, b) => a - b).map(g => ({{
+    // Dans un niveau, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
+    name: 'Niveau ' + g, niveau: g, rows: GAP.filter(r => r.Niveau === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
   }})));
 let gapRows = [];
 
@@ -844,19 +844,19 @@ const gapChart = new Chart(document.getElementById('chart-gap'), {{
     }},
     onClick: (evt, els) => pick(els, i => {{
       const r = gapRows[i];
-      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Grade] === r.Grade);
+      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Niveau] === r.Niveau);
     }}),
   }}),
 }});
 
 function showGapView(view, button) {{
   gapRows = view.rows;
-  // Deux lignes sous chaque barre : le métier (et le grade s'ils sont mélangés), puis les effectifs.
-  gapChart.data.labels = gapRows.map(r => [gapName(r, !view.grade), plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme')]);
+  // Deux lignes sous chaque barre : le métier (et le niveau s'ils sont mélangés), puis les effectifs.
+  gapChart.data.labels = gapRows.map(r => [gapName(r, !view.niveau), plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme')]);
   gapChart.data.datasets[0].data = gapRows.map(r => r.Ecart_pct);
   // Ardoise = hommes mieux payés, or = femmes mieux payées.
   gapChart.data.datasets[0].backgroundColor = gapRows.map(r => r.Ecart_pct > 0 ? '{SLATE}' : '{GOLD}');
-  gapChart.options.scales.y.title.text = view.grade ? 'Métiers du grade ' + view.grade : 'Métier et grade';
+  gapChart.options.scales.y.title.text = view.niveau ? 'Métiers du niveau ' + view.niveau : 'Métier et niveau';
   gapChart.update();
   viewButtons.forEach(b => b.setAttribute('aria-pressed', b === button));
 }}

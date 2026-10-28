@@ -9,7 +9,7 @@ LES GROUPES DE COLLÈGUES (« COHORTES ») : former les groupes et mesurer l'éc
 -------------------------
 
 Pour savoir si un salaire est anormal, le programme le compare, entre autres, aux salaires des
-collègues COMPARABLES : les personnes qui ont le même grade, le même métier et une ancienneté proche.
+collègues COMPARABLES : les personnes qui ont le même niveau, le même métier et une ancienneté proche.
 Un tel groupe de collègues comparables s'appelle une « cohorte ».
 
 Ce fichier fait deux choses :
@@ -35,10 +35,10 @@ très bien ou très mal payée pour tout fausser.)
 
 Pour chaque salarié, on essaie ces groupes, dans cet ordre (réglable dans cohort_widening_steps,
 dans config/rules.yaml) :
-1. même grade + même métier + même tranche d'ancienneté (0-2 ans, 3-5 ans, 6-12 ans, 13-20 ans,
+1. même niveau + même métier + même tranche d'ancienneté (0-2 ans, 3-5 ans, 6-12 ans, 13-20 ans,
    plus de 20 ans) ;
-2. même grade + même métier, toutes anciennetés confondues ;
-3. même grade seulement, tous métiers confondus.
+2. même niveau + même métier, toutes anciennetés confondues ;
+3. même niveau seulement, tous métiers confondus.
 On prend le premier qui compte au moins 15 personnes.
 
 
@@ -64,10 +64,10 @@ minimum, et sans aucun message.
   prépare les vrais fichiers du dossier input/ (avec anomaly_pretraitement.py) et forme les groupes.
   Les 10 premières lignes s'affichent, et le DataFrame complet est enregistré dans
   output/cohortes/cohortes_salaries.xlsx, à ouvrir avec Excel.
-- Dans un éditeur de code, poser un point d'arrêt dans la boucle « for position, niveau in ... » de
+- Dans un éditeur de code, poser un point d'arrêt dans la boucle « for position, etape in ... » de
   la recette former_cohortes, et regarder trois choses à chaque tour :
-  cle (le nom du groupe de chaque salarié à ce niveau), taille (le nombre de personnes de ce groupe),
-  et choisis (vrai pour les salariés qui reçoivent leur groupe à ce niveau).
+  cle (le nom du groupe de chaque salarié à cette étape), taille (le nombre de personnes de ce groupe),
+  et choisis (vrai pour les salariés qui reçoivent leur groupe à cette étape).
 """
 
 
@@ -123,9 +123,9 @@ def robust_zscore(values: pd.Series) -> pd.Series:
 # Former les groupes et mesurer l'écart de chaque salarié
 # -----------------------------------------------------------------------------
 
-# Les noms lisibles des colonnes qui définissent les groupes, pour écrire le niveau retenu en clair
-# (par exemple « grade + métier » au lieu de « Grade|Job_Family »).
-NOMS_LISIBLES = {"Grade": "grade", "Job_Family": "métier", "Anciennete_Bucket": "tranche d'ancienneté"}
+# Les noms lisibles des colonnes qui définissent les groupes, pour écrire en clair les critères du
+# groupe retenu (par exemple « niveau + métier » au lieu de « Niveau|Job_Family »).
+NOMS_LISIBLES = {"Niveau": "niveau", "Job_Family": "métier", "Anciennete_Bucket": "tranche d'ancienneté"}
 
 
 def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
@@ -138,7 +138,7 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
     Ce qu'elle rend : le DataFrame des salariés, COMPLÉTÉ des colonnes ci-dessous. C'est une copie : le
     DataFrame df qu'on lui donne n'est pas modifié. Colonnes ajoutées :
-    - Niveau_Cohorte : le niveau de groupe retenu, écrit en clair, par exemple « grade + métier » ;
+    - Criteres_Cohorte : les critères du groupe retenu, écrits en clair, par exemple « niveau + métier » ;
     - Cohort_Key : le nom du groupe retenu, par exemple « 3|FINANCE|6-12 » ou « 3|FINANCE » ;
     - Cohort_Size : le nombre de personnes dans ce groupe ;
     - Cohort_Median : le salaire du milieu du groupe (la médiane) ;
@@ -147,13 +147,13 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     - Cohort_P25 et Cohort_P75 : les salaires en dessous desquels se trouvent 25 % et 75 % des
       personnes du groupe ;
     - PeerZ : l'écart du salarié par rapport à son groupe (recette robust_zscore, juste au-dessus)."""
-    # Les niveaux de groupe, du plus précis au plus large, lus dans le fichier de règles
-    # (cohort_widening_steps). S'ils n'y sont pas, on prend ceux-ci. Chaque niveau est une liste de
-    # noms de colonnes séparés par « | » : « Grade|Job_Family » veut dire « même grade et même métier ».
+    # Les étapes, du groupe le plus précis au plus large, lues dans le fichier de règles
+    # (cohort_widening_steps). Si elles n'y sont pas, on prend celles-ci. Chaque étape est une liste de
+    # noms de colonnes séparés par « | » : « Niveau|Job_Family » veut dire « même niveau et même métier ».
     default_steps = [
-        "Grade|Job_Family|Anciennete_Bucket",
-        "Grade|Job_Family",
-        "Grade"
+        "Niveau|Job_Family|Anciennete_Bucket",
+        "Niveau|Job_Family",
+        "Niveau"
     ]
     steps = rule_params.get("cohort_widening_steps", default_steps)
     # La taille minimale d'un groupe, lue dans le fichier de règles (15 si elle n'y est pas).
@@ -162,49 +162,49 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
     # Le DataFrame rendu est une copie du DataFrame des salariés, avec toutes ses colonnes (« .copy() » :
     # df ne sera pas modifié). Au départ, personne n'a encore de groupe : on ajoute les colonnes des
-    # groupes, vides (np.nan veut dire « case vide »). Niveau_Cohorte et Cohort_Key contiendront du
+    # groupes, vides (np.nan veut dire « case vide »). Criteres_Cohorte et Cohort_Key contiendront du
     # texte (dtype=object).
     cohortes = df.copy()
-    for colonne in ["Niveau_Cohorte", "Cohort_Key"]:
+    for colonne in ["Criteres_Cohorte", "Cohort_Key"]:
         cohortes[colonne] = pd.Series(np.nan, index=df.index, dtype=object)
     for colonne in ["Cohort_Size", "Cohort_Median", "Cohort_Mean", "Cohort_STD", "Cohort_P25", "Cohort_P75", "PeerZ"]:
         cohortes[colonne] = np.nan
 
-    # On essaie les niveaux un par un, du plus précis au plus large. « enumerate » donne à la fois le
-    # numéro du niveau (position : 0, 1, 2) et le niveau lui-même.
-    for position, niveau in enumerate(steps):
-        # Les colonnes qui définissent le groupe à ce niveau, par exemple ["Grade", "Job_Family"].
-        colonnes = niveau.split("|")
-        # Le nom du groupe de chaque salarié à ce niveau : ses valeurs dans ces colonnes, collées avec
+    # On essaie les étapes une par une, du groupe le plus précis au plus large. « enumerate » donne à
+    # la fois le numéro de l'étape (position : 0, 1, 2) et l'étape elle-même.
+    for position, etape in enumerate(steps):
+        # Les colonnes qui définissent le groupe à cette étape, par exemple ["Niveau", "Job_Family"].
+        colonnes = etape.split("|")
+        # Le nom du groupe de chaque salarié à cette étape : ses valeurs dans ces colonnes, collées avec
         # des « | », par exemple « 3|FINANCE|6-12 ». (astype(str) écrit chaque valeur en texte ; une
         # case vide devient le texte « nan », et les personnes concernées forment leur propre groupe.)
         cle = df[colonnes].astype(str).agg("|".join, axis=1)
-        # Les salariés rangés par groupe COMPLET à ce niveau (tous ceux qui ont le même nom de groupe).
+        # Les salariés rangés par groupe COMPLET à cette étape (tous ceux qui ont le même nom de groupe).
         groupes = df.groupby(cle)
-        # Pour chaque salarié, le nombre de personnes de son groupe à ce niveau. « transform » recopie
+        # Pour chaque salarié, le nombre de personnes de son groupe à cette étape. « transform » recopie
         # le résultat de chaque groupe sur chacune de ses lignes.
         taille = groupes["Matricule"].transform("count")
 
-        # Qui reçoit son groupe à ce niveau ?
-        # - sans_groupe : les salariés qui n'en ont pas encore reçu à un niveau plus précis ;
-        # - dernier_niveau : vrai si c'est le niveau le plus large (le dernier de la liste) ;
-        # - choisis : les salariés sans groupe dont le groupe à ce niveau compte au moins min_size
-        #   personnes. Au dernier niveau, on prend TOUS ceux qui restent, même si leur groupe est
+        # Qui reçoit son groupe à cette étape ?
+        # - sans_groupe : les salariés qui n'en ont pas encore reçu à une étape plus précise ;
+        # - derniere_etape : vrai si c'est l'étape la plus large (la dernière de la liste) ;
+        # - choisis : les salariés sans groupe dont le groupe à cette étape compte au moins min_size
+        #   personnes. À la dernière étape, on prend TOUS ceux qui restent, même si leur groupe est
         #   petit, car il n'existe rien de plus large (un avertissement le signale à la fin).
         sans_groupe = cohortes["Cohort_Key"].isna()
-        dernier_niveau = position == len(steps) - 1
-        choisis = sans_groupe if dernier_niveau else sans_groupe & (taille >= min_size)
-        # Personne à placer à ce niveau : on passe directement au niveau suivant (« continue »).
+        derniere_etape = position == len(steps) - 1
+        choisis = sans_groupe if derniere_etape else sans_groupe & (taille >= min_size)
+        # Personne à placer à cette étape : on passe directement à l'étape suivante (« continue »).
         if not choisis.any():
             continue
 
         # Pour les salariés choisis, on remplit leurs colonnes (« cohortes.loc[choisis, ...] » veut
         # dire « seulement sur les lignes des salariés choisis »). Toutes les statistiques sont
-        # calculées sur le groupe ENTIER à ce niveau, même si certains de ses membres ont reçu, eux, un
+        # calculées sur le groupe ENTIER à cette étape, même si certains de ses membres ont reçu, eux, un
         # groupe plus précis : c'est ce qui fait que chacun est comparé à tous ses collègues du groupe.
         salaires = groupes["Fixe_Annuel_MAD"]
-        # Le niveau retenu, écrit en clair (par exemple « grade + métier »).
-        cohortes.loc[choisis, "Niveau_Cohorte"] = " + ".join(NOMS_LISIBLES.get(c, c) for c in colonnes)
+        # Les critères du groupe retenu, écrits en clair (par exemple « niveau + métier »).
+        cohortes.loc[choisis, "Criteres_Cohorte"] = " + ".join(NOMS_LISIBLES.get(c, c) for c in colonnes)
         # Le nom et la taille du groupe retenu.
         cohortes.loc[choisis, "Cohort_Key"] = cle[choisis]
         cohortes.loc[choisis, "Cohort_Size"] = taille[choisis]
@@ -221,14 +221,14 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
     # À ce stade, tout le monde a un groupe : la taille redevient un nombre entier (15 et non 15,0).
     cohortes["Cohort_Size"] = cohortes["Cohort_Size"].astype(int)
-    # On prévient si certains salariés n'ont trouvé qu'un groupe trop petit, même au niveau le plus
-    # large (par exemple un grade qui ne compte que 8 personnes en tout) : leur comparaison aux
+    # On prévient si certains salariés n'ont trouvé qu'un groupe trop petit, même à l'étape la plus
+    # large (par exemple un niveau qui ne compte que 8 personnes en tout) : leur comparaison aux
     # collègues est peu fiable.
     trop_petits = cohortes["Cohort_Size"] < min_size
     if trop_petits.any():
         print(
             f"[WARN] {int(trop_petits.sum())} salarié(s) dans un groupe de collègues de moins de {min_size} "
-            "personnes, même au niveau le plus large - comparaison aux collègues peu fiable pour eux.",
+            "personnes, même à l'étape la plus large - comparaison aux collègues peu fiable pour eux.",
             file=sys.stderr,
         )
     # On rend le DataFrame des salariés, complété de leur groupe.

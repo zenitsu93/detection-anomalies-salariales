@@ -54,15 +54,15 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
 
     Étapes :
     1. Lire les trois fichiers Excel (.xlsx).
-    2. Retirer les doublons : matricule en double chez les salariés, métier + grade en double dans la
+    2. Retirer les doublons : matricule en double chez les salariés, métier + niveau en double dans la
        grille et le marché (le premier est gardé).
     3. Ajouter la tranche d'ancienneté de chaque salarié (Anciennete_Bucket).
     4. Ajouter à chaque salarié la fourchette de sa grille (Min, Mid, Max) et la médiane du marché
-       (Market_Median), retrouvées grâce à son métier (Job_Family) et son grade (Grade).
+       (Market_Median), retrouvées grâce à son métier (Job_Family) et son niveau (Niveau).
     5. Calculer les ratios :
        - CompaRatio = salaire / Mid : 1 veut dire « payé au milieu de la fourchette » ;
        - RangePenetration = (salaire - Min) / (Max - Min) : 0 veut dire « au Min », 1 « au Max » ;
-       - MarketRatio = salaire / médiane du marché : 1 veut dire « payé au niveau du marché ».
+       - MarketRatio = salaire / médiane du marché : 1 veut dire « payé comme le marché ».
     """
     # 1. Lecture des trois fichiers. Ce sont des fichiers Excel : pas de séparateur ni d'encodage à
     # préciser, les nombres arrivent déjà comme des nombres.
@@ -71,10 +71,10 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     market = pd.read_excel(chemin_market)
 
     # 2. Doublons, dans les trois fichiers : on garde toujours le premier.
-    cles = ["Job_Family", "Grade"]
+    cles = ["Job_Family", "Niveau"]
     # Salariés : un même matricule présent deux fois.
     emp = emp.drop_duplicates(subset="Matricule")
-    # Grille et marché : un même métier + grade présent deux fois. Sinon, chaque salarié concerné
+    # Grille et marché : un même métier + niveau présent deux fois. Sinon, chaque salarié concerné
     # serait recopié deux fois dans le DataFrame à l'étape 4.
     bands = bands.drop_duplicates(subset=cles)
     market = market.drop_duplicates(subset=cles)
@@ -83,10 +83,10 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     # salarié aux collègues d'ancienneté proche.
     emp["Anciennete_Bucket"] = emp["Anciennete"].apply(bucket_anciennete)
 
-    # 4. Grille et marché, retrouvés par métier + grade.
+    # 4. Grille et marché, retrouvés par métier + niveau.
     grille = bands[cles + ["Min", "Mid", "Max"]]
     marche = market[cles + ["Median"]].rename(columns={"Median": "Market_Median"})
-    # how="left" : on garde tous les salariés, même ceux dont le métier + grade n'existe pas dans la
+    # how="left" : on garde tous les salariés, même ceux dont le métier + niveau n'existe pas dans la
     # grille ou le marché (leurs colonnes Min, Mid, Max ou Market_Median restent alors vides).
     df = emp.merge(grille, on=cles, how="left").merge(marche, on=cles, how="left")
 

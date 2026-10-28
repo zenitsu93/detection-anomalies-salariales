@@ -17,14 +17,14 @@ from sklearn.model_selection import train_test_split
 from anomaly_pretraitement import preparer_employes
 
 # Ce qu'on connaît d'un salarié déjà dans l'entreprise.
-COLONNES = ["Job_Family", "Grade", "Anciennete", "Age", "Competence_N1", "Positionnement_9BOX",
+COLONNES = ["Job_Family", "Niveau", "Anciennete", "Age", "Competence_N1", "Positionnement_9BOX",
             "Hot_job"]
 
 
 def entrainer(df: pd.DataFrame):
-    # Métier et grade en colonnes 0/1
-    X = pd.get_dummies(df[COLONNES], columns=["Job_Family", "Grade"], dtype=float)
-    # Log du salaire : l'écart se lit en %, comparable d'un grade à l'autre
+    # Métier et niveau en colonnes 0/1
+    X = pd.get_dummies(df[COLONNES], columns=["Job_Family", "Niveau"], dtype=float)
+    # Log du salaire : l'écart se lit en %, comparable d'un niveau à l'autre
     Y = np.log(df["Fixe_Annuel_MAD"])
 
     # 20 % des salariés mis de côté : le modèle ne les voit pas en apprenant, on vérifie sur eux
@@ -57,7 +57,7 @@ def predire(profils: pd.DataFrame, reg: dict) -> pd.DataFrame:
     """profils : les colonnes du modèle."""
     profils = profils.copy()
     # Mêmes colonnes 0/1 qu'à l'entraînement
-    X = pd.get_dummies(profils[COLONNES], columns=["Job_Family", "Grade"],
+    X = pd.get_dummies(profils[COLONNES], columns=["Job_Family", "Niveau"],
                        dtype=float).reindex(columns=reg["colonnes_X"], fill_value=0)
     log_predit = reg["modele"].predict(X)
     bas, haut = reg["fourchette"]

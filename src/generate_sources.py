@@ -6,11 +6,11 @@ Tous les parametres ajustables sont regroupes dans la section PARAMETRES.
 Pour passer de l'echantillon a la volumetrie cible : N_EMPLOYES = 10000.
 
 Vue d'ensemble de ce que fait le script :
-  1. BANDS    : pour chaque famille de metiers et chaque grade (1 a 7), calcule
+  1. BANDS    : pour chaque famille de metiers et chaque niveau (1 a 7), calcule
                 une grille salariale interne (Min / Mid / Max).
-  2. MARKET   : pour les memes couples famille x grade, calcule les references
+  2. MARKET   : pour les memes couples famille x niveau, calcule les references
                 du marche (P25 / Median / P75), derivees de la grille interne.
-  3. EMPLOYES : genere des employes fictifs (famille, grade, poste, salaire,
+  3. EMPLOYES : genere des employes fictifs (famille, niveau, poste, salaire,
                 age, anciennete, sexe, etc.) dont le salaire tombe dans la
                 bande. Les postes sont de simples numeros (JT0001, JT0002...)
                 et chacun porte un Hot_job de 0 a 2. Chaque employe recoit
@@ -37,8 +37,8 @@ import pandas as pd
 SEED = 20260909
 # Nombre total d'employes a generer.
 N_EMPLOYES = 10000            # <-- mettre 10000 pour la volumetrie cible
-# Liste des grades [1, 2, 3, 4, 5, 6, 7] ; range(1, 8) s'arrete avant 8.
-GRADES = list(range(1, 8))  # 1 = plus eleve, 7 = plus bas
+# Liste des niveaux [1, 2, 3, 4, 5, 6, 7] ; range(1, 8) s'arrete avant 8.
+NIVEAUX = list(range(1, 8))  # 1 = plus eleve, 7 = plus bas
 # Pays unique de toutes les lignes generees.
 PAYS = "Maroc"
 # Devise des salaires (dirham marocain).
@@ -53,8 +53,8 @@ FAMILLES = [
     "TRANSFORMATION", "JURIDIQUE", "TRANSVERSE",
 ]
 
-# Ancrage : valeur du Mid au grade 7.
-# C'est le point de depart de la grille : tous les autres grades sont
+# Ancrage : valeur du Mid au niveau 7.
+# C'est le point de depart de la grille : tous les autres niveaux sont
 # calcules a partir de cette valeur en multipliant par COEF.
 ANCRAGE_G7 = {
     "AUDIT": 126.0,
@@ -76,10 +76,10 @@ ANCRAGE_G7 = {
 # Information documentaire : cette variable n'est pas utilisee dans le calcul.
 ANCRAGE_FOURNI = {"AUDIT", "IT"}
 
-# Coefficient de progression inter-grade, fixe par l'ancrage du grade 7 :
+# Coefficient de progression d'un niveau a l'autre, fixe par l'ancrage du niveau 7 :
 # les familles ancrees a 126 prennent 1.30, celles ancrees a 200 (IT, DATA) 1.25.
-# Exemple : avec 1.30, le Mid du grade 6 = Mid du grade 7 x 1.30,
-# le Mid du grade 5 = Mid du grade 6 x 1.30, etc.
+# Exemple : avec 1.30, le Mid du niveau 6 = Mid du niveau 7 x 1.30,
+# le Mid du niveau 5 = Mid du niveau 6 x 1.30, etc.
 COEF_PAR_ANCRAGE = {126.0: 1.30, 200.0: 1.25}
 # Coefficient de chaque famille, lu a partir de son ancrage : on ne peut pas
 # changer l'ancrage d'une famille sans que son coefficient suive.
@@ -110,7 +110,7 @@ POLE_MAP = {
     "TRANSFORMATION": 5,
     "TRANSVERSE": None,  # aleatoire
 }
-# Nombre d'entites de niveau 2 (sous-directions) dans chaque pole.
+# Nombre d'entites N2 (sous-directions) dans chaque pole.
 # Ex. le pole 1 contient les entites P1-E01 a P1-E15.
 N_ENTITES_N2 = {1: 15, 2: 7, 3: 20, 4: 13, 5: 17}
 
@@ -137,9 +137,9 @@ HOT_JOB_PARTS = {0: 1 / 3, 1: 1 / 3, 2: 1 / 3}
 # le 9-Box evalue une personne). Part des employes pour chaque case (total = 100%).
 PARTS_9BOX = {0: 0.14, 1: 0.06, 2: 0.35, 3: 0.03, 4: 0.21, 5: 0.14, 6: 0.07}
 
-# Distribution des grades : identique pour toutes les familles (pyramide)
-# Probabilite d'avoir le grade 1, 2, ..., 7 (peu de directeurs, beaucoup de juniors).
-POIDS_GRADE = np.array([0.04, 0.07, 0.11, 0.17, 0.22, 0.22, 0.17])
+# Distribution des niveaux : identique pour toutes les familles (pyramide)
+# Probabilite d'avoir le niveau 1, 2, ..., 7 (peu de directeurs, beaucoup de juniors).
+POIDS_NIVEAU = np.array([0.04, 0.07, 0.11, 0.17, 0.22, 0.22, 0.17])
 
 # Age : loi normale de moyenne 37 ans, ecart-type 8, bornee entre 20 et 60.
 AGE_MU, AGE_SD, AGE_MIN, AGE_MAX = 37, 8, 20, 60
@@ -156,15 +156,15 @@ COMP_MU, COMP_SD = 3.35, 0.60
 # ----------------------------------------------------------------------------
 # 1. BANDS
 # ----------------------------------------------------------------------------
-def mid_par_grade(famille):
-    """Mid(grade) = Mid(grade+1) x coef, en remontant du grade 7 au grade 1."""
+def mid_par_niveau(famille):
+    """Mid(niveau) = Mid(niveau+1) x coef, en remontant du niveau 7 au niveau 1."""
     # Recupere le coefficient de progression de la famille (ex. 1.30).
     coef = COEF[famille]
-    # Initialise le dictionnaire {grade: mid} avec la valeur d'ancrage du grade 7.
+    # Initialise le dictionnaire {niveau: mid} avec la valeur d'ancrage du niveau 7.
     mids = {7: ANCRAGE_G7[famille]}
-    # Parcourt les grades 6, 5, 4, 3, 2, 1 (range(6, 0, -1) descend jusqu'a 1).
+    # Parcourt les niveaux 6, 5, 4, 3, 2, 1 (range(6, 0, -1) descend jusqu'a 1).
     for g in range(6, 0, -1):
-        # Le Mid du grade g = Mid du grade juste en dessous (g + 1) x coef.
+        # Le Mid du niveau g = Mid du niveau juste en dessous (g + 1) x coef.
         mids[g] = mids[g + 1] * coef
     # Renvoie par ex. {7: 126, 6: 163.8, 5: 212.94, ...}.
     return mids
@@ -199,12 +199,12 @@ def repartir(n_total, poids_dict):
 
 # attribuer_postes : cree les postes (Job_Title) et y range les employes.
 # Un poste est un simple numero. Il appartient a une seule famille et un seul
-# grade, sauf le poste commun RETAIL BANKING qui melange les grades.
-# Les N_POSTES postes sont partages entre les couples famille x grade selon
+# niveau, sauf le poste commun RETAIL BANKING qui melange les niveaux.
+# Les N_POSTES postes sont partages entre les couples famille x niveau selon
 # leur effectif : une cellule de 400 employes a plus de postes qu'une de 10.
 # Chaque poste recoit au moins un employe, pour retrouver exactement
 # N_POSTES intitules differents dans employes.xlsx.
-def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
+def attribuer_postes(fam_emp, niveau_emp, commun_emp, rng):
     """Renvoie le numero de poste (1, 2, ...) de chaque employe."""
     # Numero de poste de chaque employe, rempli au fur et a mesure.
     poste_emp = [0] * len(fam_emp)
@@ -218,10 +218,10 @@ def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
         for k in idx_commun:
             poste_emp[k] = numero
 
-    # Regroupe les autres employes par cellule famille x grade :
-    # {("IT", 5): [positions des employes IT de grade 5], ...}.
+    # Regroupe les autres employes par cellule famille x niveau :
+    # {("IT", 5): [positions des employes IT de niveau 5], ...}.
     cellules = {}
-    for k, (fam, g, commun) in enumerate(zip(fam_emp, grade_emp, commun_emp)):
+    for k, (fam, g, commun) in enumerate(zip(fam_emp, niveau_emp, commun_emp)):
         if not commun:
             # setdefault cree la liste vide la premiere fois que la cellule apparait.
             cellules.setdefault((fam, g), []).append(k)
@@ -235,7 +235,7 @@ def attribuer_postes(fam_emp, grade_emp, commun_emp, rng):
     supplement = repartir(n_postes - len(cellules),
                           {c: len(idx) - 1 for c, idx in cellules.items()})
 
-    # Parcourt les cellules dans l'ordre (famille, puis grade) pour numeroter les postes.
+    # Parcourt les cellules dans l'ordre (famille, puis niveau) pour numeroter les postes.
     for cellule in sorted(cellules):
         # Nombre de postes de la cellule, numerotes a la suite des precedents.
         n_cell = 1 + supplement[cellule]
@@ -304,21 +304,21 @@ def main():
     # ------------------------------------------------------------------
     # 1. BANDS
     # ------------------------------------------------------------------
-    # Liste qui va recevoir une ligne (dictionnaire) par couple famille x grade.
+    # Liste qui va recevoir une ligne (dictionnaire) par couple famille x niveau.
     bands_rows = []
     # Boucle sur chacune des 13 familles.
     for fam in FAMILLES:
-        # Calcule les Mid des grades 1 a 7 pour cette famille.
-        mids = mid_par_grade(fam)
-        # Boucle sur chacun des 7 grades.
-        for g in GRADES:
-            # Mid (point milieu) de la bande pour ce grade.
+        # Calcule les Mid des niveaux 1 a 7 pour cette famille.
+        mids = mid_par_niveau(fam)
+        # Boucle sur chacun des 7 niveaux.
+        for g in NIVEAUX:
+            # Mid (point milieu) de la bande pour ce niveau.
             mid = mids[g]
             # Ajoute une ligne a la table des bandes.
             bands_rows.append({
                 "Pays": PAYS,
                 "Job_Family": fam,
-                "Grade": g,
+                "Niveau": g,
                 # Borne basse : Mid x 0.67, arrondie a 2 decimales.
                 "Min": round(mid * MIN_RATIO, 2),
                 # Point milieu arrondi a 2 decimales.
@@ -333,21 +333,21 @@ def main():
     # ------------------------------------------------------------------
     # 2. MARKET
     # ------------------------------------------------------------------
-    # Liste qui va recevoir une ligne par couple famille x grade pour le marche.
+    # Liste qui va recevoir une ligne par couple famille x niveau pour le marche.
     market_rows = []
     # Boucle sur chacune des 13 familles.
     for fam in FAMILLES:
         # Recalcule les Mid internes de la famille (base de la reference marche).
-        mids = mid_par_grade(fam)
-        # Boucle sur chacun des 7 grades.
-        for g in GRADES:
+        mids = mid_par_niveau(fam)
+        # Boucle sur chacun des 7 niveaux.
+        for g in NIVEAUX:
             # Mediane du marche = Mid interne x decalage marche (1.00 par defaut).
             med = mids[g] * MARKET_SHIFT[fam]
             # Ajoute une ligne a la table marche.
             market_rows.append({
                 "Pays": PAYS,
                 "Job_Family": fam,
-                "Grade": g,
+                "Niveau": g,
                 # 25e percentile du marche : Median x 0.66.
                 "P25": round(med * P25_RATIO, 2),
                 # Mediane du marche.
@@ -366,20 +366,20 @@ def main():
     # (ex. {"RETAIL BANKING": 5000, "IT": 1200, ...} pour N_EMPLOYES = 10000).
     effectifs = repartir(N_EMPLOYES, EFFECTIFS_10K)
 
-    # 3a. Famille et grade de chaque employe
+    # 3a. Famille et niveau de chaque employe
     # Trois listes lues en parallele : la position k decrit le k-ieme employe
-    # (sa famille, son grade, et s'il occupe le poste commun RETAIL BANKING).
+    # (sa famille, son niveau, et s'il occupe le poste commun RETAIL BANKING).
     # On remplit d'abord ces listes pour tout le monde : il faut connaitre
-    # l'effectif de chaque couple famille x grade avant de creer les postes.
-    fam_emp, grade_emp, commun_emp = [], [], []
+    # l'effectif de chaque couple famille x niveau avant de creer les postes.
+    fam_emp, niveau_emp, commun_emp = [], [], []
     # Boucle sur chaque famille et son nombre d'employes n.
     for fam, n in effectifs.items():
         # Si la famille n'a aucun employe (possible avec un petit N_EMPLOYES), on passe.
         if n == 0:
             continue
-        # Tire au hasard n grades selon la pyramide POIDS_GRADE.
+        # Tire au hasard n niveaux selon la pyramide POIDS_NIVEAU.
         # La division par la somme garantit que les probabilites totalisent 1.
-        grades_fam = rng.choice(GRADES, size=n, p=POIDS_GRADE / POIDS_GRADE.sum())
+        niveaux_fam = rng.choice(NIVEAUX, size=n, p=POIDS_NIVEAU / POIDS_NIVEAU.sum())
 
         # 40% des effectifs RETAIL BANKING partagent un meme poste
         if fam == "RETAIL BANKING":
@@ -395,14 +395,14 @@ def main():
         # Ajoute les n employes de la famille aux trois listes.
         for i in range(n):
             fam_emp.append(fam)
-            # Grade converti en entier Python standard.
-            grade_emp.append(int(grades_fam[i]))
+            # Niveau converti en entier Python standard.
+            niveau_emp.append(int(niveaux_fam[i]))
             # True si cet employe fait partie des 40% au poste commun.
             commun_emp.append(i in idx_unique)
 
     # 3b. Postes (Job_Title) et Hot_job
     # Numero de poste de chaque employe, dans le meme ordre que fam_emp.
-    poste_emp = attribuer_postes(fam_emp, grade_emp, commun_emp, rng)
+    poste_emp = attribuer_postes(fam_emp, niveau_emp, commun_emp, rng)
     # Nombre d'employes par poste, ex. {1: 2000, 2: 5, 3: 3, ...}.
     taille_poste = Counter(poste_emp)
     # Hot_job de chaque poste, ex. {1: 0, 2: 2, 3: 1, ...}.
@@ -421,19 +421,19 @@ def main():
     emp_rows = []
     # Compteur servant a numeroter les matricules (Mat00001, Mat00002, ...).
     matricule = 1
-    # Boucle sur chaque employe : sa famille, son grade, son numero de poste et sa case 9-Box.
-    for fam, g, poste, box in zip(fam_emp, grade_emp, poste_emp, box_emp):
+    # Boucle sur chaque employe : sa famille, son niveau, son numero de poste et sa case 9-Box.
+    for fam, g, poste, box in zip(fam_emp, niveau_emp, poste_emp, box_emp):
         # Pole / entite
         # Pole de la famille ; si None (TRANSVERSE), on tire un pole entre 1 et 5.
         # (rng.integers(1, 6) renvoie un entier de 1 a 5, 6 exclu.)
         pole = POLE_MAP[fam] or int(rng.integers(1, 6))
-        # Tire une entite de niveau 2 au hasard dans ce pole, ex. "P3-E07".
+        # Tire une entite N2 au hasard dans ce pole, ex. "P3-E07".
         # :02d ecrit le numero sur 2 chiffres avec un zero devant si besoin.
         entite = f"P{pole}-E{int(rng.integers(1, N_ENTITES_N2[pole] + 1)):02d}"
 
-        # Salaire dans la fourchette [Min, Max] de la bande Famille x Grade
-        # Selectionne dans bands la ligne correspondant a cette famille et ce grade.
-        b = bands[(bands.Job_Family == fam) & (bands.Grade == g)].iloc[0]
+        # Salaire dans la fourchette [Min, Max] de la bande Famille x Niveau
+        # Selectionne dans bands la ligne correspondant a cette famille et ce niveau.
+        b = bands[(bands.Job_Family == fam) & (bands.Niveau == g)].iloc[0]
         # Tire un salaire uniformement entre Min et Max, arrondi a 2 decimales.
         fixe = round(float(rng.uniform(b.Min, b.Max)), 2)
 
@@ -454,15 +454,15 @@ def main():
             "Matricule": f"Mat{matricule:05d}",
             # Nom anonymise (donnees fictives).
             "Nom": "nan",
-            # Entite de niveau 1 = le pole, ex. "Pole 3".
+            # Entite N1 = le pole, ex. "Pole 3".
             "Entite_N1": f"Pole {pole}",
-            # Entite de niveau 2 tiree plus haut, ex. "P3-E07".
+            # Entite N2 tiree plus haut, ex. "P3-E07".
             "Entite_N2": entite,
             "Pays": PAYS,
             "Job_Family": fam,
             # Numero de poste sur 4 chiffres, ex. "JT0042".
             "Job_Title": f"JT{poste:04d}",
-            "Grade": g,
+            "Niveau": g,
             # Salaire fixe annuel en MAD.
             "Fixe_Annuel_MAD": fixe,
             "Age": age,
@@ -530,8 +530,8 @@ def main():
     print("\nControles :")
     # Verifie que TOUS les employes respectent Age - Anciennete >= 18.
     print("  Age - Anciennete >= 18 :", bool(((employes.Age - employes.Anciennete) >= 18).all()))
-    # Joint chaque employe a sa bande (meme pays, famille, grade) pour recuperer Min et Max.
-    ctrl = employes.merge(bands, on=["Pays", "Job_Family", "Grade"])
+    # Joint chaque employe a sa bande (meme pays, famille, niveau) pour recuperer Min et Max.
+    ctrl = employes.merge(bands, on=["Pays", "Job_Family", "Niveau"])
     # Verifie que TOUS les salaires sont compris entre Min et Max de leur bande.
     print("  Salaire dans [Min, Max] :",
           bool(((ctrl.Fixe_Annuel_MAD >= ctrl.Min) & (ctrl.Fixe_Annuel_MAD <= ctrl.Max)).all()))

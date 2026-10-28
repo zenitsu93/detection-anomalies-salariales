@@ -8,7 +8,7 @@ rules:
     compa_ratio: 20        # CompaRatio hors des bornes [compa_ratio_low, compa_ratio_high]
     market_gap: 15         # MarketRatio hors des bornes [market_low, market_high]
     peer_outlier: 15       # |PeerZ| >= peer_z_threshold_major
-    min_salary: 20         # salaire sous le plancher de son grade (min_salary_by_grade)
+    min_salary: 20         # salaire sous le plancher de son niveau (min_salary_by_niveau)
 
   # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
   # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
@@ -39,17 +39,17 @@ rules:
   compa_ratio_low: 0.85
   compa_ratio_high: 1.15
 
-  # Règle marché = salaire ÷ médiane du marché (même métier, même grade). En dessous de 0.90 ou
+  # Règle marché = salaire ÷ médiane du marché (même métier, même niveau). En dessous de 0.90 ou
   # au-dessus de 1.20 : alerte.
   market_low: 0.90
   market_high: 1.20
 
-  # Règle « salaire minimum » : salaire annuel minimum de chaque grade (1 à 7), en kMAD comme
-  # Fixe_Annuel_MAD. Ce plancher vaut pour tous les métiers d'un même grade, alors que la grille
+  # Règle « salaire minimum » : salaire annuel minimum de chaque niveau (1 à 7), en kMAD comme
+  # Fixe_Annuel_MAD. Ce plancher vaut pour tous les métiers d'un même niveau, alors que la grille
   # interne (bands.xlsx) change d'un métier à l'autre. Un salaire strictement sous le plancher de son
-  # grade lève l'alerte MIN_SALARY : grade 5, plancher 140 : un salaire de 135 la lève, 140 non.
-  # Un grade absent de cette liste n'est pas contrôlé. Valeurs à ajuster selon la politique salariale.
-  min_salary_by_grade:
+  # niveau lève l'alerte MIN_SALARY : niveau 5, plancher 140 : un salaire de 135 la lève, 140 non.
+  # Un niveau absent de cette liste n'est pas contrôlé. Valeurs à ajuster selon la politique salariale.
+  min_salary_by_niveau:
     1: 400
     2: 300
     3: 240
@@ -64,9 +64,9 @@ rules:
   # au moins cohort_min_size personnes, toujours en entier (voir former_cohortes dans
   # src/anomaly_cohortes.py).
   cohort_widening_steps:
-    - "Grade|Job_Family|Anciennete_Bucket"
-    - "Grade|Job_Family"
-    - "Grade"
+    - "Niveau|Job_Family|Anciennete_Bucket"
+    - "Niveau|Job_Family"
+    - "Niveau"
 
   # Écart aux collègues (PeerZ) : mesure à quel point un salaire s'éloigne de ceux de son groupe
   # (0 = dans la moyenne ; 2 = nettement à part ; 3 = très à part).
@@ -78,10 +78,10 @@ rules:
   rule_weight: 0.7
   ml_weight: 0.3
 
-  # Niveaux de priorité (Severity) selon le RiskScore, de 0 à 100.
+  # Priorités (Severity) selon le RiskScore, de 0 à 100.
   # Seule la première valeur (la borne basse) compte : un score de 69,4 est « Major », car il
   # atteint 50 sans atteindre 70. La deuxième valeur est gardée à titre indicatif.
-  # Garder les niveaux dans cet ordre croissant des bornes basses : le code les parcourt tels quels.
+  # Garder les priorités dans cet ordre croissant des bornes basses : le code les parcourt tels quels.
   prioritization_buckets:
     Info: [0, 29]
     Minor: [30, 49]

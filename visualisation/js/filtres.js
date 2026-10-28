@@ -1,13 +1,13 @@
-// Barres de filtres au-dessus des graphes : boutons (vue, grade, Hot_job) et listes (pôle, métier).
+// Barres de filtres au-dessus des graphes : boutons (vue, niveau, Hot_job) et listes (pôle, métier).
 // Chaque changement redessine le graphe concerné, et lui seul.
 (function (E) {
   'use strict';
   const C = E.calculs, { $, echapper } = E.communs;
 
-  // options : { vues: [[valeur, libellé]...], grade, hotjob, pole, metier } ; dessiner(sel) reçoit le choix en cours.
+  // options : { vues: [[valeur, libellé]...], niveau, hotjob, pole, metier } ; dessiner(sel) reçoit le choix en cours.
   function filtrer(id, df, options, dessiner) {
     const zone = $(id);
-    const sel = { vue: options.vues ? options.vues[0][0] : null, grade: null, hotjob: null, pole: null, metier: null };
+    const sel = { vue: options.vues ? options.vues[0][0] : null, niveau: null, hotjob: null, pole: null, metier: null };
     const boutons = (nom, cle, valeurs) => `<div class="filtre"><span class="filtre-nom">${nom}</span><div class="views" role="group" aria-label="${nom}">`
       + valeurs.map(([v, t], i) => `<button type="button" data-cle="${cle}" data-valeur="${echapper(v)}" aria-pressed="${i === 0}">${echapper(t)}</button>`).join('')
       + '</div></div>';
@@ -18,14 +18,14 @@
 
     zone.innerHTML = [
       options.vues && boutons('Vue', 'vue', options.vues),
-      options.grade && boutons('Grade', 'grade', tous('Grade')),
+      options.niveau && boutons('Niveau', 'niveau', tous('Niveau')),
       options.hotjob && boutons('Hot_job', 'hotjob', tous('Hot_job')),
       options.pole && liste('Pôle', 'pole', C.modalites(df, 'Entite_N1'), 'Tous les pôles'),
       options.metier && liste('Métier', 'metier', C.modalites(df, 'Job_Family'), 'Tous les métiers'),
     ].filter(Boolean).join('');
 
-    // Grade et Hot_job sont des nombres ; « Tous » (valeur vide) veut dire « pas de filtre ».
-    const valeur = (cle, v) => v === '' ? null : (cle === 'grade' || cle === 'hotjob') ? Number(v) : v;
+    // Niveau et Hot_job sont des nombres ; « Tous » (valeur vide) veut dire « pas de filtre ».
+    const valeur = (cle, v) => v === '' ? null : (cle === 'niveau' || cle === 'hotjob') ? Number(v) : v;
     zone.onclick = e => {
       const b = e.target.closest('button[data-cle]');
       if (!b) return;
@@ -42,12 +42,12 @@
     dessiner(sel);
   }
 
-  const garder = (l, sel) => (sel.grade === null || l.Grade === sel.grade) && (sel.hotjob === null || l.Hot_job === sel.hotjob)
+  const garder = (l, sel) => (sel.niveau === null || l.Niveau === sel.niveau) && (sel.hotjob === null || l.Hot_job === sel.hotjob)
     && (sel.pole === null || String(l.Entite_N1) === sel.pole) && (sel.metier === null || String(l.Job_Family) === sel.metier);
 
-  // « Grade 5, IT » ou « Tous les salariés » : rappelé en tête du constat, pour savoir sur qui il porte.
+  // « Niveau 5, IT » ou « Tous les salariés » : rappelé en tête du constat, pour savoir sur qui il porte.
   function libelle(sel) {
-    const t = [sel.grade === null ? null : 'grade ' + sel.grade, sel.hotjob === null ? null : 'Hot_job ' + sel.hotjob,
+    const t = [sel.niveau === null ? null : 'niveau ' + sel.niveau, sel.hotjob === null ? null : 'Hot_job ' + sel.hotjob,
       sel.pole, sel.metier].filter(v => v !== null).map(echapper).join(', ');
     return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Tous les salariés';
   }

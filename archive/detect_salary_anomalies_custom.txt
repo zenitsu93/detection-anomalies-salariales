@@ -7,7 +7,7 @@ Script de détection des incohérences de rémunération fixe (version personnal
 Cette version est adaptée pour les besoins spécifiques du client :
 
 - Suppression de la colonne « Ville » des fichiers et de la logique de jointure. Le rattachement géographique se fait
-  désormais au niveau du pays uniquement (ou s'appuie sur les seules colonnes grade/famille de poste si aucune
+  désormais au niveau du pays uniquement (ou s'appuie sur les seules colonnes niveau/famille de poste si aucune
   information géographique pertinente n'est disponible).
 - Suppression de tout doublon de colonne « Matricule » présent dans le fichier des employés. Seule la première
   occurrence est conservée.
@@ -131,7 +131,7 @@ def bucket_anciennete(x: object) -> str:
     "Ville": ["ville", "city", "site", "location", "localite", "localité"],
     "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
     "Job_Title": ["job_title", "titre_poste", "title", "poste"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
+    "Niveau": ["niveau", "level", "niveau_code", "job_level", "classification"],
     "Fixe_Annuel_MAD": ["fixe_annuel_mad", "salaire_annuel_mad", "salaire_fixe", "fixed_salary_mad", "annual_fixed_mad"],
     "Age": ["age"],
     "Anciennete": ["anciennete", "ancienneté", "seniority", "tenure"],
@@ -149,7 +149,7 @@ BANDS_CANON = {
     # La ville est conservée pour le renommage mais sera supprimée ensuite
     "Ville": ["ville", "city", "site", "location", "localite", "localité"],
     "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
+    "Niveau": ["niveau", "level", "niveau_code", "job_level", "classification"],
     "Min": ["min", "minimum"],
     "Mid": ["mid", "median", "midpoint"],
     "Max": ["max", "maximum"],
@@ -163,7 +163,7 @@ MARKET_CANON = {
     # La Ville est renommée mais sera éliminée
     "Ville": ["ville", "city", "site", "location", "localite", "localité"],
     "Job_Family": ["job_family", "jobfamily", "famille_metier", "famille", "jobgroup"],
-    "Grade": ["grade", "level", "grade_code", "job_level", "classification"],
+    "Niveau": ["niveau", "level", "niveau_code", "job_level", "classification"],
     "Median": ["median", "market_median", "mid", "midpoint"],
     # Normalisation sur le champ Pays
     "Pays": ["country", "pays"],
@@ -220,7 +220,7 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
 
     Cette version prépare la tranche d'ancienneté pour chaque collaborateur (``Anciennete_Bucket``),
     ignore la dimension pays dans la jointure et rattache les employés à leurs bandes internes via
-    ``Job_Family`` et ``Grade`` uniquement. Après la jointure, les ratios internes et externes sont calculés.
+    ``Job_Family`` et ``Niveau`` uniquement. Après la jointure, les ratios internes et externes sont calculés.
 
     Args:
         employees: DataFrame contenant les informations des employés.
@@ -241,10 +241,10 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
     ref_cols = []
     if "Job_Family" in employees.columns and "Job_Family" in bands.columns:
         ref_cols.append("Job_Family")
-    if "Grade" in employees.columns and "Grade" in bands.columns:
-        ref_cols.append("Grade")
+    if "Niveau" in employees.columns and "Niveau" in bands.columns:
+        ref_cols.append("Niveau")
     if not ref_cols:
-        raise KeyError("Les colonnes 'Job_Family' et/ou 'Grade' manquent pour effectuer la jointure.")
+        raise KeyError("Les colonnes 'Job_Family' et/ou 'Niveau' manquent pour effectuer la jointure.")
 
     # Vérification des colonnes nécessaires dans bands
     need_cols = ref_cols + [c for c in ["Min", "Mid", "Max"] if c in bands.columns]
@@ -252,7 +252,7 @@ def compute_features(employees: pd.DataFrame, bands: pd.DataFrame, market: pd.Da
     if missing_cols:
         raise KeyError(f"[BANDS] Colonnes manquantes: {', '.join(missing_cols)}. Vérifiez votre fichier de fourchettes.")
 
-    # Jointure interne sur Job_Family et Grade
+    # Jointure interne sur Job_Family et Niveau
     merged = employees.merge(
         bands[need_cols],
         on=ref_cols,
@@ -366,12 +366,12 @@ def cohort_stats_and_peers_nv(df, rule_params):
     step = 0
     # Définir les étapes d'élargissement.  
     # On ignore désormais le pays et on inclut l'ancienneté (via Anciennete_Bucket) dans la définition des cohortes.  
-    # La première étape utilise Grade × Job_Family × tranche d'ancienneté ;  
-    # puis on élargit à Grade × Job_Family puis uniquement au grade si la cohorte est trop petite.  
+    # La première étape utilise Niveau × Job_Family × tranche d'ancienneté ;  
+    # puis on élargit à Niveau × Job_Family puis uniquement au niveau si la cohorte est trop petite.  
     default_steps = [
-        "Grade|Job_Family|Anciennete_Bucket",
-        "Grade|Job_Family",
-        "Grade"
+        "Niveau|Job_Family|Anciennete_Bucket",
+        "Niveau|Job_Family",
+        "Niveau"
     ]
     steps = rule_params.get("cohort_widening_steps", default_steps)
     min_size = rule_params.get("cohort_min_size", 5)
@@ -479,12 +479,12 @@ def cohort_stats_and_peers(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     step = 0
     # Définir les étapes d'élargissement.  
     # On ignore désormais le pays et on inclut l'ancienneté (via Anciennete_Bucket) dans la définition des cohortes.  
-    # La première étape utilise Grade × Job_Family × tranche d'ancienneté ;  
-    # puis on élargit à Grade × Job_Family puis uniquement au grade si la cohorte est trop petite.  
+    # La première étape utilise Niveau × Job_Family × tranche d'ancienneté ;  
+    # puis on élargit à Niveau × Job_Family puis uniquement au niveau si la cohorte est trop petite.  
     default_steps = [
-        "Grade|Job_Family|Anciennete_Bucket",
-        "Grade|Job_Family",
-        "Grade"
+        "Niveau|Job_Family|Anciennete_Bucket",
+        "Niveau|Job_Family",
+        "Niveau"
     ]
     steps = rule_params.get("cohort_widening_steps", default_steps)
 
@@ -790,7 +790,7 @@ def format_numeric_fields_anc(out: pd.DataFrame) -> pd.DataFrame:
 def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """Analyse les écarts de rémunération par sexe et par groupe de comparaison.
 
-    Le résultat contient, pour chaque combinaison de Job_Family et Grade (si présents), la médiane des salaires fixes
+    Le résultat contient, pour chaque combinaison de Job_Family et Niveau (si présents), la médiane des salaires fixes
     pour les personnes identifiées comme "F" et "M" dans la colonne Sexe, ainsi qu'un ratio M/F permettant de
     visualiser le gap (valeur > 1 signifie que la médiane masculine est supérieure à la médiane féminine).
     """
@@ -800,8 +800,8 @@ def gender_gap_analysis(df: pd.DataFrame) -> pd.DataFrame:
     group_cols = []
     if "Job_Family" in df.columns:
         group_cols.append("Job_Family")
-    if "Grade" in df.columns:
-        group_cols.append("Grade")
+    if "Niveau" in df.columns:
+        group_cols.append("Niveau")
     # Calcul des médianes
     med = df.groupby(group_cols + ["Sexe"])["Fixe_Annuel_MAD"].median().unstack()
     # Renommage des colonnes sexe pour plus de clarté
@@ -879,7 +879,7 @@ def main():
 
     # Construction de la sortie organisée (front_cols) sans la colonne Ville (supprimée)
     front_cols = [c for c in [
-        "Matricule", "Nom", "Entite_N1", "Entite_N2", "Pays", "Job_Family", "Job_Title", "Grade",
+        "Matricule", "Nom", "Entite_N1", "Entite_N2", "Pays", "Job_Family", "Job_Title", "Niveau",
         "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration", "Market_Median", "MarketRatio",
         "PeerZ", "Rule_Flags", "Rule_Score", "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key",
         "Reason_Principale", "Reco", "Cout_Ajustement"

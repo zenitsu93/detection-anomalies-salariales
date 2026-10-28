@@ -7,7 +7,7 @@
   // Mêmes seuils que la règle CompaRatio de la détection (compa_ratio_low et compa_ratio_high de config/rules.yaml).
   const COMPA_BAS = 0.85, COMPA_HAUT = 1.15;
 
-  // ---------- Masse salariale et effectifs par pôle (filtrable par grade) ----------
+  // ---------- Masse salariale et effectifs par pôle (filtrable par niveau) ----------
   // Trois petits graphes alignés sur les mêmes pôles, plutôt qu'un graphe à deux échelles qui se lit mal.
   // Le Compa-Ratio par pôle n'est pas repris ici : il est dans le graphe « Équité femmes / hommes et pratiques par pôle », plus détaillé.
 
@@ -42,45 +42,45 @@
     constat('s-masse', `${F.libelle(sel)} : ${fr(effectif)} salariés, ${fr(total / 1000, 1)} millions de MAD de masse salariale. Pôle le plus lourd : ${echapper(lourd.pole)} (${pct(lourd.masse, total, 0)} de la masse, ${pct(lourd.n, effectif, 0)} des effectifs). Salaire moyen le plus haut : ${echapper(cher.pole)} (${fr(cher.moyen, 1)} kMAD).`);
   }
 
-  // ---------- Salaires hors grille par pôle et par grade (filtrable par métier) ----------
+  // ---------- Salaires hors grille par pôle et par niveau (filtrable par métier) ----------
 
   function horsGrille(df, sel) {
     const lignes = df.filter(l => F.garder(l, sel) && [l.Fixe_Annuel_MAD, l.Min, l.Max].every(Number.isFinite));
-    const poles = C.modalites(lignes, 'Entite_N1'), grades = C.modalites(lignes, 'Grade');
+    const poles = C.modalites(lignes, 'Entite_N1'), niveaux = C.modalites(lignes, 'Niveau');
     const sousMin = l => l.Fixe_Annuel_MAD < l.Min, surMax = l => l.Fixe_Annuel_MAD > l.Max;
-    // Chaque case : la part des salariés du pôle et du grade hors de leur grille, puis leur nombre.
+    // Chaque case : la part des salariés du pôle et du niveau hors de leur grille, puis leur nombre.
     const carte = (test, couleur, axes) => {
-      const cases = poles.map(p => grades.map(g => { const grp = lignes.filter(l => l.Entite_N1 === p && l.Grade === g); return [grp.filter(test).length, grp.length]; }));
-      return { type: 'heatmap', x: grades.map(String), y: poles.map(String), z: cases.map(r => r.map(([n, t]) => t ? 100 * n / t : null)),
+      const cases = poles.map(p => niveaux.map(g => { const grp = lignes.filter(l => l.Entite_N1 === p && l.Niveau === g); return [grp.filter(test).length, grp.length]; }));
+      return { type: 'heatmap', x: niveaux.map(String), y: poles.map(String), z: cases.map(r => r.map(([n, t]) => t ? 100 * n / t : null)),
         text: cases.map(r => r.map(([n, t]) => n ? `${fr(100 * n / t, 1)} %<br>${fr(n)}` : (t ? '0' : ''))), texttemplate: '%{text}', textfont: { size: 11 },
         customdata: cases, colorscale: [[0, '#ffffff'], [1, couleur]], zmin: 0, showscale: false, xgap: 2, ygap: 2, ...axes,
-        hovertemplate: '%{y} · grade %{x}<br><b>%{customdata[0]} salariés sur %{customdata[1]}</b> (%{z:.1f} %)<extra></extra>' };
+        hovertemplate: '%{y} · niveau %{x}<br><b>%{customdata[0]} salariés sur %{customdata[1]}</b> (%{z:.1f} %)<extra></extra>' };
     };
     const traces = [carte(sousMin, K.ROUGE, {}), carte(surMax, K.OR, { xaxis: 'x2', yaxis: 'y2' })];
     const L = grille({ colonnes: 2, espH: 0.06, titres: ['Sous le Min de leur grille', 'Au-dessus du Max de leur grille'] });
     for (const s of ['', '2']) {
-      Object.assign(L['xaxis' + s], { type: 'category', title: titreAxe('Grade'), showgrid: false });
+      Object.assign(L['xaxis' + s], { type: 'category', title: titreAxe('Niveau'), showgrid: false });
       Object.assign(L['yaxis' + s], { type: 'category', showgrid: false, autorange: 'reversed' });
     }
     L.yaxis2.showticklabels = false;
-    // Clic sur une case : les salariés de ce pôle et de ce grade sous le Min (carte de gauche) ou au-dessus du Max (carte de droite).
+    // Clic sur une case : les salariés de ce pôle et de ce niveau sous le Min (carte de gauche) ou au-dessus du Max (carte de droite).
     const clic = p => {
       const [i, j] = p.pointNumber, [test, quoi] = p.curveNumber ? [surMax, 'Au-dessus du Max'] : [sousMin, 'Sous le Min'];
-      return { titre: `${quoi} de leur grille : ${poles[i]}, grade ${grades[j]}`, lignes: lignes.filter(l => l.Entite_N1 === poles[i] && l.Grade === grades[j] && test(l)) };
+      return { titre: `${quoi} de leur grille : ${poles[i]}, niveau ${niveaux[j]}`, lignes: lignes.filter(l => l.Entite_N1 === poles[i] && l.Niveau === niveaux[j] && test(l)) };
     };
     montrer('g-hors-grille', traces, L, 130 + 52 * Math.max(4, poles.length), clic, F.libelle(sel));
     const n = lignes.length, ns = lignes.filter(sousMin).length, nm = lignes.filter(surMax).length;
     // La case où la part sous le Min est la plus forte.
     let pire = null;
-    for (const p of poles) for (const g of grades) {
-      const grp = lignes.filter(l => l.Entite_N1 === p && l.Grade === g), k = grp.filter(sousMin).length;
+    for (const p of poles) for (const g of niveaux) {
+      const grp = lignes.filter(l => l.Entite_N1 === p && l.Niveau === g), k = grp.filter(sousMin).length;
       if (k && (!pire || k / grp.length > pire.part)) pire = { p, g, k, part: k / grp.length };
     }
     constat('s-hors-grille', `${F.libelle(sel)} : ${fr(ns)} salariés sous le Min de leur grille (${pct(ns, n)}) et ${fr(nm)} au-dessus du Max (${pct(nm, n)}).`
-      + (pire ? ` Part la plus forte sous le Min : ${echapper(pire.p)}, grade ${pire.g} (${fr(100 * pire.part, 1)} %, ${fr(pire.k)} salariés).` : ''));
+      + (pire ? ` Part la plus forte sous le Min : ${echapper(pire.p)}, niveau ${pire.g} (${fr(100 * pire.part, 1)} %, ${fr(pire.k)} salariés).` : ''));
   }
 
-  // ---------- Position face au marché, par pôle ou par métier (filtrable par grade) ----------
+  // ---------- Position face au marché, par pôle ou par métier (filtrable par niveau) ----------
 
   // Ordre d'empilement depuis la médiane : à gauche ce qui est sous la médiane, à droite ce qui est au-dessus.
   const SEGMENTS = [['Entre P25 et médiane', '#8fb0d3', -1, K.ENCRE, 2], ['Sous le P25', '#2f5785', -1, '#fff', 1],
@@ -122,7 +122,7 @@
     if (!groupes.length) return constat('s-marche', 'Aucun salarié pour ce filtre.');
     const sous = lignes.filter(l => l.Position_Marche === 'Sous le P25' || l.Position_Marche === 'Entre P25 et médiane').length;
     const bas = groupes[0], haut = groupes[groupes.length - 1];
-    constat('s-marche', `${F.libelle(sel)} : ${pct(sous, lignes.length, 0)} des salariés sont payés sous la médiane du marché de leur métier et grade. Le mieux placé : ${echapper(haut.nom)} (${fr(100 * auDessus(haut), 0)} % au-dessus de la médiane) ; le moins bien placé : ${echapper(bas.nom)} (${fr(100 * auDessus(bas), 0)} %).`);
+    constat('s-marche', `${F.libelle(sel)} : ${pct(sous, lignes.length, 0)} des salariés sont payés sous la médiane du marché de leur métier et niveau. Le mieux placé : ${echapper(haut.nom)} (${fr(100 * auDessus(haut), 0)} % au-dessus de la médiane) ; le moins bien placé : ${echapper(bas.nom)} (${fr(100 * auDessus(bas), 0)} %).`);
   }
 
   // ---------- Talents et rémunération : Compa-Ratio et 9-Box (filtrable par pôle, métier, Hot_job) ----------
@@ -175,7 +175,7 @@
     constat('s-talents', `${F.libelle(sel)} (${fr(lignes.length)} salariés) : ${fr(sous.length)} sous 0,85 et ${fr(sur.length)} au-dessus de 1,15. Case 9-Box la plus haute (${haut}) avec un Compa-Ratio sous 0,85 : ${fr(sous.filter(l => l.Positionnement_9BOX === haut).length)} salariés ; case la plus basse (${bas}) au-dessus de 1,15 : ${fr(sur.filter(l => l.Positionnement_9BOX === bas).length)}.`);
   }
 
-  // ---------- Métiers en tension : Compa-Ratio moyen par métier et Hot_job (filtrable par grade et pôle) ----------
+  // ---------- Métiers en tension : Compa-Ratio moyen par métier et Hot_job (filtrable par niveau et pôle) ----------
 
   // Trois paliers : rouge sous 0,90, gris de 0,90 à 1,00, vert au-dessus de 1,00 (de 0,80 à 1,10, chaque palier fait un tiers).
   const PALIERS = [[0, '#f4c7c2'], [1 / 3, '#f4c7c2'], [1 / 3, '#eef0f2'], [2 / 3, '#eef0f2'], [2 / 3, '#cfe7d7'], [1, '#cfe7d7']];

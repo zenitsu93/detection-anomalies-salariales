@@ -180,7 +180,7 @@ td .detail { display: block; font-size: 12px; color: var(--muted); }
 .filtre-nom { font-size: 12px; font-weight: 600; color: var(--muted); }
 .filtres select { height: 28px; max-width: 280px; padding: 0 8px; font: 13px var(--font); color: var(--ink); background: var(--panel);
   border: 1px solid var(--control); border-radius: var(--radius); }
-/* Boutons de filtre (comme les boutons par grade du tableau de bord) : celui qui est affiché est foncé. */
+/* Boutons de filtre (comme les boutons par niveau du tableau de bord) : celui qui est affiché est foncé. */
 .views { display: flex; flex-wrap: wrap; gap: 6px; }
 .views button { height: 28px; min-width: 34px; padding: 0 10px; font-size: 12px; justify-content: center; }
 .views button[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }

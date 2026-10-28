@@ -12,7 +12,7 @@
   // de la liste n'est pas montrée (par exemple Nom, si le fichier ne le donne pas).
   const COLONNES = [
     ['Matricule', 'Matricule'], ['Nom', 'Nom'], ['Entite_N1', 'Pôle'], ['Job_Family', 'Métier'], ['Job_Title', 'Poste'],
-    ['Grade', 'Grade'], ['Sexe', 'Sexe'], ['Age', 'Âge'], ['Anciennete', 'Ancienneté'], ['Fixe_Annuel_MAD', 'Salaire fixe (kMAD)'],
+    ['Niveau', 'Niveau'], ['Sexe', 'Sexe'], ['Age', 'Âge'], ['Anciennete', 'Ancienneté'], ['Fixe_Annuel_MAD', 'Salaire fixe (kMAD)'],
     ['Min', 'Min'], ['Mid', 'Mid'], ['Max', 'Max'], ['Compa_Ratio', 'Compa-Ratio'], ['Range_Penetration', 'Position dans la bande'],
     ['Median', 'Médiane marché'], ['Position_Marche', 'Face au marché'], ['Competence_N1', 'Competence_N1'],
     ['Positionnement_9BOX', '9-Box'], ['Hot_job', 'Hot_job'],
@@ -177,7 +177,7 @@
   const fenetre = $('liste');
   let vue = null, cols = [], titreEnCours = '', avant = null;
 
-  // titre : ce qui a été cliqué (« Pôle 3 ») ; origine : le graphe et son filtre, en HTML (« Masse salariale · Grade 5 ») ;
+  // titre : ce qui a été cliqué (« Pôle 3 ») ; origine : le graphe et son filtre, en HTML (« Masse salariale · Niveau 5 ») ;
   // unite : ce que compte la liste (« ligne » pour les doublons, où un salarié a plusieurs lignes).
   function ouvrir(titre, lignes, origine = '', unite = 'salarié') {
     fermerMenu(false);
