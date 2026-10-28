@@ -24,12 +24,6 @@
   <div class="page-head">
     <div><p class="crumb">Rémunération › Exploration</p><h1>Positionnement salarial : vue d'ensemble</h1></div>
     <div class="head-actions">
-      <button class="primary" id="relancer" type="button" hidden>
-        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>
-        Relancer avec les fichiers du dossier</button>
-      <button id="choisirDossier" type="button">
-        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1.5 4.5v8h13v-6.5h-6.5l-1.5-1.5z"/></svg>
-        Choisir le dossier</button>
       <button id="choisirFichiers" type="button">
         <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 1.5h5.5l3 3v10h-8.5z"/><path d="M9.5 1.5v3h3"/></svg>
         Choisir les fichiers</button>
@@ -39,38 +33,36 @@
 
   <div id="notice" class="notice" role="status" hidden></div>
 
-  <!-- Affichée pendant que le navigateur ouvre sa propre fenêtre (choix du dossier, autorisation) : ce qu'il faut y répondre -->
-  <div class="demande" id="demande" hidden>
-    <div class="demande-carte" role="dialog" aria-modal="true" aria-labelledby="demande-titre">
-      <div class="demande-tete">
-        <svg class="demande-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1.5 4.5v8h13v-6.5h-6.5l-1.5-1.5z"/></svg>
-        <h2 id="demande-titre"></h2>
-      </div>
-      <ol class="demande-etapes" id="demande-etapes"></ol>
-      <p class="note">Les fichiers ne quittent pas cet ordinateur : la page les lit, sans rien modifier ni envoyer.</p>
+  <!-- Pendant qu'on glisse des fichiers au-dessus des graphes : où les lâcher -->
+  <div class="depot-plein" id="depot" hidden>
+    <div class="depot-carte">
+      <svg class="depot-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+      <h2>Lâcher les fichiers pour mettre la page à jour</h2>
+      <p class="note">employes.xlsx, bands.xlsx ou market.xlsx : chaque fichier déposé remplace celui du même nom.</p>
     </div>
   </div>
 
-  <!-- Accueil : affiché tant qu'aucune donnée n'a été lue -->
-  <section class="panel empty-state" id="accueil">
+  <!-- Accueil : la zone où déposer les trois fichiers, affichée tant qu'ils n'ont pas tous été donnés -->
+  <section class="panel empty-state depot" id="accueil">
     <div class="sources" aria-hidden="true">
-      <div class="fichier">employes</div><div class="fichier">bands</div><div class="fichier">market</div>
+      <div class="fichier" data-fichier="employes.xlsx">employes</div><div class="fichier" data-fichier="bands.xlsx">bands</div><div class="fichier" data-fichier="market.xlsx">market</div>
       <span class="fleche">→</span>
       <div class="mini-graphe"><i style="height:45%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:30%"></i></div>
     </div>
-    <h2>Aucune donnée chargée</h2>
+    <h2>Déposer les trois fichiers ici</h2>
     <p>La page lit les trois fichiers RH, contrôle les données, puis montre la rémunération sous tous ses angles : masse
       salariale, position dans la grille et face au marché, ce qui fait varier cette position (ancienneté, compétences,
       évaluation, tension du métier) et équité.</p>
     <ol class="steps">
-      <li><b>1</b>Déposer employes.xlsx, bands.xlsx et market.xlsx dans le dossier donnees</li>
-      <li><b>2</b>Choisir ce dossier</li>
-      <li><b>3</b>Chaque mois : remplacer les fichiers, puis relancer</li>
+      <li><b>1</b>Glisser employes.xlsx, bands.xlsx et market.xlsx dans ce cadre</li>
+      <li><b>2</b>Ou les choisir avec le bouton (Ctrl + clic pour en prendre plusieurs)</li>
+      <li><b>3</b>Les graphes s'affichent dès que les trois sont là</li>
     </ol>
-    <button class="primary" id="commencer" type="button">Choisir le dossier</button>
-    <p class="note">Tout se passe sur cet ordinateur : les fichiers ne sont envoyés nulle part. La page garde les dernières
-      données lues dans la mémoire du navigateur pour les réafficher à la prochaine ouverture. Le choix d'un dossier
-      fonctionne avec Edge et Chrome ; avec un autre navigateur, utiliser « Choisir les fichiers ».</p>
+    <button class="primary" id="commencer" type="button">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 1.5h5.5l3 3v10h-8.5z"/><path d="M9.5 1.5v3h3"/></svg>
+      Choisir les fichiers</button>
+    <p class="note">Tout se passe sur cet ordinateur : les fichiers ne sont envoyés nulle part, et la page ne garde rien.
+      Elle ne lit aucun fichier toute seule : à chaque ouverture, elle attend qu'on lui donne les trois.</p>
   </section>
 
   <div class="layout" id="contenu" hidden>

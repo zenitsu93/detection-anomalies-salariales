@@ -26,9 +26,7 @@
   }
 
   async function charger({ tables, source }) {
-    const donnees = { tables, source, date: new Date().toISOString() };
-    afficher(donnees);
-    await Fi.ecrire('donnees', donnees);
+    afficher({ tables, source, date: new Date().toISOString() });
   }
 
   // ---------- Affichage ----------
@@ -130,47 +128,44 @@
     };
   }
 
-  // ---------- Boutons ----------
+  // ---------- Fichiers : déposés dans la page ou choisis avec le bouton ----------
 
-  // La fenêtre qui choisit le dossier ou demande l'autorisation appartient au navigateur : aucune page ne peut changer
-  // son apparence. Pendant qu'elle est ouverte, la page affiche donc par-dessus ce qu'il faut y répondre.
-  async function demander(titre, etapes, action) {
-    $('demande-titre').textContent = titre;
-    $('demande-etapes').innerHTML = etapes.map(e => `<li>${e}</li>`).join('');
-    $('demande').hidden = false;
-    try { return await action(); }
-    finally { $('demande').hidden = true; }
+  // Pas de dossier mémorisé : le navigateur n'a aucune autorisation à demander. La page lit seulement les fichiers
+  // qu'on lui donne, et dessine les graphes dès que les trois sont là ; un fichier redonné remplace celui du même nom.
+  const liste = noms => noms.join(', ').replace(/, ([^,]*)$/, ' et $1');
+  function recevoir(fichiers) {
+    if (!fichiers.length) return;
+    const { recus, manquants, ignores } = Fi.recevoir(fichiers);
+    document.querySelectorAll('[data-fichier]').forEach(t => t.classList.toggle('recu', recus.includes(t.dataset.fichier)));
+    const ignore = ignores.length ? `Fichier ignoré : ${liste(ignores)}. Les fichiers doivent s'appeler employes.xlsx, bands.xlsx et market.xlsx.` : '';
+    // Il en manque encore, ou rien d'utile n'a été donné (seulement des fichiers ignorés) : on dit où on en est, sans recalculer.
+    if (manquants.length || ignores.length === fichiers.length) {
+      const etat = manquants.length ? `${recus.length ? `Reçu : ${liste(recus)}. ` : ''}Il manque ${liste(manquants)}.` : '';
+      return avertir([ignore, etat].filter(Boolean).join(' '), ignores.length ? 'erreur' : '');
+    }
+    executer(async () => charger(await Fi.tables()));
   }
 
-  const choisirDossier = () => executer(async () => {
-    const dossier = await demander('Choisir le dossier des fichiers', [
-      'Dans la fenêtre qui s\'ouvre, sélectionner le dossier qui contient <b>employes.xlsx</b>, <b>bands.xlsx</b> et <b>market.xlsx</b>.',
-      'Edge demande ensuite s\'il peut laisser la page lire ce dossier : accepter.',
-    ], () => window.showDirectoryPicker({ id: 'exploration-salaires', mode: 'read' }));
-    await Fi.ecrire('dossier', dossier);
-    $('relancer').hidden = false;
-    await charger(await Fi.depuisDossier(dossier));
-  });
-  $('choisirDossier').onclick = choisirDossier;
-  $('commencer').onclick = () => window.showDirectoryPicker ? choisirDossier() : $('fichiers').click();
+  $('choisirFichiers').onclick = $('commencer').onclick = () => $('fichiers').click();
+  $('fichiers').onchange = e => { const choisis = [...e.target.files]; e.target.value = ''; recevoir(choisis); };
 
-  $('relancer').onclick = () => executer(async () => {
-    const dossier = await Fi.lire('dossier');
-    if (!dossier) throw new Error('Aucun dossier mémorisé : cliquez sur « Choisir le dossier ».');
-    // La fenêtre d'explication ne s'affiche que si Edge va vraiment poser la question.
-    const autorise = await dossier.queryPermission({ mode: 'read' }) === 'granted' || await demander('Autoriser la lecture du dossier', [
-      `Edge demande, en haut de la fenêtre, s'il peut laisser la page lire le dossier <b>${echapper(dossier.name)}</b> : accepter.`,
-      'S\'il propose de l\'autoriser à chaque visite, choisir cette réponse : la page n\'aura plus à le demander et s\'ouvrira directement avec les fichiers du dossier.',
-    ], () => dossier.requestPermission({ mode: 'read' })) === 'granted';
-    if (!autorise) throw new Error('Le navigateur n\'a pas reçu l\'autorisation de lire le dossier.');
-    await charger(await Fi.depuisDossier(dossier));
-  });
-
-  $('choisirFichiers').onclick = () => $('fichiers').click();
-  $('fichiers').onchange = e => executer(async () => {
-    const choisis = [...e.target.files];
-    e.target.value = '';
-    await charger(await Fi.depuisListe(choisis));
+  // Glisser-déposer n'importe où dans la page. Sans ces lignes, le navigateur ouvrirait le fichier déposé à la place
+  // de la page. Pendant le glissement, le cadre d'accueil s'éclaire, ou, si les graphes sont affichés, un cadre recouvre la page.
+  const avecFichiers = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  let dedans = 0;   // dragenter / dragleave se répètent à chaque élément survolé : on compte pour savoir quand on sort vraiment
+  const glisser = actif => {
+    $('accueil').classList.toggle('survol', actif);
+    $('depot').hidden = !actif || !$('accueil').hidden;
+  };
+  document.addEventListener('dragenter', e => { if (avecFichiers(e) && dedans++ === 0) glisser(true); });
+  document.addEventListener('dragleave', e => { if (avecFichiers(e) && --dedans === 0) glisser(false); });
+  document.addEventListener('dragover', e => { if (avecFichiers(e)) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if (!avecFichiers(e)) return;
+    e.preventDefault();
+    dedans = 0;
+    glisser(false);
+    recevoir([...e.dataTransfer.files]);
   });
 
   // ---------- Sommaire : la section à l'écran est mise en avant ----------
@@ -181,19 +176,10 @@
   }, { rootMargin: '-15% 0px -75% 0px' });
   liens.forEach(a => { const cible = document.querySelector(a.getAttribute('href')); if (cible) suivi.observe(cible); });
 
-  // ---------- Ouverture : les fichiers du dossier s'ils sont lisibles sans redemander, sinon les dernières données lues ----------
+  // L'ancienne version gardait dans le navigateur le dossier choisi et une copie des dernières données lues : on l'efface,
+  // pour qu'aucune donnée salariale n'y reste.
+  try { indexedDB.deleteDatabase('exploration-salaires'); } catch { /* mémoire du navigateur bloquée : rien à effacer */ }
 
-  (async () => {
-    if (!window.showDirectoryPicker) $('choisirDossier').hidden = true;
-    const dossier = await Fi.lire('dossier');
-    if (dossier) $('relancer').hidden = false;
-    try {
-      if (dossier && await dossier.queryPermission({ mode: 'read' }) === 'granted') return executer(async () => charger(await Fi.depuisDossier(dossier)));
-    } catch { /* dossier déplacé ou supprimé : on affiche les dernières données lues */ }
-    const donnees = await Fi.lire('donnees');
-    if (donnees) executer(async () => afficher(donnees));
-  })();
-
-  // Utilisé par les tests de la page, qui lui donnent des données sans passer par le choix d'un dossier.
+  // Utilisé par les tests de la page, qui lui donnent des données sans passer par le dépôt des fichiers.
   E.page = { charger, executer };
 })(window.Exploration = window.Exploration || {});

@@ -52,18 +52,13 @@ button:disabled { opacity: .5; cursor: wait; }
 @keyframes tourne { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
-/* ---------- Pendant une fenêtre du navigateur (choix du dossier, autorisation) ---------- */
-.demande { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(31, 35, 40, .45); }
-.demande-carte { width: 100%; max-width: 480px; padding: 22px 26px 20px; background: var(--panel); border-top: 4px solid var(--brand);
-  border-radius: var(--radius); box-shadow: 0 16px 40px rgba(31, 35, 40, .22); }
-.demande-tete { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.demande-ico { width: 34px; height: 34px; flex: none; padding: 7px; background: var(--brand-soft); color: var(--brand-dark); border-radius: var(--radius); }
-.demande-tete h2 { font-size: 16px; font-weight: 600; }
-.demande-etapes { margin: 0 0 14px; padding: 0; list-style: none; counter-reset: etape; font-size: 13px; }
-.demande-etapes li { position: relative; padding-left: 32px; counter-increment: etape; }
-.demande-etapes li + li { margin-top: 10px; }
-.demande-etapes li::before { content: counter(etape); position: absolute; left: 0; top: 1px; width: 20px; height: 20px; display: grid; place-items: center;
-  background: var(--brand-dark); color: #fff; border-radius: 2px; font-size: 11px; font-weight: 600; }
+/* ---------- Fichiers glissés au-dessus des graphes : où les lâcher ---------- */
+/* pointer-events: none : le cadre ne gêne pas le glisser-déposer, que la page écoute sur tout le document. */
+.depot-plein { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(31, 35, 40, .45); pointer-events: none; }
+.depot-carte { width: 100%; max-width: 480px; padding: 28px 26px 22px; text-align: center; background: var(--panel); border-top: 4px solid var(--brand);
+  border-radius: var(--radius); box-shadow: 0 16px 40px rgba(31, 35, 40, .22); outline: 2px dashed var(--brand); outline-offset: -10px; }
+.depot-ico { width: 40px; height: 40px; padding: 8px; margin-bottom: 10px; background: var(--brand-soft); color: var(--brand-dark); border-radius: var(--radius); }
+.depot-carte h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
 
 /* ---------- Liste des salariés (clic sur un graphe) : un tableau comme dans Excel, comme dans le tableau de bord ---------- */
 .indice { margin-bottom: -6px; font-size: 12px; color: var(--muted); }
@@ -124,6 +119,14 @@ details.panel:not([open]) > summary { border-bottom: 0; border-radius: var(--rad
 .fichier { position: relative; width: 74px; height: 88px; padding-top: 50px; background: var(--panel); border: 1px solid var(--control); border-radius: 3px;
   font-size: 11px; font-weight: 600; color: var(--muted); }
 .fichier::before { content: "XLSX"; position: absolute; left: 10px; top: 14px; padding: 1px 5px; background: var(--brand-soft); color: var(--brand-dark); border-radius: 2px; font-size: 10px; }
+/* Zone de dépôt : un cadre en pointillés, qui passe à l'or pendant qu'on y glisse des fichiers. */
+.depot { outline: 2px dashed var(--control); outline-offset: -12px; transition: background-color .15s, outline-color .15s; }
+.depot.survol { outline-color: var(--brand); background: var(--brand-soft); }
+.depot.survol .steps b { background: var(--panel); }
+/* Un fichier déjà reçu : coché en vert. */
+.fichier.recu { border-color: var(--ok); color: var(--ok); }
+.fichier.recu::after { content: "\2713"; position: absolute; right: -8px; top: -8px; width: 20px; height: 20px; display: grid; place-items: center;
+  background: var(--ok); color: #fff; border-radius: 50%; font-size: 12px; }
 .fleche { font-size: 22px; }
 .mini-graphe { width: 96px; height: 88px; display: flex; align-items: flex-end; gap: 6px; padding: 10px; background: var(--panel);
   border: 1px solid var(--control); border-top: 3px solid var(--brand); border-radius: 3px; }
@@ -234,7 +237,7 @@ footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line);
 }
 @media print {
   body { background: #fff; }
-  .head-actions, .toc, .filtres, .notice, .agrandir, .indice, .liste, .demande { display: none !important; }
+  .head-actions, .toc, .filtres, .notice, .agrandir, .indice, .liste, .depot-plein { display: none !important; }
   .layout { grid-template-columns: 1fr; }
   .panel { break-inside: avoid; }
 }
