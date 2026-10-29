@@ -5,7 +5,8 @@
 TABLEAU DE BORD HTML DES ANOMALIES
 ==================================
 
-Ce fichier crée un tableau de bord HTML (graphiques Chart.js) à partir de :
+Ce fichier crée un tableau de bord HTML (graphiques Plotly, avec le même zoom et le même bouton
+« Agrandir » que la page d'exploration de visualisation/) à partir de :
 - df : le DataFrame des salariés rendu par anomaly_recommandations.py, avec le score général
   (RiskScore) et la priorité (Severity) ajoutés par anomaly_score_general.py ;
 - gg : le tableau rendu par anomaly_ecarts_hommes_femmes.py ;
@@ -46,9 +47,11 @@ from anomaly_score_general import aggregate_risk
 from anomaly_recommandations import recommendations
 from anomaly_ecarts_hommes_femmes import gender_gap_analysis
 
-CHARTJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
-# SheetJS écrit le fichier Excel de la liste des salariés directement dans le navigateur.
-XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+# Plotly dessine les graphiques ; SheetJS écrit le fichier Excel de la liste des salariés directement
+# dans le navigateur. Pourquoi recopiés DANS le tableau de bord, depuis visualisation/vendor/, au lieu
+# d'être chargés depuis internet : le fichier s'ouvre sans connexion (comme la page d'exploration), et
+# reste complet même envoyé seul par mail. Il pèse en échange environ 6 Mo de plus.
+VENDOR = Path(__file__).resolve().parent.parent / "visualisation" / "vendor"
 
 # Charte Repères : or et brun pour la marque (brun aussi pour les montants), ardoise pour les effectifs.
 GOLD = "#e9a21b"
@@ -197,6 +200,8 @@ def build_html(data: dict, maintenant: datetime) -> str:
             ("Signaux déclencheurs", ["Signal", "Salariés"], zip(data["flags"]["labels"], data["flags"]["data"])),
         ]
     ], ensure_ascii=False).replace("<", "\\u003c")
+    plotly_js = (VENDOR / "plotly.min.js").read_text(encoding="utf-8")
+    xlsx_js = (VENDOR / "xlsx.full.min.js").read_text(encoding="utf-8")
 
     return f"""<!doctype html>
 <html lang="fr">
@@ -205,8 +210,8 @@ def build_html(data: dict, maintenant: datetime) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Repères — Anomalies salariales</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23e9a21b'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23fff'/%3E%3Crect x='15' y='4' width='2' height='24' fill='%234a2c1d'/%3E%3C/svg%3E">
-<script src="{CHARTJS_URL}"></script>
-<script src="{XLSX_URL}"></script>
+<script>{plotly_js}</script>
+<script>{xlsx_js}</script>
 <style>
 /* Charte Repères. */
 :root {{
@@ -234,7 +239,7 @@ main {{ max-width: 1320px; margin: auto; padding: 24px 32px 32px; }}
 .page-head {{ display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 20px; }}
 .crumb {{ font-size: 12px; color: var(--faint); margin-bottom: 2px; }}
 h1 {{ font-size: 22px; font-weight: 600; }}
-.page-hint {{ font-size: 13px; color: var(--muted); }}
+.page-hint {{ font-size: 13px; color: var(--muted); text-align: right; }}
 
 .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }}
 .panel-head {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px;
@@ -260,11 +265,15 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 
 .grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }}
 .full {{ grid-column: 1 / -1; }}
-.chart-box {{ position: relative; width: 100%; }}
-.h-sm {{ height: 240px; }}
-.h-md {{ height: 300px; }}
-.h-lg {{ height: 360px; }}
-.h-xl {{ height: 520px; }}
+.graphe {{ width: 100%; }}
+/* Plein écran d'un graphe (bouton « Agrandir »), comme dans la page d'exploration. */
+.panel-actions {{ display: flex; align-items: center; gap: 12px; }}
+.agrandir {{ display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: 12px; }}
+.ico {{ width: 15px; height: 15px; flex: none; }}
+.panel:fullscreen {{ display: flex; flex-direction: column; width: 100vw; height: 100vh; border: 0; border-radius: 0; overflow: hidden; background: var(--panel); }}
+.panel:fullscreen > .panel-body {{ flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding: 12px 24px 16px; }}
+.panel:fullscreen .graphe {{ flex: 1 1 0; min-height: 360px; overflow: hidden; }}
+.panel::backdrop {{ background: var(--panel); }}
 /* Boutons de choix des écarts hommes / femmes : celui qui est affiché est foncé. */
 .views {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }}
 .views button[aria-pressed="true"] {{ background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }}
@@ -276,7 +285,14 @@ details.data-toggle[open] summary {{ font-weight: 600; }}
 table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
 th {{ text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); white-space: nowrap; }}
 td {{ padding: 8px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }}
+/* Pourquoi aussi sur les en-têtes (th) : avant, le titre d'une colonne de nombres restait calé à gauche
+   alors que ses nombres étaient calés à droite ; titre et valeurs ne tombaient pas l'un sous l'autre. */
 .num {{ text-align: right; }}
+tbody tr:hover td {{ background: var(--panel-head); }}
+/* Les tableaux des « Données détaillées » ont deux à cinq colonnes : à la largeur de la page, un nom et
+   son nombre se retrouvaient aux deux bouts de l'écran. Ils prennent maintenant la largeur de leur contenu. */
+.data-toggle table {{ width: auto; min-width: min(560px, 100%); }}
+.data-toggle th:first-child {{ min-width: 220px; }}
 .data-panel summary {{ list-style: none; }}
 /* Tableaux comme dans Excel : une recherche au-dessus, un bouton ▾ par colonne qui ouvre le menu de tri
    et de filtre. Un bouton foncé avec un entonnoir signale une colonne filtrée. */
@@ -338,7 +354,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 @media print {{
   body {{ background: #fff; }}
   .panel {{ break-inside: avoid; }}
-  .page-hint, .overlay {{ display: none; }}
+  .page-hint, .overlay, .agrandir {{ display: none; }}
 }}
 </style>
 </head>
@@ -354,7 +370,8 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 <main>
   <div class="page-head">
     <div><p class="crumb">Rémunération › Anomalies</p><h1>Tableau de bord des anomalies</h1></div>
-    <p class="page-hint">Cliquez une barre, un point ou un nombre de priorité pour afficher les salariés concernés.</p>
+    <p class="page-hint">Cliquez une barre, un point ou un nombre de priorité pour afficher les salariés concernés.<br>
+      Molette pour zoomer, double-clic pour revenir, « Agrandir » pour le plein écran.</p>
   </div>
 
   <dl class="panel kpis">
@@ -369,33 +386,34 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
   <div class="grid">
     <section class="panel full">
       <div class="panel-head"><h2 class="panel-title">Anomalies à traiter par pôle</h2><span class="panel-unit">salariés</span></div>
-      <div class="panel-body"><div class="chart-box h-sm"><canvas id="chart-pole"></canvas></div></div>
+      <div class="panel-body"><div class="graphe" id="chart-pole"></div></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Top 10 métiers concernés</h2><span class="panel-unit">salariés à traiter</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-job"></canvas></div></div>
+      <div class="panel-body"><div class="graphe" id="chart-job"></div>
+        <p class="note">Salariés à traiter (priorité Critique, Majeure ou Mineure) : les 10 métiers qui en comptent le plus.</p></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Coût d'ajustement par pôle et par action</h2><span class="panel-unit">{UNITE}</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-cost"></canvas></div>
+      <div class="panel-body"><div class="graphe" id="chart-cost"></div>
         <p class="note">Remise au Min : salaires sous le Min de la grille. Rapprochement du Mid : salaires trop bas
           dans la grille (CompaRatio sous {c['seuil']}).</p></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Signaux déclencheurs</h2><span class="panel-unit">salariés</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-flags"></canvas></div>
+      <div class="panel-body"><div class="graphe" id="chart-flags"></div>
         <p class="note">Un salarié peut déclencher plusieurs signaux.</p></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Score général</h2><span class="panel-unit">salariés par tranche de score</span></div>
-      <div class="panel-body"><div class="chart-box h-lg"><canvas id="chart-risk"></canvas></div>
+      <div class="panel-body"><div class="graphe" id="chart-risk"></div>
         <p class="note">Le score général réunit le score de règles et le score IA ; c'est lui qui fixe la priorité.</p></div>
     </section>
     <section class="panel full">
       <div class="panel-head"><h2 class="panel-title">Écarts de salaire hommes / femmes</h2><span class="panel-unit">par métier et niveau</span></div>
       <div class="panel-body">
         <div class="views" id="gap-views" role="group" aria-label="Écarts à afficher"></div>
-        <div class="chart-box h-xl"><canvas id="chart-gap"></canvas></div>
+        <div class="graphe" id="chart-gap"></div>
         <p class="note">Chaque barre compare le salaire médian (celui du milieu) des hommes à celui des femmes, à métier
           et niveau égaux : +10 % veut dire que les hommes touchent 10 % de plus. Sous chaque métier, le nombre de
           femmes et d'hommes comparés : sur quelques personnes, un seul salaire suffit à créer un gros écart. Un métier
@@ -479,6 +497,8 @@ function showPopulation(title, predicate) {{
     // ne sont pas dessinées, mais elles restent comptées et exportées.
     view = tableView(panelBody, RCOLS, matches, MAX_ROWS_SHOWN);
   }}
+  // Un graphe en plein écran cache tout le reste de la page : la liste s'ouvre alors par-dessus lui.
+  (document.fullscreenElement || document.body).appendChild(overlay);
   overlay.hidden = false;
 }}
 
@@ -547,10 +567,12 @@ function tableView(box, cols, rows, limit) {{
   const items = rows.map(r => {{ const t = r.map((v, i) => cellText(cols[i], v)); return {{ r, t, k: t.map(norm) }}; }});
   const filters = new Map();  // numéro de colonne -> valeurs gardées (texte affiché)
   let sort = null, shown = items;
+  // Une colonne de nombres a son titre calé à droite, au-dessus de ses nombres (eux aussi à droite).
+  const nums = cols.map((c, i) => rows.some(r => typeof r[i] === 'number'));
   box.innerHTML = '<div class="tv-tools"><input type="search" placeholder="Rechercher dans le tableau" aria-label="Rechercher dans le tableau">'
     + '<span class="tv-count" aria-live="polite"></span><button type="button" hidden>Effacer les filtres</button></div>'
     + '<div class="table-wrap"><table><thead><tr>'
-    + labels.map(l => '<th>' + escapeText(l) + '<button type="button" class="tv-btn" aria-haspopup="dialog" aria-expanded="false"></button></th>').join('')
+    + labels.map((l, i) => '<th' + (nums[i] ? ' class="num"' : '') + '>' + escapeText(l) + '<button type="button" class="tv-btn" aria-haspopup="dialog" aria-expanded="false"></button></th>').join('')
     + '</tr></thead><tbody></tbody></table></div>';
   const search = box.querySelector('.tv-tools input'), count = box.querySelector('.tv-count');
   const clear = box.querySelector('.tv-tools button'), tbody = box.querySelector('tbody');
@@ -658,126 +680,125 @@ TABLES.forEach(t => {{
   tableView(d.lastChild, t.cols, t.rows, Infinity);
 }});
 
-// ---- Graphiques ----
-function merge(base, extra) {{
-  for (const k in extra) {{
-    const v = extra[k];
-    if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object') merge(base[k], v);
-    else base[k] = v;
-  }}
-  return base;
+// ---- Graphiques : Plotly, avec les mêmes réglages que la page d'exploration de visualisation/ ----
+const POLICE = "'Segoe UI', system-ui, sans-serif";
+const ENCRE = '#1f2328', GRIS = '#5f6670', GRILLE = '#eceef1', TRAIT = '#dde0e4';
+Plotly.register({{
+  moduleType: 'locale', name: 'fr',
+  dictionary: {{
+    'Zoom': 'Zoom', 'Pan': 'Déplacer', 'Zoom in': 'Zoom avant', 'Zoom out': 'Zoom arrière', 'Autoscale': 'Ajuster aux données',
+    'Reset axes': 'Revenir à la vue de départ', 'Reset view': 'Revenir à la vue de départ',
+    'Download plot as a PNG': 'Enregistrer en image (PNG)', 'Download plot': 'Enregistrer en image',
+    'Double-click to zoom back out': 'Double-cliquer pour revenir à la vue de départ',
+  }},
+  format: {{ decimal: ',', thousands: ' ' }},
+}});
+// Molette pour zoomer ; au survol, une barre d'outils en haut à droite (zoom, déplacer, revenir, image).
+const CONFIG = {{
+  locale: 'fr', displaylogo: false, scrollZoom: true, responsive: true,
+  modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian'],
+  toImageButtonOptions: {{ format: 'png', scale: 2 }},
+}};
+const AXE = {{ gridcolor: GRILLE, linecolor: TRAIT, zeroline: false, automargin: true, tickfont: {{ size: 12, color: GRIS }} }};
+const titreAxe = texte => ({{ text: texte, font: {{ size: 12, color: GRIS }}, standoff: 12 }});
+
+// Pour que tout s'aligne : les deux graphes d'une même rangée ont la même hauteur et les mêmes marges
+// haute et basse (leurs axes tombent à la même hauteur), et tous les graphes à barres horizontales ont
+// la même marge gauche, mesurée sur le plus long nom (leurs barres partent du même endroit).
+// MARGE_TITRE : la marge basse d'une rangée où l'un des graphes a un titre sous son axe.
+const MARGE = {{ t: 32, b: 36, r: 24 }}, MARGE_TITRE = 64;
+const H_POLE = 260, H_RANGEE = 400;
+const mesure = document.createElement('canvas').getContext('2d');
+mesure.font = '12px ' + POLICE;
+const largeur = textes => Math.ceil(Math.max(0, ...textes.map(t => mesure.measureText(String(t)).width)));
+const MARGE_G = largeur([...DATA.pole.labels, ...DATA.job.labels, ...DATA.cost.labels, ...DATA.flags.labels]) + 24;
+
+// En plein écran, le graphe prend toute la hauteur que lui laisse son panneau (voir « Agrandir », plus bas).
+const hauteurDisponible = div => Math.max(360, Math.floor(div.getBoundingClientRect().height));
+
+// Dessine le graphe id ; clic(point) ouvre la liste des salariés derrière la barre ou le point cliqué.
+function dessiner(id, traces, L, hauteur, clic) {{
+  const div = document.getElementById(id);
+  div.dataset.hauteur = hauteur;   // la hauteur normale, reprise en sortant du plein écran
+  if (document.fullscreenElement && document.fullscreenElement.contains(div)) hauteur = hauteurDisponible(div);
+  Object.assign(L, {{
+    height: hauteur, margin: {{ ...MARGE, l: MARGE_G, ...(L.margin || {{}}) }}, paper_bgcolor: '#fff', plot_bgcolor: '#fff',
+    font: {{ family: POLICE, size: 12, color: GRIS }}, separators: ', ',
+    hoverlabel: {{ bgcolor: ENCRE, bordercolor: ENCRE, font: {{ family: POLICE, size: 12, color: '#fff' }}, align: 'left' }},
+    // La légende se pose au-dessus du graphe, sur son bord gauche : à la même place dans tous les panneaux.
+    legend: {{ orientation: 'h', x: 0, xanchor: 'left', y: 1, yanchor: 'bottom', font: {{ size: 12, color: ENCRE }}, ...(L.legend || {{}}) }},
+  }});
+  Plotly.react(div, traces, L, CONFIG).then(gd => {{
+    // Chaque dessin remplace le clic du précédent (le graphe des écarts hommes / femmes change de vue).
+    gd.removeAllListeners('plotly_click');
+    if (clic) gd.on('plotly_click', e => {{ if (e.points[0]) clic(e.points[0]); }});
+  }});
 }}
-Chart.defaults.color = '#5f6670';
-Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
-Chart.defaults.font.size = 12;
-const GRID = '#eceef1';
-function baseOptions(extra) {{
-  return merge({{
-    locale: 'fr-FR',
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: {{ duration: 400 }},
-    onHover: (evt, els) => {{ evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }},
-    plugins: {{
-      legend: {{ display: false }},
-      tooltip: {{ backgroundColor: '#1f2328', padding: 10, cornerRadius: 3, displayColors: false }},
-    }},
-    scales: {{
-      x: {{ grid: {{ color: GRID }}, border: {{ display: false }} }},
-      y: {{ grid: {{ color: GRID }}, border: {{ display: false }} }},
-    }},
-  }}, extra);
+
+// Barres horizontales, la première catégorie en haut. Les barres font la même épaisseur (18 px) dans
+// tous les graphes, qu'il y ait 5 pôles ou 10 métiers.
+function barresH(categories, hauteur, L = {{}}) {{
+  const place = (hauteur - MARGE.t - ((L.margin && L.margin.b) || MARGE.b)) / Math.max(categories.length, 1);
+  return {{
+    ...L, barmode: 'relative', bargap: Math.min(0.8, Math.max(0.15, 1 - 18 / place)),
+    // ',d' : des nombres entiers avec une espace pour les milliers (1 000, 20 000), pas « 1000 » ni « 20k ».
+    xaxis: {{ ...AXE, tickformat: ',d', ...(L.xaxis || {{}}) }},
+    yaxis: {{ ...AXE, type: 'category', categoryorder: 'array', categoryarray: categories, autorange: 'reversed',
+             showgrid: false, ticklabelstandoff: 8, ...(L.yaxis || {{}}) }},
+  }};
 }}
-const shortTicks = {{ callback(v) {{ const l = this.getLabelForValue(v); return innerWidth < 600 && l.length > 16 ? l.slice(0, 15) + '…' : l; }} }};
-const hbar = (color, extra) => merge({{ backgroundColor: color, borderRadius: 2, maxBarThickness: 18 }}, extra || {{}});
-const pick = (els, fn) => {{ if (els.length) fn(els[0].index, els[0].datasetIndex); }};
-// Réglages des barres horizontales (tous les graphiques sauf le score général).
-const hOptions = extra => baseOptions(merge({{ indexAxis: 'y', scales: {{ y: {{ grid: {{ display: false }}, ticks: shortTicks }} }} }}, extra));
 
 // Une barre par pôle, découpée par priorité ; une priorité sans aucun salarié n'est pas affichée.
 const poleSets = DATA.pole.datasets.filter(d => d.data.some(v => v > 0));
-new Chart(document.getElementById('chart-pole'), {{
-  type: 'bar',
-  data: {{ labels: DATA.pole.labels, datasets: poleSets.map(d => hbar(d.color, {{ label: d.label, data: d.data }})) }},
-  options: hOptions({{
-    plugins: {{ legend: {{ display: true, position: 'top', align: 'start', labels: {{ boxWidth: 10, boxHeight: 10, padding: 16 }} }},
-               tooltip: {{ displayColors: true }} }},
-    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
-    onClick: (evt, els) => pick(els, (i, d) => {{
-      const pole = DATA.pole.labels[i], sev = poleSets[d];
-      showPopulation(pole + ' — ' + sev.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Severity] === sev.code);
-    }}),
-  }}),
+dessiner('chart-pole', poleSets.map(d => ({{
+  type: 'bar', orientation: 'h', name: d.label, y: DATA.pole.labels, x: d.data, marker: {{ color: d.color }},
+  hovertemplate: '%{{y}} · ' + d.label + '<br><b>%{{x:,}} salariés</b><extra></extra>',
+}})), barresH(DATA.pole.labels, H_POLE), H_POLE, p => {{
+  const pole = DATA.pole.labels[p.pointNumber], sev = poleSets[p.curveNumber];
+  showPopulation(pole + ' — ' + sev.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Severity] === sev.code);
 }});
 
-new Chart(document.getElementById('chart-job'), {{
-  type: 'bar',
-  data: {{ labels: DATA.job.labels, datasets: [hbar('{SLATE}', {{ data: DATA.job.data }})] }},
-  options: hOptions({{ onClick: (evt, els) => pick(els, i => {{
-    const label = DATA.job.labels[i];
-    showPopulation('Métier : ' + label, r => r[RIDX.Job_Family] === label && aTraiter(r));
-  }}) }}),
+dessiner('chart-job', [{{
+  type: 'bar', orientation: 'h', y: DATA.job.labels, x: DATA.job.data, marker: {{ color: '{SLATE}' }},
+  hovertemplate: '%{{y}}<br><b>%{{x:,}} salariés à traiter</b><extra></extra>',
+}}], barresH(DATA.job.labels, H_RANGEE), H_RANGEE, p => {{
+  const label = DATA.job.labels[p.pointNumber];
+  showPopulation('Métier : ' + label, r => r[RIDX.Job_Family] === label && aTraiter(r));
 }});
 
 // Une barre par pôle, découpée par action : on voit ce que coûte chaque cible d'ajustement.
 const costSets = DATA.cost.datasets;
-new Chart(document.getElementById('chart-cost'), {{
-  type: 'bar',
-  data: {{ labels: DATA.cost.labels, datasets: costSets.map(d => hbar(d.color, {{ label: d.label, data: d.data }})) }},
-  options: hOptions({{
-    plugins: {{ legend: {{ display: true, position: 'top', align: 'start', labels: {{ boxWidth: 10, boxHeight: 10, padding: 16 }} }},
-               tooltip: {{ displayColors: true, callbacks: {{
-                 label: c => c.dataset.label + ' : ' + NUM.format(c.parsed.x) + ' {UNITE} (' + NUM.format(costSets[c.datasetIndex].n[c.dataIndex]) + ' salariés)',
-               }} }} }},
-    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
-    onClick: (evt, els) => pick(els, (i, d) => {{
-      const pole = DATA.cost.labels[i], action = costSets[d];
-      showPopulation(pole + ' — ' + action.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Reco] === action.code);
-    }}),
-  }}),
+dessiner('chart-cost', costSets.map(d => ({{
+  type: 'bar', orientation: 'h', name: d.label, y: DATA.cost.labels, x: d.data, customdata: d.n, marker: {{ color: d.color }},
+  hovertemplate: '%{{y}} · ' + d.label + '<br><b>%{{x:,.1f}} {UNITE}</b> (%{{customdata:,}} salariés)<extra></extra>',
+}})), barresH(DATA.cost.labels, H_RANGEE), H_RANGEE, p => {{
+  const pole = DATA.cost.labels[p.pointNumber], action = costSets[p.curveNumber];
+  showPopulation(pole + ' — ' + action.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Reco] === action.code);
 }});
 
-new Chart(document.getElementById('chart-flags'), {{
-  type: 'bar',
-  data: {{ labels: DATA.flags.labels, datasets: [hbar('{SLATE}', {{ data: DATA.flags.data }})] }},
-  options: hOptions({{
-    plugins: {{ tooltip: {{ callbacks: {{ title: items => items[0].label + ' (' + DATA.flags.codes[items[0].dataIndex] + ')' }} }} }},
-    onClick: (evt, els) => pick(els, i => {{
-      const code = DATA.flags.codes[i];
-      showPopulation('Signal : ' + DATA.flags.labels[i], r => r[RIDX.Rule_Flags].split(';').includes(code));
-    }}),
-  }}),
+dessiner('chart-flags', [{{
+  type: 'bar', orientation: 'h', y: DATA.flags.labels, x: DATA.flags.data, customdata: DATA.flags.codes, marker: {{ color: '{SLATE}' }},
+  hovertemplate: '%{{y}} (%{{customdata}})<br><b>%{{x:,}} salariés</b><extra></extra>',
+}}], barresH(DATA.flags.labels, H_RANGEE, {{ margin: {{ b: MARGE_TITRE }} }}), H_RANGEE, p => {{
+  const code = DATA.flags.codes[p.pointNumber];
+  showPopulation('Signal : ' + DATA.flags.labels[p.pointNumber], r => r[RIDX.Rule_Flags].split(';').includes(code));
 }});
 
 // Une courbe par score : combien de salariés tombent dans chaque tranche de 10 points.
 const tranche = v => Math.min(Math.floor(v / 10), 9);
-new Chart(document.getElementById('chart-risk'), {{
-  type: 'line',
-  data: {{ labels: DATA.scores.labels, datasets: DATA.scores.datasets.map((s, k) => ({{
-    label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color,
-    // Le score général (le premier), celui qui fixe la priorité, en trait plus épais.
-    borderWidth: k ? 2 : 3, pointRadius: k ? 4 : 5, pointHoverRadius: 7, pointBorderColor: '#fff', pointBorderWidth: 2,
-  }})) }},
-  options: baseOptions({{
-    // L'infobulle donne les trois scores de la tranche survolée.
-    interaction: {{ mode: 'index', intersect: false }},
-    plugins: {{
-      legend: {{ display: true, position: 'top', align: 'start', labels: {{ usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 16 }} }},
-      tooltip: {{ displayColors: true, callbacks: {{
-        title: items => {{ const b = items[0].dataIndex * 10; return 'Score de ' + b + (b < 90 ? ' à moins de ' + (b + 10) : ' à 100'); }},
-        label: c => c.dataset.label + ' : ' + NUM.format(c.parsed.y) + ' salariés',
-      }} }},
-    }},
-    scales: {{
-      x: {{ grid: {{ display: false }}, title: {{ display: true, text: 'Score sur 100, par tranche de 10 points' }} }},
-      y: {{ beginAtZero: true, title: {{ display: true, text: 'Nombre de salariés' }} }},
-    }},
-    // Le clic retient le point le plus proche, donc une seule courbe.
-    onClick: (evt, els, chart) => pick(chart.getElementsAtEventForMode(evt, 'nearest', {{ intersect: false, axis: 'xy' }}, false), (i, d) => {{
-      const s = DATA.scores.datasets[d];
-      showPopulation(s.label + ' ' + DATA.scores.labels[i], r => tranche(r[RIDX[s.code]]) === i);
-    }}),
-  }}),
+const tranches = DATA.scores.labels.map((_, i) => i < 9 ? 'de ' + i * 10 + ' à moins de ' + (i * 10 + 10) : 'de 90 à 100');
+dessiner('chart-risk', DATA.scores.datasets.map((s, k) => ({{
+  type: 'scatter', mode: 'lines+markers', name: s.label, x: DATA.scores.labels, y: s.data, customdata: tranches,
+  // Le score général (le premier), celui qui fixe la priorité, en trait plus épais.
+  line: {{ color: s.color, width: k ? 2 : 3 }}, marker: {{ color: s.color, size: k ? 8 : 10, line: {{ color: '#fff', width: 2 }} }},
+  hovertemplate: s.label + ' %{{customdata}}<br><b>%{{y:,}} salariés</b><extra></extra>',
+}})), {{
+  xaxis: {{ ...AXE, type: 'category', showgrid: false, title: titreAxe('Score sur 100, par tranche de 10 points') }},
+  yaxis: {{ ...AXE, rangemode: 'tozero', tickformat: ',d', title: titreAxe('Nombre de salariés') }},
+  margin: {{ l: 72, b: MARGE_TITRE }},
+}}, H_RANGEE, p => {{
+  const s = DATA.scores.datasets[p.curveNumber];
+  showPopulation(s.label + ' ' + DATA.scores.labels[p.pointNumber], r => tranche(r[RIDX[s.code]]) === p.pointNumber);
 }});
 
 // ---- Écarts hommes / femmes : les 10 plus marqués, puis un bouton par niveau ----
@@ -789,77 +810,47 @@ const gapName = (r, avecNiveau) => r.Job_Family + (avecNiveau ? ' · niveau ' + 
 // niveau à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
 // arrondir à 20 près garde des graduations régulières (-40 %, -20 %, 0 %...).
 const gapMax = Math.ceil(Math.max(...GAP.map(r => Math.abs(r.Ecart_pct))) * 1.2 / 20) * 20;
+const graduations = [];
+for (let v = -gapMax; v <= gapMax; v += 20) graduations.push(v);
 const gapViews = [{{ name: 'Les 10 plus marqués', rows: [...GAP].sort((a, b) => Math.abs(b.Ecart_pct) - Math.abs(a.Ecart_pct)).slice(0, 10) }}]
   .concat([...new Set(GAP.map(r => r.Niveau))].sort((a, b) => a - b).map(g => ({{
     // Dans un niveau, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
     name: 'Niveau ' + g, niveau: g, rows: GAP.filter(r => r.Niveau === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
   }})));
 let gapRows = [];
-
-// Écrit l'écart au bout de chaque barre, et le sens de lecture de part et d'autre du zéro.
-const gapLabels = {{
-  id: 'gapLabels',
-  afterDatasetsDraw(chart) {{
-    const {{ ctx, chartArea, scales: {{ x }} }} = chart, zero = x.getPixelForValue(0), y = chartArea.top - 14;
-    ctx.save();
-    ctx.textBaseline = 'middle';
-    ctx.font = '600 12px ' + Chart.defaults.font.family;
-    ctx.fillStyle = '#1f2328';
-    chart.getDatasetMeta(0).data.forEach((bar, i) => {{
-      if (!gapRows[i]) return;
-      const v = gapRows[i].Ecart_pct;
-      ctx.textAlign = v < 0 ? 'right' : 'left';
-      ctx.fillText(pctText(v), bar.x + (v < 0 ? -6 : 6), bar.y);
-    }});
-    ctx.font = '12px ' + Chart.defaults.font.family;
-    ctx.fillStyle = '{GOLD}'; ctx.fillRect(zero - 18, y - 5, 10, 10);
-    ctx.fillStyle = '{SLATE}'; ctx.fillRect(zero + 8, y - 5, 10, 10);
-    ctx.fillStyle = '#5f6670';
-    ctx.textAlign = 'right'; ctx.fillText('Femmes mieux payées', zero - 24, y);
-    ctx.textAlign = 'left'; ctx.fillText('Hommes mieux payés', zero + 24, y);
-    ctx.restore();
-  }},
-}};
-
-const gapChart = new Chart(document.getElementById('chart-gap'), {{
-  type: 'bar',
-  data: {{ labels: [], datasets: [hbar([], {{ data: [] }})] }},
-  plugins: [gapLabels],
-  options: hOptions({{
-    layout: {{ padding: {{ top: 24 }} }},
-    plugins: {{ tooltip: {{ callbacks: {{
-      title: items => gapName(gapRows[items[0].dataIndex], true),
-      label: c => {{
-        const r = gapRows[c.dataIndex];
-        return ['Médiane femmes : ' + NUM.format(r.Median_F) + ' {UNITE} (' + plural(r.F, 'femme') + ')',
-                'Médiane hommes : ' + NUM.format(r.Median_M) + ' {UNITE} (' + plural(r.M, 'homme') + ')',
-                'Les hommes touchent ' + NUM.format(Math.abs(r.Ecart_pct)) + ' % de ' + (r.Ecart_pct < 0 ? 'moins' : 'plus') + ' que les femmes'];
-      }},
-    }} }} }},
-    scales: {{
-      x: {{ min: -gapMax, max: gapMax,
-            ticks: {{ callback: v => (v > 0 ? '+' : '') + v + ' %' }},
-            // Le zéro (pas d'écart) en trait plus foncé.
-            grid: {{ color: c => c.tick.value === 0 ? '#8b929b' : GRID }},
-            title: {{ display: true, text: 'Salaire médian des hommes comparé à celui des femmes (en %)' }} }},
-      y: {{ title: {{ display: true }} }},
-    }},
-    onClick: (evt, els) => pick(els, i => {{
-      const r = gapRows[i];
-      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Niveau] === r.Niveau);
-    }}),
-  }}),
-}});
+// Deux lignes devant chaque barre : le métier (et le niveau s'ils sont mélangés), puis les effectifs.
+const effectifs = r => plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme');
+const gapSurvol = r => '<b>' + escapeText(gapName(r, true)) + '</b>'
+  + '<br>Médiane femmes : ' + NUM.format(r.Median_F) + ' {UNITE} (' + plural(r.F, 'femme') + ')'
+  + '<br>Médiane hommes : ' + NUM.format(r.Median_M) + ' {UNITE} (' + plural(r.M, 'homme') + ')'
+  + '<br>Les hommes touchent ' + NUM.format(Math.abs(r.Ecart_pct)) + ' % de ' + (r.Ecart_pct < 0 ? 'moins' : 'plus') + ' que les femmes';
+// La marge gauche se règle sur le plus long nom de toutes les vues : le zéro ne bouge pas quand on change de vue.
+const MARGE_GAP = largeur(GAP.flatMap(r => [gapName(r, true), effectifs(r)])) + 24;
 
 function showGapView(view, button) {{
   gapRows = view.rows;
-  // Deux lignes sous chaque barre : le métier (et le niveau s'ils sont mélangés), puis les effectifs.
-  gapChart.data.labels = gapRows.map(r => [gapName(r, !view.niveau), plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme')]);
-  gapChart.data.datasets[0].data = gapRows.map(r => r.Ecart_pct);
-  // Ardoise = hommes mieux payés, or = femmes mieux payées.
-  gapChart.data.datasets[0].backgroundColor = gapRows.map(r => r.Ecart_pct > 0 ? '{SLATE}' : '{GOLD}');
-  gapChart.options.scales.y.title.text = view.niveau ? 'Métiers du niveau ' + view.niveau : 'Métier et niveau';
-  gapChart.update();
+  const noms = gapRows.map(r => escapeText(gapName(r, !view.niveau)) + '<br>' + effectifs(r));
+  // Deux séries : or = femmes mieux payées (écart négatif), ardoise = hommes mieux payés. La légende le dit.
+  const serie = (garder, nom, couleur) => {{
+    const idx = gapRows.map((r, i) => i).filter(i => garder(gapRows[i].Ecart_pct));
+    return {{ type: 'bar', orientation: 'h', name: nom, y: idx.map(i => noms[i]), x: idx.map(i => gapRows[i].Ecart_pct), customdata: idx,
+      marker: {{ color: couleur }}, text: idx.map(i => pctText(gapRows[i].Ecart_pct)), textposition: 'outside', cliponaxis: false,
+      textfont: {{ size: 12, color: ENCRE }}, hovertext: idx.map(i => gapSurvol(gapRows[i])), hovertemplate: '%{{hovertext}}<extra></extra>' }};
+  }};
+  // 46 px par métier : les barres gardent leur épaisseur, quel que soit le nombre de métiers du niveau.
+  const h = Math.max(360, MARGE.t + MARGE_TITRE + 46 * gapRows.length);
+  dessiner('chart-gap', [serie(v => v <= 0, 'Femmes mieux payées', '{GOLD}'), serie(v => v > 0, 'Hommes mieux payés', '{SLATE}')],
+    barresH(noms, h, {{
+      xaxis: {{ range: [-gapMax, gapMax], tickvals: graduations, ticktext: graduations.map(v => (v > 0 ? '+' : '') + v + ' %'),
+               zeroline: true, zerolinecolor: '#8b929b', zerolinewidth: 1,
+               title: titreAxe('Salaire médian des hommes comparé à celui des femmes (en %)') }},
+      // La légende au-dessus du zéro : or à gauche, ardoise à droite, comme les barres.
+      legend: {{ x: 0.5, xanchor: 'center' }},
+      margin: {{ l: MARGE_GAP, b: MARGE_TITRE }},
+    }}), h, p => {{
+      const r = gapRows[p.customdata];
+      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Niveau] === r.Niveau);
+    }});
   viewButtons.forEach(b => b.setAttribute('aria-pressed', b === button));
 }}
 const viewButtons = gapViews.map(view => {{
@@ -871,6 +862,45 @@ const viewButtons = gapViews.map(view => {{
   return b;
 }});
 showGapView(gapViews[0], viewButtons[0]);
+
+// ---- Agrandir un graphe en plein écran : le même bouton que dans la page d'exploration ----
+// En plein écran, le graphe prend toute la hauteur disponible ; « Réduire » ou la touche Échap ramène à la page.
+const AGRANDIR = '<svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>Agrandir';
+const REDUIRE = '<svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>Réduire';
+const boutonsPlein = [];
+if (document.fullscreenEnabled) document.querySelectorAll('section.panel').forEach(section => {{
+  if (!section.querySelector('.graphe')) return;
+  // Le bouton se range à droite de l'en-tête, après l'unité.
+  const tete = section.querySelector('.panel-head'), actions = document.createElement('div');
+  actions.className = 'panel-actions';
+  const unite = tete.querySelector('.panel-unit');
+  if (unite) actions.append(unite);
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'agrandir';
+  b.onclick = () => document.fullscreenElement === section ? document.exitFullscreen() : section.requestFullscreen();
+  actions.append(b);
+  tete.append(actions);
+  boutonsPlein.push([b, section]);
+}});
+function pleinEcran() {{
+  for (const [b, section] of boutonsPlein) {{
+    const plein = document.fullscreenElement === section;
+    b.innerHTML = plein ? REDUIRE : AGRANDIR;
+    b.title = plein ? 'Revenir à la page (Échap)' : 'Afficher ce graphe en plein écran';
+  }}
+  // En sortant du plein écran, la liste des salariés (ouverte par-dessus le graphe) revient dans la page.
+  if (!document.fullscreenElement && overlay.parentNode !== document.body) document.body.appendChild(overlay);
+  // Le graphe prend la largeur et la hauteur que lui laisse le plein écran, puis reprend les siennes au
+  // retour (largeur « null » : il suit de nouveau la largeur de la page).
+  requestAnimationFrame(() => document.querySelectorAll('.graphe.js-plotly-plot').forEach(div => {{
+    const plein = document.fullscreenElement && document.fullscreenElement.contains(div);
+    if (plein) Plotly.relayout(div, {{ height: hauteurDisponible(div), width: Math.floor(div.getBoundingClientRect().width) }});
+    else if (div.layout.width || div.layout.height !== Number(div.dataset.hauteur)) Plotly.relayout(div, {{ height: Number(div.dataset.hauteur), width: null }});
+  }}));
+}}
+document.addEventListener('fullscreenchange', pleinEcran);
+pleinEcran();
 </script>
 </body>
 </html>

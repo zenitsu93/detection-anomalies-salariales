@@ -148,7 +148,7 @@ Les résultats arrivent dans `output/detection/` :
 - `anomalies.xlsx` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
 - `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + niveau.
 
-Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic).
+Le tableau de bord arrive dans `output/dashboard/`, sous un nom qui porte la date et l'heure du lancement, par exemple `dashboard_anomalies_2026-10-02_14-35-08.html`. Chaque lancement ajoute un fichier sans effacer les précédents ; le plus récent est le dernier de la liste. Il s'ouvre avec un navigateur (double-clic), même sans internet : tout ce qu'il lui faut est dans le fichier (environ 7 Mo). Ses graphes se zooment à la molette et s'agrandissent en plein écran avec le bouton « Agrandir », comme ceux de la page d'exploration.
 
 Le dossier `output/` n'est pas envoyé sur GitHub non plus : chaque lancement refait les résultats.
 
