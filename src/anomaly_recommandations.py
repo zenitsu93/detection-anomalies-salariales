@@ -6,7 +6,7 @@ RECOMMANDATIONS : QUOI FAIRE, ET COMBIEN ÇA COÛTE
 =================================================
 
 Ce fichier donne à chaque salarié une recommandation (Reco) et le coût de l'ajustement proposé
-(Cout_Ajustement), d'après sa place dans la grille (Min, Mid, Max) et son CompaRatio.
+(Cout_Ajustement), d'après sa place dans la grille (Min, Mid) et son CompaRatio.
 
 Il prend en entrée le DataFrame rendu par anomaly_signal_fort.py et rend ce DataFrame complété.
 
@@ -38,27 +38,25 @@ def recommendations(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
 
     Les cas, testés dans cet ordre (seul le premier qui s'applique compte) :
     1. salaire sous le Min                        -> « Ajuster au MIN », coût = Min - salaire ;
-    2. CompaRatio bas (< compa_ratio_low) et sous le Mid -> « Ajuster vers MID », coût = Mid - salaire ;
-    3. salaire au-dessus du Max                   -> « Au-dessus MAX: Revue », coût 0 ;
-    4. CompaRatio haut (> compa_ratio_high)       -> « Compa élevée: Revue », coût 0.
+    2. CompaRatio bas (< compa_ratio_low) et sous le Mid -> « Ajuster vers MID », coût = Mid - salaire.
     Sinon : pas de recommandation, coût 0.
+    Pourquoi plus de « Au-dessus MAX: Revue » ni de « Compa élevée: Revue » : le comité du 15/10/2026
+    a décidé qu'un salaire au-dessus de la grille n'est pas un cas à traiter, il n'y a donc rien à revoir.
     """
-    # Pourquoi lus dans le fichier de règles : l'archive écrivait 0.85 et 1.15 en dur, alors que les
-    # règles lisent ces seuils dans config/rules.yaml. Les deux suivent maintenant les mêmes seuils.
+    # Pourquoi lu dans le fichier de règles : l'archive écrivait 0.85 en dur, alors que les règles lisent
+    # ce seuil dans config/rules.yaml. Les deux suivent maintenant le même seuil.
     compa_lo = rule_params.get("compa_ratio_low")
-    compa_hi = rule_params.get("compa_ratio_high")
 
     df = df.copy()
-    fix, mn, md, mx, compa = df["Fixe_Annuel_MAD"], df["Min"], df["Mid"], df["Max"], df["CompaRatio"]
+    fix, mn, md, compa = df["Fixe_Annuel_MAD"], df["Min"], df["Mid"], df["CompaRatio"]
 
     # Une case vide donne toujours « faux » : sans grille, pas de recommandation.
-    cas = [fix < mn, (compa < compa_lo) & (fix < md), fix > mx, compa > compa_hi]
+    cas = [fix < mn, (compa < compa_lo) & (fix < md)]
 
     # Pourquoi np.select : il prend le premier cas vrai, comme les « if / elif » de l'archive, mais
     # d'un coup pour tous les salariés (l'archive les parcourait un par un, très lent sur 10 000).
-    df["Reco"] = np.select(cas, ["Ajuster au MIN", "Ajuster vers MID", "Au-dessus MAX: Revue",
-                                 "Compa élevée: Revue"], default="")
-    df["Cout_Ajustement"] = np.select(cas[:2], [mn - fix, md - fix], default=0.0)
+    df["Reco"] = np.select(cas, ["Ajuster au MIN", "Ajuster vers MID"], default="")
+    df["Cout_Ajustement"] = np.select(cas, [mn - fix, md - fix], default=0.0)
 
     return df
 

@@ -73,7 +73,9 @@ ACTIONS = {"Ajuster au MIN": ("Remise au Min", BROWN), "Ajuster vers MID": ("Rap
 
 # Les étiquettes traduites pour l'écran ; le code d'origine reste visible dans l'infobulle.
 FLAG_FR = {
-    "OUT_OF_BAND": "Hors grille",
+    # Pourquoi « Sous la grille » et plus « Hors grille » : la règle ne signale plus les salaires
+    # au-dessus du Max (décision du comité du 15/10/2026), seulement ceux sous le Min.
+    "OUT_OF_BAND": "Sous la grille",
     "COMPA_RATIO": "Position dans la grille",
     "MARKET_GAP": "Écart au marché",
     "PEER_OUTLIER": "Écart aux collègues",

@@ -269,8 +269,9 @@ class DecisionEngine:
                 if math.isclose(ratios[column], self.rules[bound], rel_tol=1e-12, abs_tol=1e-12):
                     ratios[column] = self.rules[bound]
         flags = apply_rulebook(pd.DataFrame([ratios]), self.rules).iloc[0].Rule_Flags
-        # Pourquoi OUT_OF_BAND : même règle que le programme principal, avec sa petite marge autour du
-        # Min et du Max. La fourchette proposée, elle, reste toujours entre Min et Max.
+        # Pourquoi OUT_OF_BAND : même règle que le programme principal, avec sa petite marge sous le Min.
+        # Comme là-bas, un salaire au-dessus du Max ne lève plus d'alerte (comité du 15/10/2026). La
+        # fourchette proposée, elle, reste toujours entre Min et Max.
         results = {"Grille interne": "OUT_OF_BAND" not in flags if band else None,
                    "Position dans la grille": "COMPA_RATIO" not in flags if band else None,
                    "Marché": "MARKET_GAP" not in flags if market else None,
@@ -282,8 +283,9 @@ class DecisionEngine:
         elif peers["scale"] > 0:
             results["Collègues comparables"] = "PEER_OUTLIER" not in flags
         else:
-            # Tous les collègues ont le même salaire : tout écart à ce salaire est à examiner.
-            results["Collègues comparables"] = math.isclose(salary, peers["median"])
+            # Tous les collègues ont le même salaire : être payé moins qu'eux est à examiner. Être payé
+            # plus ne l'est plus, comme dans la règle des collègues (comité du 15/10/2026).
+            results["Collègues comparables"] = salary >= peers["median"] or math.isclose(salary, peers["median"])
         # Pourquoi seulement un nom et un statut : ces contrôles décident du verdict et vérifient la cible
         # proposée, mais ne sont pas affichés un par un (la règle « Positionnement » montre déjà les repères).
         return [{"name": name, "status": "unavailable" if ok is None else "ok" if ok else "review"}

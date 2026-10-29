@@ -9,9 +9,10 @@ generate_sources.py fabrique des salariés fictifs dont le salaire tombe toujour
 leur métier + niveau : la détection n'a presque rien à trouver. Ce fichier lance generate_sources.py,
 puis abîme volontairement quelques salariés de input/employes.xlsx pour que la détection ait de
 vraies anomalies à repérer :
-- des salaires sous le Min de la grille, au-dessus du Max, ou très bas (sous le salaire minimum de
-  leur niveau) ;
+- des salaires sous le Min de la grille, ou très bas (sous le salaire minimum de leur niveau) ;
 - des matricules en double (une ligne recopiée à la fin du fichier).
+Il ajoute aussi des salaires au-dessus du Max. Ce ne sont PAS des anomalies (décision du comité du
+15/10/2026) : ils servent à vérifier que la détection les laisse bien de côté.
 Les autres salariés, la grille (bands.xlsx) et le marché (market.xlsx) ne changent pas.
 
 Utilisation, depuis le dossier du projet :
@@ -32,7 +33,8 @@ import generate_sources
 ANOMALIES = {
     # Sous la grille : entre 75 % et 90 % du Min (2 % des salariés).
     "SOUS_MIN": (0.02, 0.75, 0.90, "Min"),
-    # Au-dessus de la grille : entre 110 % et 140 % du Max (1,5 % des salariés).
+    # Au-dessus de la grille : entre 110 % et 140 % du Max (1,5 % des salariés). Pas une anomalie :
+    # la détection ne doit pas les faire remonter.
     "AU_DESSUS_MAX": (0.015, 1.10, 1.40, "Max"),
     # Très bas : entre 45 % et 60 % du Min (0,5 % des salariés). Avec les planchers de
     # min_salary_by_niveau (config/rules.yaml), ces salaires tombent tous sous le salaire minimum.

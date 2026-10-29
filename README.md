@@ -92,7 +92,7 @@ input/
 └── market.xlsx    le marché : une ligne par métier + niveau
 ```
 
-Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de vraies données salariales n'y partent jamais. Pour essayer le projet sans données réelles, fabriquer d'abord trois fichiers fictifs (10 000 salariés, dont quelques anomalies volontaires : salaires hors grille ou très bas, matricules en double) :
+Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de vraies données salariales n'y partent jamais. Pour essayer le projet sans données réelles, fabriquer d'abord trois fichiers fictifs (10 000 salariés, dont quelques anomalies volontaires : salaires sous la grille ou très bas, matricules en double ; plus quelques salaires au-dessus de la grille, qui ne sont pas des anomalies et ne doivent pas remonter) :
 
 ```powershell
 python src/generate_sources_anomalies.py
@@ -179,7 +179,7 @@ Les seuils des règles, les poids et les priorités se règlent dans `config/rul
 | double-clic sur `visualisation/exploration_salaires.html` | ouvre dans Edge ou Chrome la page d'exploration des données salariales, sans Python ni internet : elle refait les calculs du notebook du comité et montre 11 graphes (masse salariale, grille, marché, ancienneté, compétences, 9-Box, équité), avec des filtres et un bouton « Agrandir ». À chaque ouverture, la page attend les trois fichiers : les glisser dans le cadre « Déposer les trois fichiers ici », ou cliquer sur « Choisir les fichiers » (Ctrl + clic pour en prendre plusieurs). Elle ne lit aucun fichier toute seule, ne garde rien d'une ouverture à l'autre et ne demande aucune autorisation au navigateur. Pour mettre la page à jour, déposer le nouveau fichier : il remplace celui du même nom. On peut ranger les fichiers dans `visualisation/donnees/` (à créer), qui n'est pas envoyé sur GitHub. |
 | `python -m decision_support.app` | ouvre l'aide à la décision sur **http://127.0.0.1:8765** (arrêter avec `Ctrl+C`) ; mode d'emploi dans [`decision_support/README.md`](decision_support/README.md). |
 | `python src/generate_sources.py` | fabrique de nouvelles données fictives, sans anomalie. **Attention :** il réécrit les trois fichiers de `input/` et remplace donc les vôtres. |
-| `python src/generate_sources_anomalies.py` | fabrique les mêmes données fictives, puis y ajoute des anomalies volontaires (400 salaires hors grille ou très bas, 10 matricules en double), pour que la détection ait de vraies anomalies à trouver. **Même attention** que pour la ligne précédente. |
+| `python src/generate_sources_anomalies.py` | fabrique les mêmes données fictives, puis y ajoute des anomalies volontaires (250 salaires sous la grille ou très bas, 10 matricules en double), pour que la détection ait de vraies anomalies à trouver. Il ajoute aussi 150 salaires au-dessus de la grille, qui ne sont pas des anomalies : la détection doit les laisser de côté. **Même attention** que pour la ligne précédente. |
 
 <!--
 Modèle à recopier à la fin du fichier pour chaque nouvel envoi.

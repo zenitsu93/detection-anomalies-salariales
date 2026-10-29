@@ -42,11 +42,8 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # Les réglages, lus dans le fichier de règles (la valeur par défaut s'ils n'y sont pas).
     weights = rule_params.get("severity_weights")
     low_buf = rule_params.get("range_penetration_low_buffer")
-    high_buf = rule_params.get("range_penetration_high_buffer")
     compa_lo = rule_params.get("compa_ratio_low")
-    compa_hi = rule_params.get("compa_ratio_high")
     market_lo = rule_params.get("market_low")
-    market_hi = rule_params.get("market_high")
     z_minor = rule_params.get("peer_z_threshold_minor")
     z_major = rule_params.get("peer_z_threshold_major")
     planchers = rule_params.get("min_salary_by_niveau")
@@ -54,15 +51,15 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     df = df.copy()
 
     # Qui déclenche quoi : vrai ou faux pour chaque salarié. Une case vide donne toujours « faux ».
+    # Pourquoi seulement les salaires trop BAS : le comité du 15/10/2026 a décidé qu'être payé au-dessus
+    # de sa grille, du milieu de grille, du marché ou de ses collègues n'est pas un cas à traiter. Un
+    # salaire à 120 % du Max ne prend donc plus aucun point ; un salaire à 80 % du Min, si.
     sous_min = df["RangePenetration"] < low_buf
-    au_dessus_max = df["RangePenetration"] > 1 + high_buf
     compa_bas = df["CompaRatio"] < compa_lo
-    compa_haut = df["CompaRatio"] > compa_hi
     marche_bas = df["MarketRatio"] < market_lo
-    marche_haut = df["MarketRatio"] > market_hi
-    # abs() enlève le signe : payé nettement plus OU nettement moins que ses collègues, les deux comptent.
-    pairs_minor = df["PeerZ"].abs() >= z_minor
-    pairs_major = df["PeerZ"].abs() >= z_major
+    # PeerZ négatif = payé moins que ses collègues : -3 déclenche l'alerte, +3 non.
+    pairs_minor = df["PeerZ"] <= -z_minor
+    pairs_major = df["PeerZ"] <= -z_major
     # Le plancher du niveau de chaque salarié. Un niveau absent du fichier de règles reste vide : jamais
     # d'alerte. Exemple : niveau 5, plancher 140 : un salaire de 135 déclenche l'alerte, 140 non.
     plancher = df["Niveau"].map(planchers)
@@ -71,12 +68,12 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # Étiquettes et points : pour chaque règle déclenchée, on ajoute « ;ETIQUETTE » et ses points.
     df["Rule_Flags"] = ""
     df["Rule_Score"] = 0.0
-    df.loc[sous_min | au_dessus_max, "Rule_Flags"] += "OUT_OF_BAND"
-    df.loc[sous_min | au_dessus_max, "Rule_Score"] += weights.get("out_of_band")
-    df.loc[compa_bas | compa_haut, "Rule_Flags"] += ";COMPA_RATIO"
-    df.loc[compa_bas | compa_haut, "Rule_Score"] += weights.get("compa_ratio")
-    df.loc[marche_bas | marche_haut, "Rule_Flags"] += ";MARKET_GAP"
-    df.loc[marche_bas | marche_haut, "Rule_Score"] += weights.get("market_gap")
+    df.loc[sous_min, "Rule_Flags"] += "OUT_OF_BAND"
+    df.loc[sous_min, "Rule_Score"] += weights.get("out_of_band")
+    df.loc[compa_bas, "Rule_Flags"] += ";COMPA_RATIO"
+    df.loc[compa_bas, "Rule_Score"] += weights.get("compa_ratio")
+    df.loc[marche_bas, "Rule_Flags"] += ";MARKET_GAP"
+    df.loc[marche_bas, "Rule_Score"] += weights.get("market_gap")
     df.loc[pairs_minor, "Rule_Flags"] += ";PEER_OUTLIER"
     df.loc[pairs_major, "Rule_Score"] += weights.get("peer_outlier")
     df.loc[sous_plancher, "Rule_Flags"] += ";MIN_SALARY"
@@ -93,12 +90,9 @@ def apply_rulebook(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     plancher_txt = plancher.map("{:g}".format)
     df["Reason_Principale"] = ""
     df.loc[sous_min, "Reason_Principale"] += " & Salaire sous MIN interne"
-    df.loc[au_dessus_max, "Reason_Principale"] += " & Salaire au-dessus du MAX interne"
     df.loc[compa_bas, "Reason_Principale"] += " & CompaRatio=" + compa_txt[compa_bas] + f" (<{compa_lo})"
-    df.loc[compa_haut, "Reason_Principale"] += " & CompaRatio=" + compa_txt[compa_haut] + f" (>{compa_hi})"
     df.loc[marche_bas, "Reason_Principale"] += " & Sous la mediane marche"
-    df.loc[marche_haut, "Reason_Principale"] += " & Au-dessus de la mediane marche"
-    df.loc[pairs_major, "Reason_Principale"] += f" & Outlier vs pairs (|Z|> ou = {z_major:.1f})"
+    df.loc[pairs_major, "Reason_Principale"] += f" & Sous ses collegues (Z< ou = -{z_major:.1f})"
     df.loc[sous_plancher, "Reason_Principale"] += (" & Salaire sous le minimum du niveau ("
                                                    + plancher_txt[sous_plancher] + ")")
     # Le « & » du début ne sert à rien non plus.
