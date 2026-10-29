@@ -197,7 +197,12 @@ class DecisionEngine:
                 "coherent" if proposal["target"] is not None and market and peers["available"] else "insufficient")
         titles = {"coherent": "Cohérent avec les repères disponibles" if mode == "evaluate" else "Proposition de référence",
                   "review": "Points à examiner", "insufficient": "Références incomplètes"}
-        return {"mode": mode, "profile": profile, "salary": salary, "unit": UNIT,
+        # Pourquoi un avertissement à part : depuis le comité du 15/10/2026, un salaire au-dessus du Max
+        # n'est plus une anomalie, donc le verdict ne change pas. Mais pour une embauche ou une promotion,
+        # payer au-dessus de la grille est un choix qui doit pouvoir se justifier : la page le signale,
+        # sans bloquer. above_max = de combien le salaire dépasse le Max (0.25 = 25 %), sinon None.
+        above_max = (salary - band["Max"]) / band["Max"] if salary is not None and band and salary > band["Max"] else None
+        return {"mode": mode, "profile": profile, "salary": salary, "unit": UNIT, "above_max": above_max,
                 "status": status, "title": titles[status], "band": band, "market": market,
                 "peers": {k: v for k, v in peers.items() if k not in {"center", "scale"}},
                 "checks": checks, "proposal": proposal,

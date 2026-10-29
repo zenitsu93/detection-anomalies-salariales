@@ -133,6 +133,12 @@ function render(data) {
   $('result-profile').textContent = [`${profile.job_family} · Niveau ${profile.niveau}`,
     profile.seniority == null ? null : `${fmt(profile.seniority)} ans d’ancienneté`,
     data.salary == null ? null : `${fmt(data.salary)} ${data.unit}`].filter(Boolean).join(' · ');
+  // Au-dessus du Max : ce n'est plus une anomalie (le verdict ne change pas), mais on le signale.
+  const note = $('result-note'), above = data.above_max;
+  note.hidden = above == null;
+  note.textContent = above == null ? '' : `Ce salaire dépasse de ${new Intl.NumberFormat('fr-FR', {style: 'percent', maximumFractionDigits: 1}).format(above)} `
+    + `le Max de la grille (${fmt(data.band.Max)} ${data.unit}). Ce n’est pas une anomalie, mais une embauche ou une promotion `
+    + `au-dessus de la grille doit pouvoir se justifier.`;
   renderFigures(data);
   renderRuler(data);
   $('ruler-note').textContent = `Collègues comparés : ${peers.count} · ${peers.scope.toLowerCase()}.` +
