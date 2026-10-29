@@ -3,7 +3,7 @@
 (function (E) {
   'use strict';
   const C = E.calculs, F = E.filtres;
-  const { fr, pct, echapper, constat, COULEURS: K, transparent, titreAxe, grille, montrer } = E.communs;
+  const { fr, pct, echapper, constat, salaries, millions, enumerer, extremes, COULEURS: K, transparent, titreAxe, grille, montrer } = E.communs;
   // Mêmes seuils que la règle CompaRatio de la détection (compa_ratio_low et compa_ratio_high de config/rules.yaml).
   const COMPA_BAS = 0.85, COMPA_HAUT = 1.15;
 
@@ -38,8 +38,20 @@
     const clic = p => ({ titre: 'Pôle ' + p.y, lignes: lignes.filter(l => String(l.Entite_N1) === p.y) });
     montrer('g-masse', traces, L, 150 + 46 * Math.max(4, stats.length), clic, F.libelle(sel));
     if (!stats.length) return constat('s-masse', 'Aucun salarié pour ce filtre.');
-    const lourd = stats[stats.length - 1], cher = [...stats].sort((a, b) => b.moyen - a.moyen)[0];
-    constat('s-masse', `${F.libelle(sel)} : ${fr(effectif)} salariés, ${fr(total / 1000, 1)} millions de MAD de masse salariale. Pôle le plus lourd : ${echapper(lourd.pole)} (${pct(lourd.masse, total, 0)} de la masse, ${pct(lourd.n, effectif, 0)} des effectifs). Salaire moyen le plus haut : ${echapper(cher.pole)} (${fr(cher.moyen, 1)} kMAD).`);
+    // Les salariés sans salaire comptent dans l'effectif mais pas dans la masse : le constat le dit.
+    const sansSalaire = lignes.filter(l => !Number.isFinite(l.Fixe_Annuel_MAD)).length;
+    if (sansSalaire === effectif) return constat('s-masse', `${F.libelle(sel)} : ${salaries(effectif)}, aucun salaire renseigné, pas de masse salariale à calculer.`);
+    const debut = `${F.libelle(sel)} : ${salaries(effectif)}${sansSalaire ? ` (dont ${fr(sansSalaire)} sans salaire renseigné)` : ''}, ${millions(total)} de masse salariale`;
+    if (stats.length === 1) return constat('s-masse', `${debut}, tous dans le pôle ${echapper(stats[0].pole)}.`);
+    // Le plus lourd et le plus cher se lisent sur les valeurs écrites dans le constat ; les ex aequo sont tous cités.
+    const lourd = extremes(stats, s => 100 * s.masse / total, 0), cher = extremes(stats, s => s.moyen, 1);
+    const noms = t => enumerer(t.map(s => echapper(s.pole)));
+    // Sans aucun salaire renseigné, la masse est nulle : il n'y a ni pôle le plus lourd ni salaire moyen à citer.
+    const plusLourd = !lourd ? '' : lourd.haut.length > 1
+      ? ` Pôles les plus lourds, à égalité : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} de la masse chacun).`
+      : ` Pôle le plus lourd : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} de la masse, ${pct(lourd.haut[0].n, effectif, 0)} des effectifs).`;
+    const plusCher = cher ? ` Salaire moyen le plus haut : ${noms(cher.haut)} (${fr(cher.haut[0].moyen, 1)} kMAD).` : '';
+    constat('s-masse', `${debut}.${plusLourd}${plusCher}`);
   }
 
   // ---------- Salaires hors grille par pôle et par niveau (filtrable par métier) ----------
@@ -69,15 +81,21 @@
       return { titre: `${quoi} de leur grille : ${poles[i]}, niveau ${niveaux[j]}`, lignes: lignes.filter(l => l.Entite_N1 === poles[i] && l.Niveau === niveaux[j] && test(l)) };
     };
     montrer('g-hors-grille', traces, L, 130 + 52 * Math.max(4, poles.length), clic, F.libelle(sel));
+    // Seuls les salariés qui ont un salaire et une grille (Min et Max) peuvent être hors grille : le constat compte sur eux.
     const n = lignes.length, ns = lignes.filter(sousMin).length, nm = lignes.filter(surMax).length;
-    // La case où la part sous le Min est la plus forte.
-    let pire = null;
+    if (!n) return constat('s-hors-grille', 'Aucun salarié avec un salaire et une grille (Min et Max) pour ce filtre.');
+    // Les cases qui ont au moins un salarié sous le Min, de la part la plus forte à la plus faible ; à part égale, la
+    // case qui compte le plus de salariés passe devant (100 % de 5 salariés pèse plus que 100 % d'un seul).
+    const cases = [];
     for (const p of poles) for (const g of niveaux) {
       const grp = lignes.filter(l => l.Entite_N1 === p && l.Niveau === g), k = grp.filter(sousMin).length;
-      if (k && (!pire || k / grp.length > pire.part)) pire = { p, g, k, part: k / grp.length };
+      if (k) cases.push({ p, g, k, t: grp.length, part: k / grp.length });
     }
-    constat('s-hors-grille', `${F.libelle(sel)} : ${fr(ns)} salariés sous le Min de leur grille (${pct(ns, n)}) et ${fr(nm)} au-dessus du Max (${pct(nm, n)}).`
-      + (pire ? ` Part la plus forte sous le Min : ${echapper(pire.p)}, niveau ${pire.g} (${fr(100 * pire.part, 1)} %, ${fr(pire.k)} salariés).` : ''));
+    cases.sort((a, b) => b.part - a.part || b.k - a.k);
+    const pire = cases[0], memes = pire ? cases.filter(c => c.part === pire.part && c.k === pire.k).length - 1 : 0;
+    constat('s-hors-grille', `${F.libelle(sel)} (${salaries(n)} avec un salaire et une grille) : ${fr(ns)} sous le Min de leur grille (${pct(ns, n)}) et ${fr(nm)} au-dessus du Max (${pct(nm, n)}).`
+      + (pire ? ` Part la plus forte sous le Min : ${echapper(pire.p)}, niveau ${pire.g} (${fr(100 * pire.part, 1)} %, soit ${salaries(pire.k)} sur ${fr(pire.t)})`
+        + (memes ? `, à égalité avec ${memes} autre${memes > 1 ? 's' : ''} case${memes > 1 ? 's' : ''}.` : '.') : ''));
   }
 
   // ---------- Position face au marché, par pôle ou par métier (filtrable par niveau) ----------
@@ -87,9 +105,11 @@
                     ['Entre médiane et P75', '#d9ab8c', 1, K.ENCRE, 3], ['Au-dessus du P75', '#7a3f1f', 1, '#fff', 4]];
 
   function marche(df, sel) {
+    // Personne n'a de fourchette complète : soit market.xlsx n'a pas de colonnes P25 et P75, soit elles sont vides ou ne
+    // correspondent à aucun métier + niveau des salariés. Le message couvre les deux cas.
     if (!df.some(l => l.Position_Marche)) {
       Plotly.purge('g-marche');
-      return constat('s-marche', "Le fichier market.xlsx n'a pas de colonnes P25 et P75 : ce graphe a besoin de la fourchette du marché.");
+      return constat('s-marche', "Ce graphe a besoin de la fourchette du marché (colonnes P25, Median et P75 de market.xlsx) : aucun salarié n'en a une complète pour son métier et son niveau.");
     }
     const axe = sel.vue, lignes = df.filter(l => F.garder(l, sel) && l.Position_Marche);
     const groupes = C.modalites(lignes, axe).map(g => {
@@ -119,10 +139,15 @@
       return { titre: `${p.y} · ${pos}`, lignes: lignes.filter(l => String(l[axe]) === p.y && l.Position_Marche === pos) };
     };
     montrer('g-marche', traces, L, 150 + 32 * Math.max(5, groupes.length), clic, F.libelle(sel));
-    if (!groupes.length) return constat('s-marche', 'Aucun salarié pour ce filtre.');
+    if (!groupes.length) return constat('s-marche', 'Aucun salarié avec une fourchette du marché pour ce filtre.');
     const sous = lignes.filter(l => l.Position_Marche === 'Sous le P25' || l.Position_Marche === 'Entre P25 et médiane').length;
-    const bas = groupes[0], haut = groupes[groupes.length - 1];
-    constat('s-marche', `${F.libelle(sel)} : ${pct(sous, lignes.length, 0)} des salariés sont payés sous la médiane du marché de leur métier et niveau. Le mieux placé : ${echapper(haut.nom)} (${fr(100 * auDessus(haut), 0)} % au-dessus de la médiane) ; le moins bien placé : ${echapper(bas.nom)} (${fr(100 * auDessus(bas), 0)} %).`);
+    const debut = `${F.libelle(sel)} (${salaries(lignes.length)} avec une fourchette du marché) : ${pct(sous, lignes.length, 0)} sont payés sous la médiane du marché de leur métier et niveau.`;
+    // Le mieux et le moins bien placés se comparent sur la part de salariés au-dessus de la médiane, arrondie comme écrite.
+    const [un, plusieurs] = axe === 'Entite_N1' ? ['pôle', 'pôles'] : ['métier', 'métiers'];
+    const ex = extremes(groupes, g => 100 * auDessus(g), 0), noms = t => enumerer(t.map(g => echapper(g.nom))), part = t => fr(100 * auDessus(t[0]), 0) + ' %';
+    if (groupes.length === 1) return constat('s-marche', `${debut} Un seul ${un} : ${noms(groupes)}.`);
+    if (ex.egaux) return constat('s-marche', `${debut} Même part de salariés au-dessus de la médiane dans tous les ${plusieurs} (${part(groupes)}).`);
+    constat('s-marche', `${debut} Part de salariés au-dessus de la médiane : la plus forte pour ${noms(ex.haut)} (${part(ex.haut)}), la plus faible pour ${noms(ex.bas)} (${part(ex.bas)}).`);
   }
 
   // ---------- Talents et rémunération : Compa-Ratio et 9-Box (filtrable par pôle, métier, Hot_job) ----------
@@ -160,19 +185,25 @@
     L.annotations.push(
       { text: 'Sous-positionnés', x: COMPA_BAS, xref: 'x', xanchor: 'right', xshift: -6, y: 1, yref: 'y domain', yanchor: 'top', showarrow: false, font: { size: 11, color: K.GRIS } },
       { text: 'Sur-positionnés', x: COMPA_HAUT, xref: 'x', xanchor: 'left', xshift: 6, y: 1, yref: 'y domain', yanchor: 'top', showarrow: false, font: { size: 11, color: K.GRIS } });
-    const cases = C.modalites(lignes, 'Positionnement_9BOX');
+    // L'échelle 9-Box est lue dans le fichier entier (et non supposée de 0 à 6) : l'axe reste le même quel que soit le filtre,
+    // et « la case la plus haute » du constat est bien le haut de l'échelle, même si le filtre n'y a personne.
+    const echelle = C.modalites(df, 'Positionnement_9BOX'), bas = echelle[0], haut = echelle[echelle.length - 1];
     Object.assign(L.xaxis, { range: [0.55, 1.45], dtick: 0.1, title: titreAxe('Compa-Ratio (Salaire / Mid)') });
-    Object.assign(L.yaxis, { dtick: 1, range: [Math.min(0, ...cases) - 0.7, Math.max(6, ...cases) + 0.7], title: titreAxe('Positionnement 9-Box (0 à 6)') });
+    Object.assign(L.yaxis, { dtick: 1, title: titreAxe('Positionnement 9-Box'),
+      ...(echelle.length && { range: [bas - 0.7, haut + 0.7], title: titreAxe(`Positionnement 9-Box (${fr(bas)} à ${fr(haut)})`) }) });
     // Clic sur une bulle : ses salariés.
     const clic = p => {
       const b = parZone[p.curveNumber][p.pointNumber];
       return { titre: `9-Box ${b.y} · Compa-Ratio de ${fr(b.de, 2)} à ${fr(b.de + PAS, 2)}`, lignes: b.lignes };
     };
     montrer('g-talents', traces, L, 580, clic, F.libelle(sel));
-    if (!lignes.length) return constat('s-talents', 'Aucun salarié pour ce filtre.');
-    const haut = Math.max(...cases), bas = Math.min(...cases);
+    if (!lignes.length) return constat('s-talents', 'Aucun salarié avec un Compa-Ratio et une note 9-Box pour ce filtre.');
     const sous = lignes.filter(l => l.Compa_Ratio < COMPA_BAS), sur = lignes.filter(l => l.Compa_Ratio > COMPA_HAUT);
-    constat('s-talents', `${F.libelle(sel)} (${fr(lignes.length)} salariés) : ${fr(sous.length)} sous 0,85 et ${fr(sur.length)} au-dessus de 1,15. Case 9-Box la plus haute (${haut}) avec un Compa-Ratio sous 0,85 : ${fr(sous.filter(l => l.Positionnement_9BOX === haut).length)} salariés ; case la plus basse (${bas}) au-dessus de 1,15 : ${fr(sur.filter(l => l.Positionnement_9BOX === bas).length)}.`);
+    const s = [fr(COMPA_BAS, 2), fr(COMPA_HAUT, 2)];
+    // Une échelle d'une seule case n'a ni haut ni bas : la seconde phrase n'a alors pas de sens.
+    const extremites = echelle.length > 1 ? ` Dans la case 9-Box la plus haute (${fr(haut)}), ${salaries(sous.filter(l => l.Positionnement_9BOX === haut).length)} sous ${s[0]} ; `
+      + `dans la plus basse (${fr(bas)}), ${salaries(sur.filter(l => l.Positionnement_9BOX === bas).length)} au-dessus de ${s[1]}.` : '';
+    constat('s-talents', `${F.libelle(sel)} (${salaries(lignes.length)}) : ${fr(sous.length)} avec un Compa-Ratio sous ${s[0]} et ${fr(sur.length)} au-dessus de ${s[1]}.${extremites}`);
   }
 
   // ---------- Métiers en tension : Compa-Ratio moyen par métier et Hot_job (filtrable par niveau et pôle) ----------
@@ -198,14 +229,23 @@
       hovertemplate: '%{y} · %{x}<br><b>Compa-Ratio moyen : %{z:.3f}</b><br>Salaire moyen : %{customdata[1]} kMAD<br>%{customdata[0]} salariés<extra></extra>',
     }];
     const L = grille({ titres: ['Compa-Ratio moyen et salaire moyen (kMAD) par métier et tension du métier'] });
-    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Hot_job : 0 = tension faible, 2 = forte') });
+    // Les valeurs de Hot_job sont lues dans le fichier entier (et non supposées de 0 à 2) : la plus haute est la tension la plus forte.
+    const echelle = C.modalites(df, 'Hot_job'), forte = echelle[echelle.length - 1];
+    Object.assign(L.xaxis, { type: 'category', showgrid: false,
+      title: titreAxe(echelle.length > 1 ? `Hot_job : ${fr(echelle[0])} = tension la plus faible, ${fr(forte)} = la plus forte` : 'Hot_job') });
     Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed' });
     // Clic sur une case : les salariés de ce métier et de cette tension.
     const clic = p => { const [i, j] = p.pointNumber; return { titre: `${familles[i]} · Hot_job ${tensions[j]}`, lignes: cases[i][j] }; };
     montrer('g-tension', traces, L, 140 + 40 * Math.max(5, familles.length), clic, F.libelle(sel));
-    if (!familles.length) return constat('s-tension', 'Aucun salarié pour ce filtre.');
-    const forte = tensions.length - 1, enRetrait = familles.filter((f, i) => compa[i][forte] !== null && compa[i][forte] < 1);
-    constat('s-tension', `${F.libelle(sel)} : métiers dont le Compa-Ratio moyen est sous 1 pour la tension la plus forte (Hot_job ${tensions[forte]}) : ${enRetrait.length ? enRetrait.map(echapper).join(', ') : 'aucun'}.`);
+    if (!familles.length) return constat('s-tension', 'Aucun salarié avec un Compa-Ratio pour ce filtre.');
+    const lib = F.libelle(sel), j = tensions.indexOf(forte);
+    if (!echelle.length) return constat('s-tension', 'Hot_job est vide dans employes.xlsx : pas de tension du métier à croiser.');
+    if (echelle.length === 1) return constat('s-tension', `${lib} : une seule valeur de Hot_job (${fr(forte)}) dans le fichier, pas de tension plus forte qu'une autre.`);
+    if (j < 0) return constat('s-tension', `${lib} : aucun salarié dans la tension la plus forte (Hot_job ${fr(forte)}).`);
+    // « Sous 1 » se lit sur le Compa-Ratio arrondi, celui écrit dans la case et ici : une case écrite « 1,00 » n'est pas citée.
+    const enRetrait = familles.map((f, i) => [f, compa[i][j]]).filter(([, c]) => c !== null && Math.round(c * 100) < 100);
+    constat('s-tension', `${lib} : métiers dont le Compa-Ratio moyen est sous 1 dans la tension la plus forte (Hot_job ${fr(forte)}) : `
+      + `${enRetrait.length ? enRetrait.map(([f, c]) => `${echapper(f)} (${fr(c, 2)})`).join(', ') : 'aucun'}.`);
   }
 
   E.pilotage = { masseSalariale, horsGrille, marche, talents, tension };

@@ -222,11 +222,12 @@
       .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b), 'fr'));
   }
 
-  // Les modalités triées par médiane décroissante d'une colonne (ordre des boîtes du notebook).
+  // Les modalités triées par médiane décroissante d'une colonne (ordre des boîtes du notebook). Un groupe sans
+  // aucune valeur (pas de médiane) va à la fin, comme dans pandas : sinon il dérègle le tri de tous les autres.
   function ordreParMediane(df, groupe, valeur) {
     return modalites(df, groupe)
       .map(g => [g, mediane(df.filter(l => l[groupe] === g).map(l => l[valeur]))])
-      .sort((a, b) => b[1] - a[1]).map(x => x[0]);
+      .sort((a, b) => (Number.isFinite(b[1]) - Number.isFinite(a[1])) || b[1] - a[1]).map(x => x[0]);
   }
 
   const api = {

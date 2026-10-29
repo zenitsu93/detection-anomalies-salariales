@@ -2,9 +2,11 @@
 (function (E) {
   'use strict';
   const C = E.calculs, F = E.filtres;
-  const { fr, signe, echapper, constat, COULEURS: K, transparent,
+  const { fr, echapper, constat, salaries, enumerer, extremes, COULEURS: K, transparent,
     nomAxe, titreAxe, grille, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteNiveau } = E.communs;
   const logPositif = x => x > 0 ? Math.log(x) : NaN;
+  // Une corrélation ou une pente demande au moins deux salariés aux valeurs différentes : sinon, le constat le dit.
+  const ouNon = (x, d) => Number.isFinite(x) ? fr(x, d) : 'non calculable';
 
   // Écart hommes / femmes en % : salaire moyen, puis Compa-Ratio moyen (à grille et métier constants).
   function ecartsFH(lignes) {
@@ -35,7 +37,15 @@
       return { titre: `${nom} de ${fr(p.customdata[0], 2)} à ${fr(p.customdata[1], 2)}`, lignes: df.filter((l, i) => dansBarre(p, v[i])) };
     };
     montrer('g-distribution', traces, L, 560, clic);
-    constat('s-distribution', `asymétrie de ${fr(asym[0], 2)} pour le salaire brut et de ${fr(asym[1], 2)} pour son logarithme. Plus le coefficient est proche de 0, plus la distribution est symétrique.`);
+    const n = sal.filter(Number.isFinite).length;
+    // L'asymétrie demande au moins 3 salaires, et des salaires différents.
+    if (!Number.isFinite(asym[0])) return constat('s-distribution', `Tous les salariés : ${salaries(n)} avec un salaire, pas assez pour mesurer l'asymétrie.`);
+    // Le sens et la comparaison se lisent sur les valeurs arrondies, celles écrites : « 0,00 » ne peut pas être dit « étiré ».
+    const a = asym.map(x => Math.round(x * 100) / 100);
+    const sens = a[0] > 0 ? 'étirée vers les hauts salaires' : a[0] < 0 ? 'étirée vers les bas salaires' : 'symétrique';
+    const effetLog = !Number.isFinite(a[1]) ? '' : Math.abs(a[1]) < Math.abs(a[0])
+      ? ` ; le logarithme la rapproche de la symétrie (${fr(a[1], 2)}).` : ` ; le logarithme ne la rend pas plus symétrique (${fr(a[1], 2)}).`;
+    constat('s-distribution', `Tous les salariés (${salaries(n)} avec un salaire) : asymétrie de ${fr(a[0], 2)}, la distribution du salaire brut est ${sens}${effetLog || '.'} 0 = parfaitement symétrique.`);
   }
 
   // ---------- Niveaux, grille et marché (filtrable par métier) ----------
@@ -79,8 +89,13 @@
     };
     montrer('g-grille', traces, L, 520, clic, F.libelle(sel));
     // Le décompte des salariés hors grille n'est pas répété ici : il est dans les chiffres clés et dans le graphe « Salaires hors grille ».
-    const position = lignes.map(l => l.Range_Penetration);
-    constat('s-grille', `${F.libelle(sel)} (${fr(lignes.length)} salariés) : position médiane dans la bande ${fr(C.mediane(position), 2)} (0 = Min, 1 = Max) ; la moitié des salariés se situe entre ${fr(C.quantile(position, 0.25), 2)} et ${fr(C.quantile(position, 0.75), 2)}. Le détail des salariés hors grille est dans le graphe « Salaires hors grille ».`);
+    // Seuls les salariés qui ont un salaire et une grille (Min et Max) ont une position dans la bande : le constat compte sur eux.
+    if (!lignes.length) return constat('s-grille', 'Aucun salarié pour ce filtre.');
+    const position = lignes.map(l => l.Range_Penetration).filter(Number.isFinite), lib = F.libelle(sel);
+    if (!position.length) return constat('s-grille', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois un salaire et une grille (Min et Max) pour son métier et son niveau.`);
+    const avecGrille = salaries(position.length) + ' avec un salaire et une grille' + (position.length < lignes.length ? ` sur ${fr(lignes.length)}` : '');
+    const moitie = position.length > 1 ? ` ; la moitié d'entre eux se situe entre ${fr(C.quantile(position, 0.25), 2)} et ${fr(C.quantile(position, 0.75), 2)}` : '';
+    constat('s-grille', `${lib} (${avecGrille}) : position médiane dans la bande ${fr(C.mediane(position), 2)} (0 = Min, 1 = Max)${moitie}. Le détail des salariés hors grille est dans le graphe « Salaires hors grille ».`);
   }
 
   // ---------- Familles de métier (filtrable par niveau) ----------
@@ -109,8 +124,14 @@
       return p.hoverOnBox ? { titre: 'Métier ' + p.data.name, lignes: idx.map(i => lignes[i]) } : salarie(lignes[idx[p.pointNumber]]);
     };
     montrer('g-metiers', traces, L, 760, clic, F.libelle(sel));
-    const med = ordre.map(jf => [jf, C.mediane(lignes.filter(l => l.Job_Family === jf).map(l => l.Compa_Ratio))]);
-    constat('s-metiers', med.length ? `${F.libelle(sel)} : Compa-Ratio médian le plus haut pour ${echapper(med[0][0])} (${fr(med[0][1], 2)}), le plus bas pour ${echapper(med[med.length - 1][0])} (${fr(med[med.length - 1][1], 2)}). Les métiers sont rangés du plus haut au plus bas.` : 'Aucun salarié pour ce filtre.');
+    if (!lignes.length) return constat('s-metiers', 'Aucun salarié pour ce filtre.');
+    const med = ordre.map(jf => ({ nom: echapper(jf), v: C.mediane(lignes.filter(l => l.Job_Family === jf).map(l => l.Compa_Ratio)) }));
+    const ex = extremes(med, m => m.v, 2), lib = F.libelle(sel), noms = t => enumerer(t.map(m => m.nom));
+    if (!ex) return constat('s-metiers', `${lib} : aucun Compa-Ratio, faute de grille (Mid) pour ces métiers et niveaux.`);
+    // Un seul métier, ou tous au même Compa-Ratio médian : il n'y a ni plus haut ni plus bas à citer.
+    if (ex.egaux) return constat('s-metiers', ex.haut.length > 1 ? `${lib} : même Compa-Ratio médian (${fr(ex.haut[0].v, 2)}) pour tous les métiers.`
+      : `${lib} : un seul métier${med.length > 1 ? ' avec un Compa-Ratio' : ''}, ${ex.haut[0].nom}, de Compa-Ratio médian ${fr(ex.haut[0].v, 2)}.`);
+    constat('s-metiers', `${lib} : Compa-Ratio médian le plus haut pour ${noms(ex.haut)} (${fr(ex.haut[0].v, 2)}), le plus bas pour ${noms(ex.bas)} (${fr(ex.bas[0].v, 2)}). Les métiers sont rangés du plus haut au plus bas.`);
   }
 
   // ---------- Ancienneté (par tranche) et âge à l'embauche (filtrable par niveau et métier) ----------
@@ -118,7 +139,8 @@
   function anciennete(df, survol, sel) {
     const { lignes, survol: surv } = F.sousEnsemble(df, survol, sel);
     const L = grille({ colonnes: 2, titres: ["Compa-Ratio par tranche d'ancienneté", "Compa-Ratio selon l'âge à l'embauche (Age − Anciennete)"] });
-    const medianes = C.TRANCHES.map(t => { const v = lignes.filter(l => l.Tranche_Anciennete === t).map(l => l.Compa_Ratio); return [v.length ? C.mediane(v) : null, v.length]; });
+    // Par tranche : la médiane et le nombre de salariés qui ont un Compa-Ratio (ceux sans grille ne comptent pas).
+    const medianes = C.TRANCHES.map(t => { const v = lignes.filter(l => l.Tranche_Anciennete === t).map(l => l.Compa_Ratio).filter(Number.isFinite); return [v.length ? C.mediane(v) : null, v.length]; });
     const y = lignes.map(l => l.Compa_Ratio), x = lignes.map(l => l.Age_Embauche), courbe = C.lowess(x, y);
     const traces = [
       boite(K.ARDOISE, { x: lignes.map(l => l.Tranche_Anciennete), y, text: surv, name: 'Salariés' }),
@@ -144,10 +166,13 @@
       () => ({ titre: `Embauchés à ${String(p.x).replace('.', ',')} ans`, lignes: lignes.filter(l => l.Age_Embauche === p.x) }),
     ][p.curveNumber]();
     montrer('g-anciennete', traces, L, 520, clic, F.libelle(sel));
+    if (!lignes.length) return constat('s-anciennete', 'Aucun salarié pour ce filtre.');
     const corr = [C.correlation(lignes.map(l => l.Age), lignes.map(l => l.Anciennete)), C.correlation(x, lignes.map(l => l.Anciennete))];
-    const lecture = C.TRANCHES.map((t, i) => `${t} ans : ${fr(medianes[i][0], 2)}`).join(' · ');
-    constat('s-anciennete', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Compa-Ratio médian par tranche : ${lecture}.
-      Corrélation Age / Anciennete : ${fr(corr[0], 2)} ; Age_Embauche / Anciennete : ${fr(corr[1], 2)}.`);
+    // Une tranche sans médiane dit pourquoi : personne dans la tranche, ou personne avec une grille.
+    const vide = t => lignes.some(l => l.Tranche_Anciennete === t) ? 'pas de Compa-Ratio' : 'aucun salarié';
+    const lecture = C.TRANCHES.map((t, i) => `${t} ans : ${medianes[i][1] ? fr(medianes[i][0], 2) : vide(t)}`).join(' · ');
+    constat('s-anciennete', `${F.libelle(sel)} (${salaries(lignes.length)}). Compa-Ratio médian par tranche : ${lecture}.
+      Corrélation Age / Anciennete : ${ouNon(corr[0], 2)} ; Age_Embauche / Anciennete : ${ouNon(corr[1], 2)}.`);
   }
 
   // ---------- Compétences et tension métier (filtrable par niveau et métier) ----------
@@ -164,7 +189,7 @@
       const idx = indices(lignes, l => l.Hot_job === h), nom = `Hot_job = ${h}`, couleur = TENSION[k] || K.ARDOISE;
       parCourbe.push([nom, idx], [nom, idx]);   // le nuage et la droite de cette tension
       const x = idx.map(i => lignes[i].Competence_N1), y = idx.map(i => lignes[i].Compa_Ratio), d = C.droite(x, y);
-      pentes.push(`${nom} : ${fr(d.pente, 3)}`);
+      pentes.push(`${nom} : ${ouNon(d.pente, 3)}`);
       // Les points restent discrets ; ce sont les droites, bien visibles, qui portent la légende.
       traces.push({ type: 'scattergl', mode: 'markers', x, y, text: idx.map(i => surv[i]), name: nom, legendgroup: nom, showlegend: false,
         marker: { color: couleur, size: 5, opacity: 0.25 } });
@@ -181,7 +206,9 @@
       return p.data.mode === 'markers' ? salarie(lignes[idx[p.pointNumber]]) : { titre: nom, lignes: idx.map(i => lignes[i]) };
     };
     montrer('g-competences', traces, L, 500, clic, F.libelle(sel));
-    constat('s-competences', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Pente de la droite Competence_N1 → Compa-Ratio, par tension : ${pentes.join(' · ') || '–'}.`);
+    if (!lignes.length) return constat('s-competences', 'Aucun salarié pour ce filtre.');
+    if (!pentes.length) return constat('s-competences', `${F.libelle(sel)} (${salaries(lignes.length)}) : Hot_job est vide, pas de droite par tension à tracer.`);
+    constat('s-competences', `${F.libelle(sel)} (${salaries(lignes.length)}). Pente de la droite Competence_N1 → Compa-Ratio, par tension : ${pentes.join(' · ')}.`);
   }
 
   // ---------- Équité F / M et pôles (filtrable par métier) ----------
@@ -214,8 +241,23 @@
       return { titre: `${noms[s] || s}, niveau ${p.x}`, lignes: lignes.filter(l => l.Sexe === s && texteNiveau(l.Niveau) === p.x) };
     };
     montrer('g-equite', traces, L, 520, clic, F.libelle(sel));
-    const e = ecartsFH(lignes);
-    constat('s-equite', `${F.libelle(sel)} (${fr(lignes.length)} salariés). Écart salarial moyen non corrigé (M vs F) : ${signe(e[0])} ; à grille et métier constants (Compa-Ratio) : ${signe(e[1])}.`);
+    if (!lignes.length) return constat('s-equite', 'Aucun salarié pour ce filtre.');
+    const lib = F.libelle(sel), nF = lignes.filter(l => l.Sexe === 'F').length, nM = lignes.filter(l => l.Sexe === 'M').length;
+    // L'écart ne se calcule qu'entre M et F : un autre code dans Sexe (H, Femme, case vide...) est signalé, pas deviné.
+    const autres = C.modalites(lignes.filter(l => l.Sexe !== 'M' && l.Sexe !== 'F'), 'Sexe').map(s => `« ${echapper(s)} »`);
+    const horsMF = lignes.length - nF - nM;
+    const nonComptes = horsMF ? ` Non comptés : ${salaries(horsMF)} dont le Sexe n'est ni M ni F${autres.length ? ` (${enumerer(autres)})` : ''}.` : '';
+    if (!nF || !nM) {
+      const manque = [!nF && 'F (femmes)', !nM && 'M (hommes)'].filter(Boolean).join(' ni ');
+      return constat('s-equite', `${lib} (${salaries(lignes.length)}) : aucun salarié codé ${manque} dans la colonne Sexe, l'écart entre femmes et hommes ne peut pas être calculé.${nonComptes}`);
+    }
+    // Le sens de l'écart est dit en toutes lettres, sur la valeur arrondie écrite : « 0,00 % » veut dire « égal ».
+    // Sans valeur des deux côtés (salaires vides, pas de grille), la comparaison n'est pas faite.
+    const e = ecartsFH(lignes).map(x => Math.round(x * 100) / 100);
+    const compare = (x, quoi) => !Number.isFinite(x) ? `${quoi} : pas de comparaison possible, faute de valeurs pour les femmes ou pour les hommes`
+      : `${quoi} des hommes ${x > 0 ? `${fr(x, 2)} % au-dessus de` : x < 0 ? `${fr(-x, 2)} % en dessous de` : 'égal à'} celui des femmes`;
+    constat('s-equite', `${lib} (${fr(nF)} femme${nF > 1 ? 's' : ''}, ${fr(nM)} homme${nM > 1 ? 's' : ''}). ${compare(e[0], 'Salaire moyen')} (écart brut, sans tenir compte du métier ni du niveau). `
+      + `${compare(e[1], 'Compa-Ratio moyen')} (à métier et niveau égaux : chacun est comparé au milieu de sa propre grille).${nonComptes}`);
   }
 
   E.analyses = { ecartsFH, logPositif, distribution, grilleEtMarche, metiers, anciennete, performance, equite };

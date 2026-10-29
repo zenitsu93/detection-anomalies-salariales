@@ -12,6 +12,22 @@
   const echapper = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const constat = (id, html) => { $(id).innerHTML = '<b>Constat</b><span>' + html + '</span>'; };
 
+  // Les constats sont écrits par la page à partir des données : ces outils gardent la phrase juste quel que soit le chiffre.
+  // Le nombre de salariés bien accordé : « aucun salarié », « 1 salarié », « 2 salariés ».
+  const salaries = n => n ? `${fr(n)} salarié${n > 1 ? 's' : ''}` : 'aucun salarié';
+  // Une masse en kMAD, écrite en millions de MAD : « 0,2 million », « 2 624,5 millions ».
+  const millions = k => { const m = Math.round(k / 100) / 10; return `${fr(m, 1)} million${Math.abs(m) >= 2 ? 's' : ''} de MAD`; };
+  // « A », « A et B », « A, B et C ».
+  const enumerer = t => t.length < 2 ? t.join('') : t.slice(0, -1).join(', ') + ' et ' + t[t.length - 1];
+  // Les éléments qui ont la plus haute et la plus basse valeur, arrondie comme le constat l'écrit : deux valeurs écrites
+  // pareil sont à égalité, et le constat cite tous les ex aequo plutôt que d'en choisir un au hasard. null : aucune valeur.
+  function extremes(elements, valeur, decimales) {
+    const v = elements.filter(e => Number.isFinite(valeur(e))), arrondi = e => Math.round(valeur(e) * 10 ** decimales);
+    if (!v.length) return null;
+    const max = Math.max(...v.map(arrondi)), min = Math.min(...v.map(arrondi));
+    return { haut: v.filter(e => arrondi(e) === max), bas: v.filter(e => arrondi(e) === min), egaux: max === min };
+  }
+
   // ---------- Couleurs ----------
 
   // Repères : ardoise pour les effectifs, brun pour les repères, bleu pour le marché, rouge pour les bornes.
@@ -125,7 +141,7 @@
   const texteNiveau = g => Number.isFinite(g) ? String(g) : null;
 
   E.communs = {
-    $, fr, pct, signe, echapper, constat, COULEURS, transparent,
+    $, fr, pct, signe, echapper, constat, salaries, millions, enumerer, extremes, COULEURS, transparent,
     nomAxe, titreAxe, grille, hauteurDisponible, montrer, salarie, dansBarre, boite, barresEtCourbe, ligneH, indices, texteNiveau,
   };
 })(window.Exploration = window.Exploration || {});
