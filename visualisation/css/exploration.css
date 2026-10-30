@@ -181,6 +181,7 @@ td .detail { display: block; font-size: 12px; color: var(--muted); }
 .filtres:empty { display: none; }
 .filtre { display: flex; align-items: center; gap: 10px; }
 .filtre-nom { font-size: 12px; font-weight: 600; color: var(--muted); }
+.filtre-aide { font-size: 12px; color: var(--faint); }
 .filtres select { height: 28px; max-width: 280px; padding: 0 8px; font: 13px var(--font); color: var(--ink); background: var(--panel);
   border: 1px solid var(--control); border-radius: var(--radius); }
 /* Boutons de filtre (comme les boutons par niveau du tableau de bord) : celui qui est affiché est foncé. */
