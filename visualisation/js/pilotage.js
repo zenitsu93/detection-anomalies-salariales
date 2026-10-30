@@ -1,4 +1,4 @@
-// Les graphes ajoutés au notebook pour piloter la rémunération : masse salariale, salaires hors grille, position face au marché,
+// Les graphes ajoutés au notebook pour piloter la rémunération : SAR par pôle, salaires hors grille, position face au marché,
 // talents et rémunération, métiers en tension.
 (function (E) {
   'use strict';
@@ -7,7 +7,9 @@
   // Mêmes seuils que la règle CompaRatio de la détection (compa_ratio_low et compa_ratio_high de config/rules.yaml).
   const COMPA_BAS = 0.85, COMPA_HAUT = 1.15;
 
-  // ---------- Masse salariale et effectifs par pôle (filtrable par niveau) ----------
+  // ---------- SAR et effectifs par pôle (filtrable par niveau) ----------
+  // SAR = salaire annuel de référence (Fixe_Annuel_MAD) ; le SAR d'un pôle est la somme de ceux de ses salariés. Pourquoi ce
+  // mot : c'est celui qu'emploie RPB (point du 29/10/2026), là où la page disait « masse salariale ».
   // Trois petits graphes alignés sur les mêmes pôles, plutôt qu'un graphe à deux échelles qui se lit mal.
   // Le Compa-Ratio par pôle n'est pas repris ici : il est dans le graphe « Équité femmes / hommes et pratiques par pôle », plus détaillé.
 
@@ -19,7 +21,7 @@
     }).sort((a, b) => a.masse - b.masse);   // en barres horizontales, la dernière est en haut : le pôle le plus lourd
     const total = C.somme(stats.map(s => s.masse)), effectif = C.somme(stats.map(s => s.n));
     const y = stats.map(s => s.pole), masses = stats.map(s => s.masse / 1000);   // kMAD → millions de MAD
-    const L = grille({ colonnes: 3, espH: 0.06, titres: ['Effectif', 'Masse salariale (millions de MAD)', 'Salaire moyen (kMAD)'] });
+    const L = grille({ colonnes: 3, espH: 0.06, titres: ['Effectif', 'SAR (millions de MAD)', 'Salaire moyen (kMAD)'] });
     const barre = (s, x, textes, couleur) => ({ type: 'bar', orientation: 'h', y, x, text: textes, textposition: 'outside', cliponaxis: false,
       textfont: { size: 11, color: K.ENCRE }, marker: { color: couleur }, showlegend: false, xaxis: 'x' + s, yaxis: 'y' + s,
       hovertemplate: '%{y}<br><b>%{text}</b><extra></extra>' });
@@ -38,18 +40,18 @@
     const clic = p => ({ titre: 'Pôle ' + p.y, lignes: lignes.filter(l => String(l.Entite_N1) === p.y) });
     montrer('g-masse', traces, L, 150 + 46 * Math.max(4, stats.length), clic, F.libelle(sel));
     if (!stats.length) return constat('s-masse', 'Aucun salarié pour ce filtre.');
-    // Les salariés sans salaire comptent dans l'effectif mais pas dans la masse : le constat le dit.
+    // Les salariés sans salaire comptent dans l'effectif mais pas dans le SAR : le constat le dit.
     const sansSalaire = lignes.filter(l => !Number.isFinite(l.Fixe_Annuel_MAD)).length;
-    if (sansSalaire === effectif) return constat('s-masse', `${F.libelle(sel)} : ${salaries(effectif)}, aucun salaire renseigné, pas de masse salariale à calculer.`);
-    const debut = `${F.libelle(sel)} : ${salaries(effectif)}${sansSalaire ? ` (dont ${fr(sansSalaire)} sans salaire renseigné)` : ''}, ${millions(total)} de masse salariale`;
+    if (sansSalaire === effectif) return constat('s-masse', `${F.libelle(sel)} : ${salaries(effectif)}, aucun salaire renseigné, pas de SAR à calculer.`);
+    const debut = `${F.libelle(sel)} : ${salaries(effectif)}${sansSalaire ? ` (dont ${fr(sansSalaire)} sans salaire renseigné)` : ''}, ${millions(total)} de SAR`;
     if (stats.length === 1) return constat('s-masse', `${debut}, tous dans le pôle ${echapper(stats[0].pole)}.`);
     // Le plus lourd et le plus cher se lisent sur les valeurs écrites dans le constat ; les ex aequo sont tous cités.
     const lourd = extremes(stats, s => 100 * s.masse / total, 0), cher = extremes(stats, s => s.moyen, 1);
     const noms = t => enumerer(t.map(s => echapper(s.pole)));
-    // Sans aucun salaire renseigné, la masse est nulle : il n'y a ni pôle le plus lourd ni salaire moyen à citer.
+    // Sans aucun salaire renseigné, le SAR est nul : il n'y a ni pôle le plus lourd ni salaire moyen à citer.
     const plusLourd = !lourd ? '' : lourd.haut.length > 1
-      ? ` Pôles les plus lourds, à égalité : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} de la masse chacun).`
-      : ` Pôle le plus lourd : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} de la masse, ${pct(lourd.haut[0].n, effectif, 0)} des effectifs).`;
+      ? ` Pôles les plus lourds, à égalité : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} du SAR chacun).`
+      : ` Pôle le plus lourd : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} du SAR, ${pct(lourd.haut[0].n, effectif, 0)} des effectifs).`;
     const plusCher = cher ? ` Salaire moyen le plus haut : ${noms(cher.haut)} (${fr(cher.haut[0].moyen, 1)} kMAD).` : '';
     constat('s-masse', `${debut}.${plusLourd}${plusCher}`);
   }

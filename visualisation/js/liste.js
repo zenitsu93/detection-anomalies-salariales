@@ -177,7 +177,7 @@
   const fenetre = $('liste');
   let vue = null, cols = [], titreEnCours = '', avant = null;
 
-  // titre : ce qui a été cliqué (« Pôle 3 ») ; origine : le graphe et son filtre, en HTML (« Masse salariale · Niveau 5 ») ;
+  // titre : ce qui a été cliqué (« Pôle 3 ») ; origine : le graphe et son filtre, en HTML (« SAR et effectifs par pôle · Niveau 5 ») ;
   // unite : ce que compte la liste (« ligne » pour les doublons, où un salarié a plusieurs lignes).
   function ouvrir(titre, lignes, origine = '', unite = 'salarié') {
     fermerMenu(false);
