@@ -92,6 +92,8 @@ COL_FR = {
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
     "Rule_Score": "Score de règles", "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
     "Cout_Ajustement": f"Coût d'ajustement ({UNITE})",
+    # En dernier : une phrase, plus longue que les autres colonnes (vide sans signal fort de l'IA).
+    "Explication_IA": "Pourquoi l'IA le trouve atypique",
 }
 
 

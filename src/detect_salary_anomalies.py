@@ -10,7 +10,7 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 2. anomaly_cohortes.py             : groupes de collègues et écart PeerZ ;
 3. anomaly_regles.py               : règles (étiquettes, points, motifs) ;
 4. anomaly_signal_iforest.py       : score de l'IA ;
-5. anomaly_signal_fort.py          : signal ML_STRONG_SIGNAL pour les profils très atypiques (sans points) ;
+5. anomaly_signal_fort.py          : signal ML_STRONG_SIGNAL pour les profils très atypiques, avec son explication (sans points) ;
 6. anomaly_score_general.py        : score général (règles + IA) et priorité de chaque salarié ;
 7. anomaly_recommandations.py      : recommandation et coût d'ajustement ;
 8. anomaly_ecarts_hommes_femmes.py : médianes femmes / hommes par métier + niveau ;
@@ -83,7 +83,8 @@ if __name__ == "__main__":
     front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Niveau",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",
                   "Market_Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
-                  "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Reco", "Cout_Ajustement"]
+                  "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Explication_IA", "Reco",
+                  "Cout_Ajustement"]
     df = df[front_cols + [c for c in df.columns if c not in front_cols]]
 
     # Tous les tableaux de bord au même endroit, quel que soit le programme qui les crée.

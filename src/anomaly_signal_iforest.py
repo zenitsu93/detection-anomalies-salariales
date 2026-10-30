@@ -32,6 +32,33 @@ from anomaly_pretraitement import preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 
+# Les colonnes que le modèle regarde, dont les trois champs RH (niveau de compétences N-1, case
+# 9Box, hot job).
+FEATS = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio", "Age", "Anciennete",
+         "Competence_N1", "Positionnement_9BOX", "Hot_job"]
+
+
+def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42):
+    """Entraîne l'Isolation Forest sur les colonnes FEATS et rend le modèle et le tableau qu'il a lu.
+
+    Pourquoi une fonction à part : anomaly_signal_fort.py en a besoin pour expliquer le score. Avec
+    les mêmes salariés, les mêmes réglages et le même hasard fixé (random_state), elle redonne
+    exactement le même modèle, donc exactement les mêmes scores.
+    """
+    # Le modèle ne sait pas traiter une case vide : on la remplace par la valeur du milieu de sa
+    # colonne (la médiane).
+    X = df[FEATS].fillna(df[FEATS].median())
+
+    # Pourquoi ces deux réglages sont lus dans le fichier de règles : dans l'archive, ils étaient
+    # écrits en dur (0.05 et 200), alors que tous les autres seuils se règlent sans toucher au code.
+    iso = IsolationForest(
+        n_estimators=int(rule_params.get("ml_n_estimators")),
+        contamination=float(rule_params.get("ml_contamination")),
+        random_state=random_state,
+    )
+    iso.fit(X)
+    return iso, X
+
 
 def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> pd.DataFrame:
     """Calcule un score d'anomalie non supervisé via IsolationForest et rend un NOUVEAU DataFrame
@@ -51,25 +78,9 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
     - ml_n_estimators (200) : nombre d'arbres, c'est-à-dire de découpages au hasard.
     random_state=42 fixe le hasard : on obtient le même score à chaque lancement.
     """
-    # Les colonnes que le modèle regarde, dont les trois champs RH (niveau de compétences N-1, case
-    # 9Box, hot job).
-    feats = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio", "Age", "Anciennete",
-             "Competence_N1", "Positionnement_9BOX", "Hot_job"]
-
     df = df.copy()
 
-    # Le modèle ne sait pas traiter une case vide : on la remplace par la valeur du milieu de sa
-    # colonne (la médiane).
-    X = df[feats].fillna(df[feats].median())
-
-    # Pourquoi ces deux réglages sont lus dans le fichier de règles : dans l'archive, ils étaient
-    # écrits en dur (0.05 et 200), alors que tous les autres seuils se règlent sans toucher au code.
-    iso = IsolationForest(
-        n_estimators=int(rule_params.get("ml_n_estimators")),
-        contamination=float(rule_params.get("ml_contamination")),
-        random_state=random_state,
-    )
-    iso.fit(X)
+    iso, X = entrainer_ia(df, rule_params, random_state)
     # score_samples rend un nombre d'autant plus BAS que le profil est atypique : le signe « - »
     # l'inverse, pour que « plus grand » veuille dire « plus atypique ».
     score = -iso.score_samples(X)

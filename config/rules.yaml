@@ -15,6 +15,8 @@ rules:
   # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
   # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
   # point : le score de l'IA compte déjà dans le score général (ml_weight, plus bas).
+  # Sauf ceux qui sont atypiques surtout parce qu'ils sont payés plus haut que d'habitude (comité du
+  # 15/10/2026) : le signal touche donc un peu moins de 5 % des salariés.
   # Pourquoi « les 5 % les plus atypiques » et pas « score IA supérieur à 80 » ? Le score IA est
   # recalculé de 0 à 100 à chaque analyse : un même nombre n'a pas le même sens d'un fichier à l'autre.
   ml_strong_signal_percentile: 0.95
