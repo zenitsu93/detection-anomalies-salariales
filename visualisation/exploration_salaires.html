@@ -88,6 +88,7 @@
         <li class="groupe">Équité</li>
         <li><a href="#equite"><span class="n">11</span>Équité et pôles</a></li>
         <li class="groupe">Aide</li>
+        <li><a href="#glossaire"><span class="n">i</span>Glossaire</a></li>
         <li><a href="#aide"><span class="n">?</span>Se servir des graphes</a></li>
       </ol>
     </nav>
@@ -231,6 +232,57 @@
           <div class="filtres" id="f-equite"></div>
           <div class="graphe" id="g-equite"></div>
           <p class="constat" id="s-equite"></p>
+        </div>
+      </section>
+
+      <!-- Glossaire (point du 29/10/2026) : chaque mot et chaque indicateur de la page, expliqué simplement -->
+      <section class="panel" id="glossaire">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">i</span>Glossaire</h2><span class="panel-unit">les mots et indicateurs de la page</span></div>
+        <div class="panel-body glossaire">
+          <h3>Montants et effectifs</h3>
+          <dl>
+            <div><dt>SAR (salaire annuel de référence)</dt><dd>Le salaire fixe annuel d'un salarié (colonne <code>Fixe_Annuel_MAD</code>). Le SAR d'un pôle est la somme des SAR de ses salariés.</dd></div>
+            <div><dt>kMAD</dt><dd>Milliers de dirhams : 238 kMAD = 238 000 MAD. Les salaires sont en kMAD ; le SAR des pôles est écrit en millions de MAD.</dd></div>
+            <div><dt>Effectif</dt><dd>Le nombre de salariés.</dd></div>
+            <div><dt>Moyenne</dt><dd>La somme des valeurs divisée par leur nombre. Un seul très haut salaire la tire vers le haut : 200, 200 et 800 kMAD ont une moyenne de 400 kMAD.</dd></div>
+            <div><dt>Médiane</dt><dd>La valeur du milieu : la moitié des salariés est en dessous, l'autre moitié au-dessus. Avec 200, 200 et 800 kMAD, la médiane est 200 kMAD : un salaire extrême ne la déplace pas.</dd></div>
+            <div><dt>Écart-type</dt><dd>Dit à quel point les valeurs s'éloignent de la moyenne. Petit : les salaires sont proches les uns des autres ; grand : ils sont très étalés.</dd></div>
+            <div><dt>Asymétrie</dt><dd>Dit si les salaires s'étirent plus d'un côté que de l'autre. 0 : autant de chaque côté ; positive : quelques très hauts salaires tirent vers le haut, le cas habituel des salaires.</dd></div>
+            <div><dt>Logarithme du salaire</dt><dd>Une façon de resserrer les grands salaires pour mieux les comparer : passer de 100 à 200 kMAD compte autant que passer de 400 à 800 kMAD.</dd></div>
+          </dl>
+          <h3>Grille interne</h3>
+          <dl>
+            <div><dt>Grille (ou bande salariale)</dt><dd>Pour chaque métier et chaque niveau, la fourchette de salaire prévue par l'entreprise (<code>bands.xlsx</code>), du Min au Max.</dd></div>
+            <div><dt>Min / Mid / Max</dt><dd>Le bas de la grille, son milieu et son haut. Exemple : Min 150, Mid 200, Max 250 kMAD.</dd></div>
+            <div><dt>Hors grille</dt><dd>Un salaire sous le Min ou au-dessus du Max de sa grille.</dd></div>
+            <div><dt>Compa-Ratio</dt><dd>Salaire ÷ Mid. 1 = pile au milieu de la grille ; 0,85 = 15 % sous le milieu ; 1,15 = 15 % au-dessus. Les graphes marquent les zones sous 0,85 et au-dessus de 1,15.</dd></div>
+            <div><dt>Position dans la grille (Range Penetration)</dt><dd>Où se place le salaire entre le Min et le Max : 0 = au Min, 0,5 = au milieu, 1 = au Max. Sous 0 : sous le Min ; au-dessus de 1 : au-dessus du Max.</dd></div>
+          </dl>
+          <h3>Marché</h3>
+          <dl>
+            <div><dt>Médiane du marché (Median)</dt><dd>Le salaire du milieu observé sur le marché pour le même métier et le même niveau (<code>market.xlsx</code>).</dd></div>
+            <div><dt>P25 / P75</dt><dd>25 % des salaires du marché sont sous le P25, et 75 % sous le P75. Entre les deux : la moitié centrale du marché.</dd></div>
+            <div><dt>Ratio grille / marché (Mid / Median)</dt><dd>Compare la grille interne au marché : au-dessus de 1, le milieu de la grille paie plus que le marché ; en dessous, moins.</dd></div>
+          </dl>
+          <h3>Lire les graphes</h3>
+          <dl>
+            <div><dt>Boîte à moustaches</dt><dd>La boîte contient la moitié centrale des salariés et le trait dans la boîte est la médiane. Les « moustaches » vont jusqu'aux valeurs habituelles ; les points isolés sont les valeurs éloignées.</dd></div>
+            <div><dt>Corrélation</dt><dd>De −1 à 1. Proche de 1 : les deux grandeurs montent ensemble ; proche de −1 : quand l'une monte, l'autre baisse ; proche de 0 : pas de lien en ligne droite.</dd></div>
+            <div><dt>Pente (droite de tendance)</dt><dd>De combien une valeur change en moyenne quand l'autre augmente de 1. Exemple : une pente de 0,02 veut dire +0,02 de Compa-Ratio par point de note de compétences.</dd></div>
+            <div><dt>Tendance non linéaire (Lowess)</dt><dd>Une courbe qui suit la tendance des points sans les obliger à suivre une ligne droite.</dd></div>
+          </dl>
+          <h3>Données RH</h3>
+          <dl>
+            <div><dt>Pôle (Entite_N1) et entité (Entite_N2)</dt><dd>Le pôle est la grande direction ; l'entité, le service à l'intérieur du pôle.</dd></div>
+            <div><dt>Métier (Job_Family) et poste (Job_Title)</dt><dd>Le métier regroupe des postes proches ; le poste est l'emploi précis du salarié.</dd></div>
+            <div><dt>Niveau</dt><dd>Le niveau du poste. Avec le métier, il donne la grille du salarié et sa médiane du marché.</dd></div>
+            <div><dt>Ancienneté et tranches d'ancienneté</dt><dd>Les années passées dans l'entreprise, regroupées en tranches : 0-2, 3-5, 6-12, 13-20 et plus de 20 ans.</dd></div>
+            <div><dt>Âge à l'embauche</dt><dd>Âge − ancienneté : l'âge qu'avait le salarié en arrivant.</dd></div>
+            <div><dt>Competence_N1</dt><dd>La note de compétences de l'année précédente.</dd></div>
+            <div><dt>Case 9-Box (Positionnement_9BOX)</dt><dd>La case de l'évaluation qui croise performance et potentiel. La page suppose que plus le chiffre est haut, meilleure est l'évaluation : à confirmer sur vos données.</dd></div>
+            <div><dt>Hot job (tension du métier)</dt><dd>À quel point le métier est recherché sur le marché : plus la valeur est haute, plus la tension est forte.</dd></div>
+            <div><dt>Écart H / F</dt><dd>« Non corrigé » : salaire moyen des hommes comparé à celui des femmes, tous métiers et niveaux mélangés. « À grille égale » : même comparaison sur le Compa-Ratio, où chacun est comparé au milieu de sa propre grille.</dd></div>
+          </dl>
         </div>
       </section>
 
