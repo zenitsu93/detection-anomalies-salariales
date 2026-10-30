@@ -64,9 +64,9 @@
       // Boîtes à fond blanc : elles se détachent de la bande de la grille.
       boite(K.ARDOISE, { x: lignes.map(l => texteNiveau(l.Niveau)), y: lignes.map(l => l.Fixe_Annuel_MAD), text: surv, name: 'Salaires réels', fillcolor: 'rgba(255,255,255,0.92)' }),
       { type: 'scatter', x: g, y: moy('Mid'), mode: 'lines+markers', line: { color: K.BRUN, width: 2.5 }, marker: { size: 8 }, name: `Milieu de grille (Mid)${moyenne}`,
-        hovertemplate: 'Niveau %{x}<br>Mid : %{y:.1f} kMAD<extra></extra>' },
+        hovertemplate: 'Niveau %{x}<br>Mid : %{y:,.1f} kMAD<extra></extra>' },
       { type: 'scatter', x: g, y: moy('Median'), mode: 'lines+markers', line: { color: K.BLEU, width: 2.5, dash: 'dash' }, marker: { size: 8, symbol: 'diamond' },
-        name: `Médiane du marché${moyenne}`, hovertemplate: 'Niveau %{x}<br>Médiane marché : %{y:.1f} kMAD<extra></extra>' },
+        name: `Médiane du marché${moyenne}`, hovertemplate: 'Niveau %{x}<br>Médiane marché : %{y:,.1f} kMAD<extra></extra>' },
       ...barresEtCourbe(lignes.map(l => l.Range_Penetration), 40, { xaxis: 'x2', yaxis: 'y2' }),
     ];
     // 'category' : chaque niveau prend la même largeur, même si des numéros de niveau manquent.
@@ -146,7 +146,7 @@
       boite(K.ARDOISE, { x: lignes.map(l => l.Tranche_Anciennete), y, text: surv, name: 'Salariés' }),
       { type: 'scatter', mode: 'lines+markers', x: C.TRANCHES, y: medianes.map(m => m[0]), customdata: medianes.map(m => m[1]),
         line: { color: K.BRUN, width: 3 }, marker: { size: 8 }, name: 'Médiane par tranche',
-        hovertemplate: 'Ancienneté %{x} ans<br><b>Compa-Ratio médian : %{y:.3f}</b><br>%{customdata} salariés<extra></extra>' },
+        hovertemplate: 'Ancienneté %{x} ans<br><b>Compa-Ratio médian : %{y:.3f}</b><br>%{customdata:,} salariés<extra></extra>' },
       // Points gris clair : la courbe de tendance, en brun, se lit par-dessus.
       { type: 'scattergl', mode: 'markers', x, y, text: surv, name: 'Salariés', showlegend: false,
         marker: { color: K.PALE, size: 5, opacity: 0.2 }, xaxis: 'x2', yaxis: 'y2' },

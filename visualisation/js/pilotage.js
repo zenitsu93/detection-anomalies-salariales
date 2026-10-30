@@ -66,7 +66,7 @@
       return { type: 'heatmap', x: niveaux.map(String), y: poles.map(String), z: cases.map(r => r.map(([n, t]) => t ? 100 * n / t : null)),
         text: cases.map(r => r.map(([n, t]) => n ? `${fr(100 * n / t, 1)} %<br>${fr(n)}` : (t ? '0' : ''))), texttemplate: '%{text}', textfont: { size: 11 },
         customdata: cases, colorscale: [[0, '#ffffff'], [1, couleur]], zmin: 0, showscale: false, xgap: 2, ygap: 2, ...axes,
-        hovertemplate: '%{y} · niveau %{x}<br><b>%{customdata[0]} salariés sur %{customdata[1]}</b> (%{z:.1f} %)<extra></extra>' };
+        hovertemplate: '%{y} · niveau %{x}<br><b>%{customdata[0]:,} salariés sur %{customdata[1]:,}</b> (%{z:.1f} %)<extra></extra>' };
     };
     const traces = [carte(sousMin, K.ROUGE, {}), carte(surMax, K.OR, { xaxis: 'x2', yaxis: 'y2' })];
     const L = grille({ colonnes: 2, espH: 0.06, titres: ['Sous le Min de leur grille', 'Au-dessus du Max de leur grille'] });
@@ -125,7 +125,7 @@
         marker: { color: couleur, line: { color: '#fff', width: 1 } },
         text: v.map(x => x >= 6 ? fr(x, 0) + ' %' : ''), textposition: 'inside', insidetextanchor: 'middle', textfont: { size: 11, color: texte },
         customdata: groupes.map((g, i) => [fr(v[i], 1), g.parts[pos], g.n]),
-        hovertemplate: `%{y}<br>${pos} : <b>%{customdata[0]} %</b><br>%{customdata[1]} salariés sur %{customdata[2]}<extra></extra>` };
+        hovertemplate: `%{y}<br>${pos} : <b>%{customdata[0]} %</b><br>%{customdata[1]:,} salariés sur %{customdata[2]:,}<extra></extra>` };
     });
     const L = grille({ titres: [`Part des salariés sous la médiane du marché (à gauche) et au-dessus (à droite), ${axe === 'Entite_N1' ? 'par pôle' : 'par métier'}`] });
     L.barmode = 'relative';
@@ -174,7 +174,7 @@
       return { type: 'scatter', mode: 'markers', name: nom, x: bs.map(b => b.de + PAS / 2), y: bs.map(b => b.y),
         marker: { size: bs.map(b => b.n), sizemode: 'area', sizeref: 2 * plusGrosse / (36 ** 2), sizemin: 3, color: transparent(couleur, 0.8), line: { color: '#fff', width: 1 } },
         customdata: bs.map(b => [fr(b.de, 2), fr(b.de + PAS, 2), b.n]),
-        hovertemplate: '9-Box %{y} · Compa-Ratio de %{customdata[0]} à %{customdata[1]}<br><b>%{customdata[2]} salariés</b><extra></extra>' };
+        hovertemplate: '9-Box %{y} · Compa-Ratio de %{customdata[0]} à %{customdata[1]}<br><b>%{customdata[2]:,} salariés</b><extra></extra>' };
     });
     const L = grille({ titres: ['Compa-Ratio et positionnement 9-Box (taille de la bulle = nombre de salariés)'] });
     // Zones de lecture : sous 0,85 et au-dessus de 1,15, les seuils de la règle CompaRatio de la détection.
@@ -226,7 +226,7 @@
       textfont: { size: 11, color: K.ENCRE }, customdata: cases.map((r, i) => r.map((g, j) => [g.length, fr(salaire[i][j], 1)])), xgap: 2, ygap: 2,
       colorbar: { thickness: 12, tickvals: [0.85, 0.95, 1.05], ticktext: ['sous 0,90', '0,90 à 1,00', 'au-dessus de 1,00'], tickfont: { size: 11 },
         title: { text: 'Compa-Ratio<br>moyen', font: { size: 11 } } },
-      hovertemplate: '%{y} · %{x}<br><b>Compa-Ratio moyen : %{z:.3f}</b><br>Salaire moyen : %{customdata[1]} kMAD<br>%{customdata[0]} salariés<extra></extra>',
+      hovertemplate: '%{y} · %{x}<br><b>Compa-Ratio moyen : %{z:.3f}</b><br>Salaire moyen : %{customdata[1]} kMAD<br>%{customdata[0]:,} salariés<extra></extra>',
     }];
     const L = grille({ titres: ['Compa-Ratio moyen et salaire moyen (kMAD) par métier et tension du métier'] });
     // Les valeurs de Hot_job sont lues dans le fichier entier (et non supposées de 0 à 2) : la plus haute est la tension la plus forte.

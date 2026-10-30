@@ -55,8 +55,10 @@
     modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian'],
     toImageButtonOptions: { format: 'png', scale: 2 },
   };
+  // tickformat ',' : les graduations s'écrivent avec une espace pour les milliers (1 000, 25 000), comme dans les constats ;
+  // sans lui, plotly écrivait « 1000 » ou « 20k ». Les décimales, elles, ne changent pas (0,85 reste 0,85).
   const AXE = { gridcolor: COULEURS.GRILLE, linecolor: COULEURS.TRAIT, showline: true, zeroline: false, automargin: true,
-    tickfont: { size: 11, color: COULEURS.GRIS } };
+    tickformat: ',', tickfont: { size: 11, color: COULEURS.GRIS } };
   const nomAxe = i => i === 1 ? '' : String(i);
   const titreAxe = texte => ({ text: texte, font: { size: 12, color: COULEURS.GRIS }, standoff: 10 });
 
@@ -126,7 +128,7 @@
     const h = C.histogramme(v, bins), traces = [
       { type: 'bar', x: h.centres, y: h.effectifs, width: h.largeur, marker: { color: transparent(COULEURS.ARDOISE, 0.75), line: { color: '#fff', width: 1 } },
         showlegend: false, customdata: h.effectifs.map((_, i) => [h.bords[i], h.bords[i + 1]]),
-        hovertemplate: 'De %{customdata[0]:.2f} à %{customdata[1]:.2f}<br><b>%{y} salariés</b><extra></extra>', ...axes }];
+        hovertemplate: 'De %{customdata[0]:,.2f} à %{customdata[1]:,.2f}<br><b>%{y:,} salariés</b><extra></extra>', ...axes }];
     if (v.length > 2 && C.ecartType(v) > 0) {
       const k = C.courbeLissee(v, h);
       traces.push({ type: 'scatter', mode: 'lines', x: k.x, y: k.y, line: { color: COULEURS.BRUN, width: 2 }, showlegend: false, hoverinfo: 'skip', ...axes });
