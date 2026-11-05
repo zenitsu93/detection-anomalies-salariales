@@ -1,0 +1,160 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+CE QUE LES TROIS ANALYSES DU DIPLÔME ONT EN COMMUN
+==================================================
+
+Les trois analyses de ce dossier (cohortes.py, ia.py, regression.py) lisent les mêmes fichiers, lancent
+la même détection et écrivent le même genre de page. Ce qu'elles partagent est rangé ici, pour ne pas
+le recopier trois fois. Ce fichier ne se lance pas seul.
+
+Aucune de ces analyses ne change la détection : elles la lancent avec ses réglages habituels, puis avec
+le diplôme en plus, et montrent la différence. Les résultats de python src/detect_salary_anomalies.py
+restent les mêmes.
+"""
+
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import yaml
+
+# Le dossier du projet : un cran au-dessus de ce dossier (analyse_diplomes/).
+PROJET = Path(__file__).resolve().parent.parent
+# Pourquoi : les fichiers de src/ s'importent entre eux par leur seul nom (« from anomaly_pretraitement
+# import ... ») ; Python doit donc aussi chercher dans ce dossier.
+sys.path.insert(0, str(PROJET / "src"))
+
+from anomaly_pretraitement import message_diplomes, preparer_employes  # noqa: E402
+from anomaly_cohortes import former_cohortes  # noqa: E402
+from anomaly_regles import apply_rulebook  # noqa: E402
+from anomaly_signal_iforest import ml_anomaly  # noqa: E402
+from anomaly_signal_fort import apply_ml_strong_signal  # noqa: E402
+from anomaly_score_general import aggregate_risk  # noqa: E402
+from generate_dashboard_html import VENDOR  # noqa: E402
+
+PRIORITES = ["Critical", "Major", "Minor", "Info"]
+# Les tranches de diplôme dans l'ordre (voir tranche_etude dans src/anomaly_pretraitement.py), plus les
+# diplômes inconnus, toujours mis à part.
+TRANCHES = ["BAC+2 ou moins", "BAC+3 ou BAC+4", "BAC+5 et plus"]
+INCONNU = "Inconnu"
+
+
+def charger():
+    """Les réglages (config/rules.yaml) et les salariés prétraités, avec leur diplôme. S'arrête avec un
+    message si aucun salarié n'a de diplôme connu : il n'y aurait rien à comparer."""
+    with open(PROJET / "config" / "rules.yaml", encoding="utf-8") as fichier:
+        rule_params = yaml.safe_load(fichier)["rules"]
+    df = preparer_employes(PROJET / "input" / "employes.xlsx", PROJET / "input" / "bands.xlsx",
+                           PROJET / "input" / "market.xlsx")
+    print(message_diplomes(df))
+    if df["Tranche_Etude"].notna().sum() == 0:
+        raise SystemExit("Aucun salarié n'a de niveau d'études connu : il n'y a rien à analyser. "
+                         "Déposer le fichier des diplômes dans input/diplomes.xlsx.")
+    return rule_params, df
+
+
+def detection(df: pd.DataFrame, rule_params: dict, feats=None) -> pd.DataFrame:
+    """La détection, des groupes de collègues jusqu'à la priorité, dans le même ordre que
+    src/detect_salary_anomalies.py. feats : les colonnes que regarde l'IA, si on lui en donne d'autres
+    que d'habitude (voir entrainer_ia dans src/anomaly_signal_iforest.py)."""
+    df = former_cohortes(df, rule_params)
+    df = apply_rulebook(df, rule_params)
+    df = ml_anomaly(df, rule_params, feats=feats)
+    df = apply_ml_strong_signal(df, rule_params, feats=feats)
+    return aggregate_risk(df, rule_params)
+
+
+def virgule(x, decimales=2):
+    """0.985 -> « 0,99 » ; 12345.6 -> « 12 346 » avec decimales=0 ; « 0,00 » plutôt que « -0,00 »."""
+    if abs(x) < 0.5 * 10 ** -decimales:
+        x = 0.0
+    return f"{x:,.{decimales}f}".replace(",", " ").replace(".", ",")
+
+
+def pour_cent(x, decimales=0):
+    """0.034 -> « 3 % »."""
+    return f"{virgule(x * 100, decimales)} %"
+
+
+def salaries(n) -> str:
+    """« 1 salarié », « 2 salariés », « aucun salarié »."""
+    n = int(n)
+    return "aucun salarié" if n == 0 else f"{virgule(n, 0)} salarié{'s' if n > 1 else ''}"
+
+
+def resume(groupe: pd.DataFrame) -> str:
+    """« 35 salariés, CompaRatio médian 0,81 », ou « aucun salarié »."""
+    texte = salaries(len(groupe))
+    cr = groupe["CompaRatio"].dropna()
+    return texte + (f", CompaRatio médian {virgule(cr.median())}" if len(cr) else "")
+
+
+def comparer_payes(entrent: pd.DataFrame, sortent: pd.DataFrame) -> str:
+    """La phrase qui dit si ceux qui entrent dans une liste sont plus mal payés que ceux qui en sortent.
+    Pourquoi c'est la question : la détection cherche les salaires trop bas ; un ajout qui fait entrer des
+    salariés mieux payés que ceux qu'il fait sortir l'éloigne de son but."""
+    a, b = entrent["CompaRatio"].dropna(), sortent["CompaRatio"].dropna()
+    if a.empty or b.empty:
+        return ""
+    if round(a.median(), 2) < round(b.median(), 2):
+        return " Ceux qui entrent sont plus mal payés que ceux qui sortent : l'ajout rapproche la détection de son but."
+    if round(a.median(), 2) > round(b.median(), 2):
+        return (" Ceux qui entrent sont mieux payés que ceux qui sortent : l'ajout éloigne la détection de son "
+                "but, qui est de trouver les salaires trop bas.")
+    return " Ceux qui entrent et ceux qui sortent ont le même CompaRatio médian."
+
+
+def tableau_priorites(avant: pd.DataFrame, apres: pd.DataFrame) -> str:
+    """Le tableau croisé des priorités, sans le diplôme (lignes) et avec (colonnes), en HTML. La diagonale
+    est grisée : ce sont les salariés qui ne changent pas."""
+    croise = pd.crosstab(avant["Severity"], apres["Severity"]).reindex(index=PRIORITES, columns=PRIORITES,
+                                                                      fill_value=0)
+
+    def case(p, q):
+        classe = ' class="diag"' if p == q else ""
+        return f"<td{classe}>{virgule(croise.at[p, q], 0)}</td>"
+
+    return ("<table><tr><th>Sans ↓ / avec →</th>" + "".join(f"<th>{p}</th>" for p in PRIORITES) + "</tr>"
+            + "".join("<tr><th>" + p + "</th>" + "".join(case(p, q) for q in PRIORITES) + "</tr>"
+                      for p in PRIORITES) + "</table>")
+
+
+def ecrire_page(nom: str, titre: str, df: pd.DataFrame, corps: str, graphes: dict) -> Path:
+    """Écrit la page dans output/analyse_diplomes/, sous un nom daté (une page de plus à chaque
+    lancement, sans effacer les anciennes), et rend son chemin.
+    - corps : le texte de la page, en HTML ;
+    - graphes : pour chaque bloc <div id="..."> du corps, la liste des courbes Plotly et la mise en page.
+    Plotly est recopié dans la page (depuis visualisation/vendor/) : elle s'ouvre sans internet."""
+    maintenant = datetime.now()
+    style = {"font": {"family": "Segoe UI, Arial, sans-serif", "color": "#4a2c1d"}, "paper_bgcolor": "white",
+             "plot_bgcolor": "white", "separators": ", "}
+    donnees = json.dumps({cle: {"data": courbes, "layout": {**style, **mise_en_page}}
+                          for cle, (courbes, mise_en_page) in graphes.items()},
+                         ensure_ascii=False).replace("<", "\\u003c")
+    plotly_js = (VENDOR / "plotly.min.js").read_text(encoding="utf-8")
+    html = f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>{titre}</title>
+<style>
+body {{ font-family: "Segoe UI", Arial, sans-serif; color: #4a2c1d; max-width: 1100px; margin: 24px auto; padding: 0 16px; }}
+h1 {{ font-size: 24px; }} h2 {{ font-size: 18px; margin-top: 36px; border-bottom: 3px solid #e9a21b; padding-bottom: 4px; }}
+p, li {{ line-height: 1.5; }} .lire {{ color: #5b6b7d; }}
+.constat {{ background: #fdf5e4; border-left: 4px solid #e9a21b; padding: 10px 14px; }}
+table {{ border-collapse: collapse; margin: 10px 0; }} th, td {{ border: 1px solid #d9dde2; padding: 6px 12px; text-align: right; }}
+th {{ background: #f4f5f7; }} td.diag {{ color: #5b6b7d; }} .graphe {{ height: 420px; }}
+</style><script>{plotly_js}</script></head><body>
+<h1>{titre}</h1>
+<p class="lire">Analyse du {maintenant:%d/%m/%Y à %H:%M}. {message_diplomes(df)}</p>
+{corps}
+<script>
+const D = {donnees};
+for (const [id, g] of Object.entries(D)) Plotly.newPlot(id, g.data, g.layout, {{displaylogo: false, responsive: true}});
+</script></body></html>"""
+    dossier = PROJET / "output" / "analyse_diplomes"
+    dossier.mkdir(parents=True, exist_ok=True)
+    page = dossier / f"{nom}_{maintenant:%Y-%m-%d_%H-%M-%S}.html"
+    page.write_text(html, encoding="utf-8")
+    return page
