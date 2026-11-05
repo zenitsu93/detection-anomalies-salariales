@@ -38,16 +38,21 @@ FEATS = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio", "Ag
          "Competence_N1", "Positionnement_9BOX", "Hot_job"]
 
 
-def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42):
+def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feats=None):
     """Entraîne l'Isolation Forest sur les colonnes FEATS et rend le modèle et le tableau qu'il a lu.
 
     Pourquoi une fonction à part : anomaly_signal_fort.py en a besoin pour expliquer le score. Avec
     les mêmes salariés, les mêmes réglages et le même hasard fixé (random_state), elle redonne
     exactement le même modèle, donc exactement les mêmes scores.
+
+    feats : les colonnes à regarder à la place de FEATS. La détection ne s'en sert pas (elle regarde
+    toujours FEATS) ; analyse_diplomes/ia.py s'en sert pour essayer l'IA avec le diplôme en plus, sans
+    rien changer à la détection.
     """
+    feats = FEATS if feats is None else list(feats)
     # Le modèle ne sait pas traiter une case vide : on la remplace par la valeur du milieu de sa
     # colonne (la médiane).
-    X = df[FEATS].fillna(df[FEATS].median())
+    X = df[feats].fillna(df[feats].median())
 
     # Pourquoi ces deux réglages sont lus dans le fichier de règles : dans l'archive, ils étaient
     # écrits en dur (0.05 et 200), alors que tous les autres seuils se règlent sans toucher au code.
@@ -60,7 +65,7 @@ def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42):
     return iso, X
 
 
-def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> pd.DataFrame:
+def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feats=None) -> pd.DataFrame:
     """Calcule un score d'anomalie non supervisé via IsolationForest et rend un NOUVEAU DataFrame
     (celui reçu n'est pas modifié), avec la colonne ML_AnomalyScore en plus.
 
@@ -77,10 +82,11 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42) -> p
     - ml_contamination (0.05) : part d'anomalies que le modèle s'attend à trouver ;
     - ml_n_estimators (200) : nombre d'arbres, c'est-à-dire de découpages au hasard.
     random_state=42 fixe le hasard : on obtient le même score à chaque lancement.
+    feats : les colonnes à regarder à la place de FEATS (voir entrainer_ia) ; la détection n'en donne pas.
     """
     df = df.copy()
 
-    iso, X = entrainer_ia(df, rule_params, random_state)
+    iso, X = entrainer_ia(df, rule_params, random_state, feats)
     # score_samples rend un nombre d'autant plus BAS que le profil est atypique : le signe « - »
     # l'inverse, pour que « plus grand » veuille dire « plus atypique ».
     score = -iso.score_samples(X)

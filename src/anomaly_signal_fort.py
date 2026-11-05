@@ -30,12 +30,13 @@ Utilisation :
   Le DataFrame est enregistré dans output/signal_fort/employes_signal_fort.xlsx, à ouvrir avec Excel.
 """
 
+import math
 from pathlib import Path
 
 import pandas as pd
 import yaml
 
-from anomaly_pretraitement import preparer_employes
+from anomaly_pretraitement import RANG_NIVEAU_ETUDE, preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import entrainer_ia, ml_anomaly
@@ -52,13 +53,42 @@ NOMS = {
     "Competence_N1": ("la note de compétences N-1", 1, 2, ""),
     "Positionnement_9BOX": ("la case 9-Box", 1, 0, ""),
     "Hot_job": ("le Hot job", 1, 0, ""),
+    # Pas regardé par la détection : seulement quand analyse_diplomes/ia.py essaie l'IA avec le diplôme.
+    "Rang_Etude_Max": ("le niveau d'études", 1, 0, ""),
 }
+# Le début du nom des colonnes 0/1 de catégorie de diplôme que fabrique analyse_diplomes/ia.py, par
+# exemple « Categorie : DIPLOME D'INGENIEUR ». Pourquoi pas une liste fixe dans NOMS : les catégories
+# sont celles du fichier des diplômes, qu'on ne connaît pas à l'avance.
+CATEGORIE = "Categorie : "
+
+# Le rang d'un niveau d'études écrit en toutes lettres : 6 -> « BAC+5 ». Pour un rang que partagent deux
+# niveaux, on garde le premier de la table (BAC+5 plutôt que BAC+6, BAC+7 plutôt que l'expertise comptable).
+NIVEAU_DU_RANG = {}
+for _niveau, _rang in RANG_NIVEAU_ETUDE.items():
+    NIVEAU_DU_RANG.setdefault(_rang, _niveau)
+
+
+def nom(info):
+    """Le nom d'une information dans l'explication : « l'âge », « la catégorie de diplôme « … » »."""
+    if info.startswith(CATEGORIE):
+        return f"la catégorie de diplôme « {info[len(CATEGORIE):]} »"
+    return NOMS[info][0]
 # Les informations qui disent combien le salarié est payé (voir le choix B dans apply_ml_strong_signal).
 PAYE = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio"]
 
 
 def texte(valeur, info):
     """La valeur d'une information, écrite à la française : 573.58 -> « 574 kMAD », 3.5 -> « 3,5 »."""
+    # Le niveau d'études s'écrit en toutes lettres (« BAC+5 ») plutôt qu'avec son rang (« 6 »). Le niveau
+    # habituel (la médiane de tous les salariés) peut tomber entre deux rangs, par exemple 5,5 : on écrit
+    # alors « entre BAC+4 et BAC+5 ».
+    if info == "Rang_Etude_Max":
+        bas, haut = NIVEAU_DU_RANG[math.floor(valeur)], NIVEAU_DU_RANG[math.ceil(valeur)]
+        return bas if bas == haut else f"entre {bas} et {haut}"
+    # Une catégorie de diplôme s'écrit « oui » ou « non » plutôt que 1 ou 0. La valeur habituelle peut
+    # tomber entre les deux (0,5) quand il y a autant de oui que de non : on écrit alors « un sur deux ».
+    if info.startswith(CATEGORIE):
+        return "oui" if valeur == 1 else "non" if valeur == 0 else "un sur deux"
     _, facteur, decimales, unite = NOMS[info]
     nombre = f"{valeur * facteur:,.{decimales}f}".replace(",", " ").replace(".", ",")
     if "," in nombre:
@@ -93,7 +123,7 @@ def poids_des_infos(modele, X: pd.DataFrame, lignes) -> pd.DataFrame:
     return pd.DataFrame(baisses, index=lignes)
 
 
-def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict, feats=None) -> pd.DataFrame:
     """Ajoute l'étiquette ML_STRONG_SIGNAL et son explication aux salariés parmi les plus atypiques
     pour l'IA (les 5 % du haut avec ml_strong_signal_percentile = 0.95), qu'une règle se soit
     déclenchée ou non. Ne touche pas à Rule_Score. Rend un NOUVEAU DataFrame (celui reçu n'est pas
@@ -115,7 +145,10 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # Pourquoi l'IA trouve chacun d'eux atypique. Le modèle est recréé à l'identique de l'étape IA
     # (mêmes salariés, mêmes réglages, même hasard fixé) : il donne exactement les mêmes scores. Il
     # n'est pas reçu de l'étape précédente, qui ne passe que le tableau des salariés.
-    modele, X = entrainer_ia(df, rule_params)
+    # feats : les colonnes que regarde l'IA, si on lui en donne d'autres que FEATS (voir entrainer_ia).
+    # La détection n'en donne pas ; analyse_diplomes/ia.py, si : l'explication doit alors être tirée du
+    # même modèle que le score.
+    modele, X = entrainer_ia(df, rule_params, feats=feats)
     habituel = X.median()
     baisses = poids_des_infos(modele, X, candidats)
 
@@ -133,7 +166,7 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
             continue
         fort.append(i)
         df.at[i, "Explication_IA"] = (
-            "surtout " + " et ".join(f"{NOMS[c][0]} ({texte(X.at[i, c], c)}, contre {texte(habituel[c], c)} en général)"
+            "surtout " + " et ".join(f"{nom(c)} ({texte(X.at[i, c], c)}, contre {texte(habituel[c], c)} en général)"
                                      for c in infos)
             if infos else "aucune information ne ressort seule : c'est leur combinaison qui est inhabituelle")
 

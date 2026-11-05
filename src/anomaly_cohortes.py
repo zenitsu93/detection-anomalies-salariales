@@ -41,6 +41,10 @@ dans config/rules.yaml) :
 3. même niveau seulement, tous métiers confondus.
 On prend le premier qui compte au moins 15 personnes.
 
+Un salarié dont une des colonnes de l'étape est vide saute cette étape (voir « connus » dans la recette
+former_cohortes). C'est ce qui permet à analyse_diplomes/cohortes.py d'essayer une étape avec la tranche
+de diplôme : un salarié au diplôme inconnu passe directement à l'étape suivante.
+
 
 3. Pourquoi cette règle remplace l'ancienne
 -------------------------------------------
@@ -125,7 +129,8 @@ def robust_zscore(values: pd.Series) -> pd.Series:
 
 # Les noms lisibles des colonnes qui définissent les groupes, pour écrire en clair les critères du
 # groupe retenu (par exemple « niveau + métier » au lieu de « Niveau|Job_Family »).
-NOMS_LISIBLES = {"Niveau": "niveau", "Job_Family": "métier", "Anciennete_Bucket": "tranche d'ancienneté"}
+NOMS_LISIBLES = {"Niveau": "niveau", "Job_Family": "métier", "Anciennete_Bucket": "tranche d'ancienneté",
+                 "Tranche_Etude": "tranche de diplôme"}
 
 
 def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
@@ -193,7 +198,16 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         #   petit, car il n'existe rien de plus large (un avertissement le signale à la fin).
         sans_groupe = cohortes["Cohort_Key"].isna()
         derniere_etape = position == len(steps) - 1
-        choisis = sans_groupe if derniere_etape else sans_groupe & (taille >= min_size)
+        # connus : vrai si le salarié a une valeur dans toutes les colonnes de cette étape. Pourquoi :
+        # sans cela, les salariés dont une case est vide (un diplôme inconnu, par exemple) formeraient
+        # leur propre groupe « nan » et seraient comparés entre eux, alors qu'ils n'ont rien en commun à
+        # part la case vide. Ils sautent l'étape et passent à la suivante. Avec les étapes du fichier de
+        # règles, rien ne change tant que le niveau, le métier et l'ancienneté sont remplis (une
+        # ancienneté inconnue s'écrit déjà « NA » en toutes lettres, elle n'est donc pas vide). Seul
+        # changement : un salarié sans métier n'est plus comparé aux autres salariés sans métier, mais
+        # passe au groupe « même niveau ».
+        connus = df[colonnes].notna().all(axis=1)
+        choisis = sans_groupe if derniere_etape else sans_groupe & connus & (taille >= min_size)
         # Personne à placer à cette étape : on passe directement à l'étape suivante (« continue »).
         if not choisis.any():
             continue

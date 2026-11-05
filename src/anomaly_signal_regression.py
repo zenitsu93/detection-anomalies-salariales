@@ -19,11 +19,30 @@ from anomaly_pretraitement import preparer_employes
 # Ce qu'on connaît d'un salarié déjà dans l'entreprise.
 COLONNES = ["Job_Family", "Niveau", "Anciennete", "Age", "Competence_N1", "Positionnement_9BOX",
             "Hot_job"]
+# Les colonnes du diplôme qu'on peut donner en plus au modèle (voir tableau_x). Le modèle de l'aide à
+# la décision ne les lit pas ; analyse_diplomes/regression.py les essaie, pour voir si elles rendent le
+# salaire prédit plus juste.
+COLONNES_DIPLOME = ["Tranche_Etude", "Cat_Ecole_Max"]
+# Les colonnes qui sont des catégories et pas des nombres : chacune devient des colonnes 0/1.
+CATEGORIES = ["Job_Family", "Niveau", *COLONNES_DIPLOME]
 
 
-def entrainer(df: pd.DataFrame):
-    # Métier et niveau en colonnes 0/1
-    X = pd.get_dummies(df[COLONNES], columns=["Job_Family", "Niveau"], dtype=float)
+def tableau_x(df: pd.DataFrame, colonnes: list) -> pd.DataFrame:
+    """Le tableau que lit le modèle : les colonnes demandées, les catégories en colonnes 0/1.
+    Pourquoi un diplôme inconnu devient « Inconnu » : le modèle refuse les cases vides. « Inconnu » a
+    alors sa propre colonne 0/1, au lieu de recevoir un diplôme inventé."""
+    x = df[colonnes].copy()
+    for colonne in COLONNES_DIPLOME:
+        if colonne in colonnes:
+            x[colonne] = x[colonne].fillna("Inconnu")
+    return pd.get_dummies(x, columns=[c for c in CATEGORIES if c in colonnes], dtype=float)
+
+
+def entrainer(df: pd.DataFrame, colonnes: list = COLONNES):
+    # colonnes : ce que lit le modèle ; sans précision, COLONNES. Pourquoi pouvoir en donner d'autres :
+    # analyse_diplomes/regression.py compare le modèle sans et avec le diplôme.
+    # Métier et niveau (et le diplôme, s'il est demandé) en colonnes 0/1
+    X = tableau_x(df, colonnes)
     # Log du salaire : l'écart se lit en %, comparable d'un niveau à l'autre
     Y = np.log(df["Fixe_Annuel_MAD"])
 
@@ -47,6 +66,8 @@ def entrainer(df: pd.DataFrame):
     bas, haut = np.quantile(Y_test - Y_pred, [0.05, 0.95])
     reg = {
         "modele": modele,
+        # Pourquoi garder la liste des colonnes lues : predire doit refaire exactement le même tableau.
+        "colonnes": list(colonnes),
         "colonnes_X": list(X.columns),
         "fourchette": (bas, haut),
     }
@@ -56,9 +77,9 @@ def entrainer(df: pd.DataFrame):
 def predire(profils: pd.DataFrame, reg: dict) -> pd.DataFrame:
     """profils : les colonnes du modèle."""
     profils = profils.copy()
-    # Mêmes colonnes 0/1 qu'à l'entraînement
-    X = pd.get_dummies(profils[COLONNES], columns=["Job_Family", "Niveau"],
-                       dtype=float).reindex(columns=reg["colonnes_X"], fill_value=0)
+    # Mêmes colonnes 0/1 qu'à l'entraînement. Un modèle enregistré avant que la liste « colonnes » soit
+    # gardée avec lui lisait COLONNES.
+    X = tableau_x(profils, reg.get("colonnes", COLONNES)).reindex(columns=reg["colonnes_X"], fill_value=0)
     log_predit = reg["modele"].predict(X)
     bas, haut = reg["fourchette"]
 
