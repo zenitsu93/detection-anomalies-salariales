@@ -102,8 +102,8 @@ if __name__ == "__main__":
                  "Avec la tranche et la catégorie": essais(df, AVEC_TOUT),
                  "Témoin : diplômes mélangés au hasard": essais(melanger(df), AVEC_TOUT)}
 
-    lignes = "".join(f"<tr><th>{nom}</th><td>{virgule(r['mae'].mean(), 1)} ± {virgule(r['mae'].std(), 1)}</td>"
-                     f"<td>{virgule(r['r2'].mean(), 3)}</td><td>± {virgule(r['largeur'].mean() / 2, 1)} %</td></tr>"
+    lignes = "".join(f"<tr><th>{nom}</th><td>{virgule(r['mae'].mean(), 1)}</td>"
+                     f"<td>{virgule(r['r2'].mean(), 2)}</td><td>± {virgule(r['largeur'].mean() / 2, 0)} %</td></tr>"
                      for nom, r in resultats.items())
     sans, avec, temoin = (resultats[n] for n in ["Sans le diplôme", "Avec la tranche et la catégorie",
                                                  "Témoin : diplômes mélangés au hasard"])
@@ -113,13 +113,15 @@ if __name__ == "__main__":
     # modèle sans lui dans au moins 9 essais sur 10 (sinon, son gain peut venir du hasard des paquets).
     if gain > max(gain_temoin, 0) and mieux >= 0.9:
         verdict = (f"Le diplôme rend le salaire prédit plus juste : il fait mieux que le modèle sans lui dans "
-                   f"{virgule(mieux * 100, 0)} % des essais, et gagne plus que le témoin.")
+                   f"{virgule(mieux * 100, 0)} % des essais, et mieux que des diplômes tirés au hasard.")
+    elif gain <= max(gain_temoin, 0):
+        verdict = "Le diplôme ne rend pas le salaire prédit plus juste : il ne fait pas mieux que des diplômes tirés au hasard."
     else:
-        verdict = ("Le diplôme ne rend pas le salaire prédit nettement plus juste : il ne gagne pas plus que le "
-                   f"témoin, ou ne fait mieux que dans {virgule(mieux * 100, 0)} % des essais.")
-    constat1 = (f"Avec la tranche et la catégorie, l'erreur moyenne passe de {virgule(sans['mae'].mean(), 1)} à "
-                f"{virgule(avec['mae'].mean(), 1)} kMAD (gain de {virgule(gain, 2)} kMAD) ; avec le témoin, à "
-                f"{virgule(temoin['mae'].mean(), 1)} kMAD (gain de {virgule(gain_temoin, 2)} kMAD). {verdict}")
+        verdict = (f"Le diplôme ne rend pas le salaire prédit nettement plus juste : il ne fait mieux que dans "
+                   f"{virgule(mieux * 100, 0)} % des essais.")
+    constat1 = (f"Erreur moyenne : {virgule(sans['mae'].mean(), 1)} kMAD sans le diplôme, "
+                f"{virgule(avec['mae'].mean(), 1)} kMAD avec, {virgule(temoin['mae'].mean(), 1)} kMAD avec le témoin. "
+                f"{verdict}")
 
     graphes, phrases, blocs = {}, [], []
     for cle, colonne, nom, couleur in [("t", "Tranche_Etude", "la tranche de diplôme", "#e9a21b"),
@@ -128,8 +130,10 @@ if __name__ == "__main__":
         if ecarts.empty:
             phrases.append(f"Pour {nom}, une seule valeur est connue ({reference}) : rien à comparer.")
             continue
-        phrases.append(f"Pour {nom}, par rapport à « {reference} » (la plus fréquente) : "
-                       + " ; ".join(f"{v} : {signe(e)}" for v, e in ecarts.items()) + ".")
+        # Les écarts sont déjà écrits au bout des barres : la phrase ne donne que le plus grand.
+        plus_grand = ecarts.abs().idxmax()
+        phrases.append(f"Pour {nom}, le plus grand écart avec « {reference} » est celui de « {plus_grand} » : "
+                       f"{signe(ecarts[plus_grand])}.")
         # Pourquoi l'axe va au moins de -5 % à +5 % : sinon Plotly l'ajuste aux barres, et un écart de 0,3 %
         # remplirait toute la largeur, comme s'il était énorme. Un écart plus grand élargit l'axe.
         etendue = max(5.0, float(ecarts.abs().max()) * 1.25)
@@ -146,17 +150,15 @@ if __name__ == "__main__":
 
     corps = f"""
 <h2>1. Les erreurs du modèle, sans et avec le diplôme</h2>
-<p class="lire">Chaque modèle est essayé 50 fois : il apprend sur 80 % des salariés et on regarde de combien il se
-trompe sur les 20 % qu'il n'a pas vus. <b>Erreur moyenne</b> : de combien de kMAD la prédiction se trompe en moyenne
-(± : de combien elle varie d'un essai à l'autre). <b>Part du salaire expliquée</b> : de 0 (rien) à 1 (tout).
-<b>Fourchette</b> : la marge autour du salaire prédit qui contient le vrai salaire 9 fois sur 10. Le <b>témoin</b> a
-des diplômes mélangés au hasard : il montre ce qu'on gagne en ajoutant des colonnes qui ne veulent rien dire. Le
-diplôme n'aide que s'il fait nettement mieux que lui.</p>
-<table><tr><th>Modèle</th><th>Erreur moyenne (kMAD)</th><th>Part du salaire expliquée</th><th>Fourchette</th></tr>{lignes}</table>
+<p class="lire">Chaque modèle est essayé 50 fois : il apprend sur 80 % des salariés, puis on mesure son erreur sur
+les 20 % qu'il n'a pas vus. Le <b>témoin</b> a des diplômes mélangés au hasard : il montre ce qu'on gagne avec des
+colonnes qui ne veulent rien dire. Le diplôme n'aide que s'il fait nettement mieux que lui.</p>
+<table><tr><th>Modèle</th><th>Erreur moyenne (kMAD)</th><th>Part du salaire expliquée (0 = rien, 1 = tout)</th>
+<th>Marge d'erreur (9 fois sur 10)</th></tr>{lignes}</table>
 <p class="constat">{constat1}</p>
 
 <h2>2. De combien le diplôme change le salaire prédit</h2>
-<p class="lire">À métier, niveau, ancienneté, âge, notes et Hot job égaux, comparé à la valeur la plus fréquente.
+<p class="lire">À métier, niveau, ancienneté, âge, notes et Hot job égaux, par rapport à la valeur la plus fréquente.
 Une barre proche de 0 veut dire que le diplôme ne change presque rien au salaire prédit.</p>
 {"".join(blocs)}
 <p class="constat">{" ".join(phrases)}</p>"""

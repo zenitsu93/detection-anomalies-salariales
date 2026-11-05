@@ -24,8 +24,8 @@ salariés qui entrent ou sortent des plus atypiques, ou dont la priorité ou le 
 import numpy as np
 import pandas as pd
 
-from commun import (INCONNU, PROJET, TRANCHES, charger, comparer_payes, detection, ecrire_page, pour_cent,
-                    resume, salaries, tableau_priorites, virgule)
+from commun import (INCONNU, PROJET, TRANCHES, charger, detection, ecrire_page, mouvement, pour_cent, salaries,
+                    tableau_priorites, virgule)
 from anomaly_signal_iforest import FEATS
 from anomaly_signal_fort import CATEGORIE
 
@@ -69,9 +69,7 @@ if __name__ == "__main__":
     top_avant = avant["ML_AnomalyScore"] >= avant["ML_AnomalyScore"].quantile(1 - part)
     top_apres = apres["ML_AnomalyScore"] >= apres["ML_AnomalyScore"].quantile(1 - part)
     entrent, sortent = apres[top_apres & ~top_avant], avant[top_avant & ~top_apres]
-    constat1 = (f"Avec le diplôme, {salaries(len(entrent))} sur {virgule(top_apres.sum(), 0)} changent parmi les "
-                f"plus atypiques. Entrent : {resume(entrent)}. Sortent : {resume(sortent)}."
-                + comparer_payes(entrent, sortent))
+    constat1 = mouvement(entrent, sortent)
 
     # Le diplôme des plus atypiques, comparé à celui de tous les salariés.
     tranche = df["Tranche_Etude"].fillna(INCONNU)
@@ -87,8 +85,8 @@ if __name__ == "__main__":
               for nom, couleur in zip(parts.columns, ["#c9ced4", "#5b6b7d", "#e9a21b"])]
     rapport = (parts["Les plus atypiques, avec le diplôme"] / parts["Tous les salariés"]).replace(np.inf, np.nan)
     trop = rapport[rapport >= 1.5].dropna()
-    constat2 = ("Avec le diplôme, aucune tranche n'est au moins 1,5 fois plus présente parmi les plus atypiques que "
-                "parmi tous les salariés." if trop.empty else
+    constat2 = ("Avec le diplôme, aucune tranche n'est nettement plus présente parmi les plus atypiques que parmi "
+                "tous les salariés." if trop.empty else
                 "Avec le diplôme, " + " ; ".join(f"« {t} » est {virgule(r, 1)} fois plus présente parmi les plus "
                                                  "atypiques que parmi tous les salariés" for t, r in trop.items())
                 + ".")
@@ -96,36 +94,37 @@ if __name__ == "__main__":
     # Le signal fort et les explications qui citent le diplôme.
     sf_avant, sf_apres = signal_fort(avant), signal_fort(apres)
     constat3 = (f"Signal fort : {salaries(sf_avant.sum())} avec l'IA habituelle, {salaries(sf_apres.sum())} avec le "
-                f"diplôme. Le reçoivent en plus : {resume(apres[sf_apres & ~sf_avant])}. Le perdent : "
-                f"{resume(avant[sf_avant & ~sf_apres])}." + comparer_payes(apres[sf_apres & ~sf_avant], avant[sf_avant & ~sf_apres]))
+                "diplôme. " + mouvement(apres[sf_apres & ~sf_avant], avant[sf_avant & ~sf_apres],
+                                        ("Le reçoivent en plus", "le perdent"), conclure=False))
     explications = apres.loc[sf_apres, "Explication_IA"].fillna("")
     citent = explications[explications.str.contains("niveau d'études|catégorie de diplôme")]
+    # Les exemples sans doublon : deux salariés peuvent avoir mot pour mot la même explication.
+    exemples_uniques = citent.drop_duplicates()
     constat4 = (f"{virgule(len(citent), 0)} explication{'s' if len(citent) > 1 else ''} du signal fort sur "
                 f"{virgule(len(explications), 0)} cite{'nt' if len(citent) > 1 else ''} le diplôme"
-                + (" ; les cinq premières :" if len(citent) else "."))
-    exemples = "".join(f"<li>{e}</li>" for e in citent.head(5))
+                + (" ; par exemple :" if len(citent) else "."))
+    exemples = "".join(f"<li>{e}</li>" for e in exemples_uniques.head(5))
     liste_categories = ", ".join(c[len(CATEGORIE):] for c in categories) or "aucune"
 
     corps = f"""
-<p class="lire">Avec le diplôme, l'IA regarde en plus le niveau d'études (son rang, de 0 = secondaire à 7 = BAC+7) et
-la catégorie du diplôme, une colonne par catégorie trouvée dans le fichier ({liste_categories}).</p>
+<p class="lire">Avec le diplôme, l'IA regarde en plus le niveau d'études (de 0 pour le secondaire à 7 pour BAC+7)
+et la catégorie du diplôme ({liste_categories}).</p>
 
 <h2>1. Qui entre et qui sort des plus atypiques</h2>
-<p class="lire">Les plus atypiques sont les {pour_cent(part)} de salariés qui ont le score IA le plus haut. Ajouter le
-diplôme est utile si ceux qui entrent sont plus mal payés (CompaRatio plus bas) que ceux qui sortent.</p>
+<p class="lire">Les plus atypiques sont les {pour_cent(part)} de salariés qui ont le score IA le plus haut. Le diplôme
+est utile si ceux qu'il fait entrer sont plus mal payés que ceux qu'il fait sortir.</p>
 <p class="constat">{constat1}</p>
 
 <h2>2. Le diplôme des plus atypiques</h2>
-<p class="lire">L'IA repère ce qui est rare. Si une tranche de diplôme est beaucoup plus présente parmi les plus
-atypiques (barre orange) que parmi tous les salariés (barre grise), l'IA les fait remonter pour leur diplôme, pas
-forcément pour leur salaire.</p>
+<p class="lire">L'IA repère ce qui est rare. Une tranche bien plus présente parmi les plus atypiques (barre orange)
+que parmi tous les salariés (barre grise) remonte à cause du diplôme, pas forcément du salaire.</p>
 <div id="g" class="graphe"></div>
 <p class="constat">{constat2}</p>
 
 <h2>3. Le signal fort et les priorités</h2>
 <p class="constat">{constat3}</p>
-<p class="lire">Chaque case compte les salariés qui ont la priorité de la ligne avec l'IA habituelle, et celle de la
-colonne avec le diplôme. Les cases grises de la diagonale sont ceux qui ne changent pas.</p>
+<p class="lire">Chaque case compte les salariés qui ont la priorité de la ligne avec l'IA habituelle, et celle de
+la colonne avec le diplôme. La diagonale, en gris, regroupe ceux qui ne changent pas.</p>
 {tableau_priorites(avant, apres)}
 
 <h2>4. Les explications de l'IA qui citent le diplôme</h2>

@@ -87,26 +87,35 @@ def salaries(n) -> str:
     return "aucun salarié" if n == 0 else f"{virgule(n, 0)} salarié{'s' if n > 1 else ''}"
 
 
-def resume(groupe: pd.DataFrame) -> str:
-    """« 35 salariés, CompaRatio médian 0,81 », ou « aucun salarié »."""
-    texte = salaries(len(groupe))
-    cr = groupe["CompaRatio"].dropna()
-    return texte + (f", CompaRatio médian {virgule(cr.median())}" if len(cr) else "")
+def mouvement(entrent: pd.DataFrame, sortent: pd.DataFrame, mots=("Entrent", "sortent"), conclure=True) -> str:
+    """La phrase qui dit qui entre dans une liste et qui en sort quand on ajoute le diplôme, et si ceux qui
+    entrent sont plus mal payés que ceux qui sortent. Par exemple : « Entrent : 34 salariés (CompaRatio
+    médian 0,70) ; sortent : 8 salariés (CompaRatio médian 0,44). Le diplôme fait entrer des salariés
+    mieux payés que ceux qu'il fait sortir : il éloigne la détection des salaires trop bas. »
+    Pourquoi c'est la question : la détection cherche les salaires trop bas.
+    mots : comment appeler ceux qui entrent et ceux qui sortent (« Nouvelles alertes », « disparues »...).
+    conclure : False pour ne pas ajouter la phrase de conclusion, quand une autre section de la page vient
+    de la dire pour presque les mêmes salariés."""
+    if entrent.empty and sortent.empty:
+        return "Personne ne change."
 
+    def detail(groupe):
+        cr = groupe["CompaRatio"].dropna()
+        return salaries(len(groupe)) + (f" (CompaRatio médian {virgule(cr.median())})" if len(cr) else "")
 
-def comparer_payes(entrent: pd.DataFrame, sortent: pd.DataFrame) -> str:
-    """La phrase qui dit si ceux qui entrent dans une liste sont plus mal payés que ceux qui en sortent.
-    Pourquoi c'est la question : la détection cherche les salaires trop bas ; un ajout qui fait entrer des
-    salariés mieux payés que ceux qu'il fait sortir l'éloigne de son but."""
+    texte = f"{mots[0]} : {detail(entrent)} ; {mots[1]} : {detail(sortent)}."
     a, b = entrent["CompaRatio"].dropna(), sortent["CompaRatio"].dropna()
-    if a.empty or b.empty:
-        return ""
+    if not conclure or a.empty or b.empty:
+        return texte
+    # Les médianes sont comparées telles qu'elles sont écrites (deux chiffres après la virgule) : deux
+    # valeurs écrites pareil ne sont pas dites « plus » ou « moins ».
     if round(a.median(), 2) < round(b.median(), 2):
-        return " Ceux qui entrent sont plus mal payés que ceux qui sortent : l'ajout rapproche la détection de son but."
+        return texte + (" Le diplôme fait entrer des salariés plus mal payés que ceux qu'il fait sortir : il aide à "
+                        "trouver les salaires trop bas.")
     if round(a.median(), 2) > round(b.median(), 2):
-        return (" Ceux qui entrent sont mieux payés que ceux qui sortent : l'ajout éloigne la détection de son "
-                "but, qui est de trouver les salaires trop bas.")
-    return " Ceux qui entrent et ceux qui sortent ont le même CompaRatio médian."
+        return texte + (" Le diplôme fait entrer des salariés mieux payés que ceux qu'il fait sortir : il éloigne "
+                        "la détection des salaires trop bas.")
+    return texte + " Les deux groupes sont aussi bien payés l'un que l'autre."
 
 
 def tableau_priorites(avant: pd.DataFrame, apres: pd.DataFrame) -> str:

@@ -206,8 +206,10 @@ def message_diplomes(df: pd.DataFrame) -> str:
     texte = (f"Diplômes retrouvés pour {nombre(bilan['retrouves'])} {salaries} sur {nombre(len(df))}, "
              f"dont {nombre(int(df['Rang_Etude_Max'].notna().sum()))} avec un niveau d'études connu.")
     if bilan["doublons"]:
-        texte += (f" {nombre(bilan['doublons'])} matricule(s) en double dans le fichier : le niveau le plus "
-                  "élevé est gardé.")
+        # « 1 salarié apparaît », « 10 salariés apparaissent » : accordé au nombre.
+        un = bilan["doublons"] == 1
+        texte += (f" {nombre(bilan['doublons'])} salarié{'' if un else 's'} apparai{'t' if un else 'ssent'} deux fois "
+                  "dans le fichier des diplômes : on garde le diplôme le plus élevé.")
     if bilan["non_reconnus"]:
         texte += f" Niveaux non reconnus, comptés comme inconnus : {', '.join(bilan['non_reconnus'])}."
     return texte
