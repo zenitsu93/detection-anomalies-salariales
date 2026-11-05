@@ -16,6 +16,7 @@ restent les mêmes.
 
 import json
 import sys
+from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 
@@ -136,8 +137,14 @@ def ecrire_page(nom: str, titre: str, df: pd.DataFrame, corps: str, graphes: dic
                           for cle, (courbes, mise_en_page) in graphes.items()},
                          ensure_ascii=False).replace("<", "\\u003c")
     plotly_js = (VENDOR / "plotly.min.js").read_text(encoding="utf-8")
+    # Le favicon Repères, le même que celui de la page d'exploration, du tableau de bord et de l'aide à la
+    # décision : il est lu dans visualisation/favicon.svg, pour qu'il n'y en ait qu'un à modifier, et
+    # recopié dans la page (quote l'écrit sous une forme qu'un lien accepte), car la page est un fichier
+    # seul dans output/, sans le fichier du favicon à côté d'elle.
+    favicon = quote((VENDOR.parent / "favicon.svg").read_text(encoding="utf-8").strip())
     html = f"""<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><title>{titre}</title>
+<link rel="icon" href="data:image/svg+xml,{favicon}" type="image/svg+xml">
 <style>
 body {{ font-family: "Segoe UI", Arial, sans-serif; color: #4a2c1d; max-width: 1100px; margin: 24px auto; padding: 0 16px; }}
 h1 {{ font-size: 24px; }} h2 {{ font-size: 18px; margin-top: 36px; border-bottom: 3px solid #e9a21b; padding-bottom: 4px; }}
