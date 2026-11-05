@@ -88,7 +88,13 @@ FLAG_FR = {
 # Les colonnes de la liste des salariés (clic sur une barre), et leur nom affiché.
 COL_FR = {
     "Matricule": "Matricule", "Entite_N1": "Pôle", "Job_Family": "Métier", "Job_Title": "Poste",
-    "Niveau": "Niveau", "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
+    "Niveau": "Niveau",
+    # Vides pour tout le monde s'il n'y a pas de fichier des diplômes (input/diplomes.xlsx). Le rang
+    # (0 = secondaire, 7 = BAC+7) est là pour trier : trié comme un texte, « Niveau d'études » mettrait
+    # SECONDAIRE après BAC+7.
+    "Niveau_Etude_Max": "Niveau d'études", "Rang_Etude_Max": "Rang d'études (0 à 7)",
+    "Cat_Ecole_Max": "Catégorie du diplôme",
+    "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
     "Rule_Score": "Score de règles", "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
     "Cout_Ajustement": f"Coût d'ajustement ({UNITE})",

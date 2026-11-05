@@ -95,15 +95,16 @@ Quand `(.venv)` s'affiche au début de la ligne, l'environnement est actif. Dans
 - Si PowerShell refuse `Activate.ps1` (« l'exécution de scripts est désactivée »), taper une fois `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, puis recommencer.
 - Sous macOS ou Linux : `python3 -m venv .venv`, puis `source .venv/bin/activate`.
 
-## 2. Déposer les trois fichiers d'entrée
+## 2. Déposer les fichiers d'entrée
 
-Les trois fichiers vont dans `input/`, avec exactement ces noms :
+Les trois fichiers, plus un facultatif, vont dans `input/`, avec exactement ces noms :
 
 ```text
 input/
 ├── employes.xlsx  les salariés : une ligne par salarié
 ├── bands.xlsx     la grille interne : une ligne par métier + niveau
-└── market.xlsx    le marché : une ligne par métier + niveau
+├── market.xlsx    le marché : une ligne par métier + niveau
+└── diplomes.xlsx  facultatif : le diplôme le plus élevé de chaque salarié
 ```
 
 Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de vraies données salariales n'y partent jamais. Pour essayer le projet sans données réelles, fabriquer d'abord trois fichiers fictifs (10 000 salariés, dont quelques anomalies volontaires : salaires sous la grille ou très bas, matricules en double ; plus quelques salaires au-dessus de la grille, qui ne sont pas des anomalies et ne doivent pas remonter) :
@@ -112,9 +113,9 @@ Le dossier `input/` n'est pas envoyé sur GitHub (il est dans `.gitignore`) : de
 python src/generate_sources_anomalies.py
 ```
 
-Pour analyser de vraies données, déposer vos trois fichiers à la place.
+Pour analyser de vraies données, déposer vos trois fichiers à la place, et celui des diplômes si vous l'avez. Le générateur ne fabrique pas de fichier des diplômes.
 
-Format des trois fichiers :
+Format des fichiers (celui des diplômes compris) :
 
 - ce sont des classeurs Excel (`.xlsx`), dont seule la première feuille est lue ;
 - la première ligne donne les noms des colonnes, écrits exactement comme ci-dessous (l'ordre des colonnes n'a pas d'importance) ;
@@ -148,6 +149,16 @@ Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne s
 
 **`market.xlsx`** : `Job_Family`, `Niveau`, puis `Median`, la médiane du marché, en kMAD. Les colonnes `P25` et `P75` du fichier fourni ne servent pas.
 
+**`diplomes.xlsx`** (facultatif) : une ligne par salarié, avec son diplôme le plus élevé. Le classeur que sort le notebook de fiabilisation des diplômes (`BDD_Diplomes_FINAL.xlsx`) peut être déposé tel quel, renommé en `diplomes.xlsx` : c'est alors sa feuille `Vue_salarie` qui est lue. Les noms de colonnes du notebook (`matricule`, `niveau_max`, `categorie_diplome_max`) sont aussi acceptés, quelles que soient les majuscules.
+
+| Colonne | Contenu | Exemple |
+| --- | --- | --- |
+| `Matricule` | le même identifiant que dans `employes.xlsx` (les espaces autour, les majuscules, un « .0 » ajouté par Excel et les zéros au début d'un matricule tout en chiffres ne comptent pas ; en cas de doublon, le niveau le plus élevé est gardé) | `Mat00001` |
+| `Niveau_Etude_Max` | niveau d'études le plus élevé : `SECONDAIRE`, `BAC`, `BAC+1` à `BAC+7`, `EXPERTISE COMPTABLE` (les espaces et les majuscules ne comptent pas) ; tout autre texte (`NON DETERMINE`, par exemple) compte comme « niveau inconnu », et le terminal liste ceux qu'il n'a pas reconnus, hors `NON DETERMINE` | `BAC+5` |
+| `Cat_Ecole_Max` | catégorie de ce diplôme | `DIPLOME D'INGENIEUR` |
+
+Les deux colonnes sont recopiées dans les résultats, juste après le niveau du poste, avec deux colonnes calculées : `Rang_Etude_Max`, le rang du niveau d'études, de 0 (secondaire) à 7 (BAC+7 et expertise comptable ; BAC+6 compte comme BAC+5), pour trier dans le bon ordre ; et `Tranche_Etude`, la tranche du diplôme (`BAC+2 ou moins`, `BAC+3 ou BAC+4`, `BAC+5 et plus`). Le niveau d'études, son rang et la catégorie sont aussi dans la liste des salariés du tableau de bord. Ces colonnes ne changent ni les scores ni les priorités. Sans ce fichier, tout se passe comme avant, et les colonnes restent vides. Au lancement, le terminal dit pour combien de salariés le diplôme a été retrouvé, ou qu'aucun matricule ne correspond.
+
 ## 3. Tout lancer d'un coup
 
 ```powershell
@@ -171,7 +182,7 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 
 | Ordre | Commande | Ce que l'étape ajoute | Résultat |
 | --- | --- | --- | --- |
-| 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié | `output/pretraitement/employes_pretraites.xlsx` |
+| 1 | `python src/anomaly_pretraitement.py` | grille, marché et ratios de chaque salarié, et son niveau d'études s'il y a un fichier des diplômes | `output/pretraitement/employes_pretraites.xlsx` |
 | 2 | `python src/anomaly_cohortes.py` | groupe de collègues et écart au groupe (PeerZ) | `output/cohortes/cohortes_salaries.xlsx` |
 | 3 | `python src/anomaly_regles.py` | alertes des cinq règles et leurs points | `output/regles/employes_regles.xlsx` |
 | 4 | `python src/anomaly_signal_iforest.py` | score de l'IA, de 0 à 100 | `output/signal_iforest/employes_signal_iforest.xlsx` |

@@ -6,7 +6,7 @@ PROGRAMME PRINCIPAL : ENCHAÎNER TOUTES LES ÉTAPES
 =================================================
 
 Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre les résultats :
-1. anomaly_pretraitement.py        : lecture, doublons, grille, marché, ratios ;
+1. anomaly_pretraitement.py        : lecture, doublons, grille, marché, ratios, diplômes ;
 2. anomaly_cohortes.py             : groupes de collègues et écart PeerZ ;
 3. anomaly_regles.py               : règles (étiquettes, points, motifs) ;
 4. anomaly_signal_iforest.py       : score de l'IA ;
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import yaml
 
-from anomaly_pretraitement import preparer_employes
+from anomaly_pretraitement import message_diplomes, preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import ml_anomaly
@@ -68,8 +68,11 @@ if __name__ == "__main__":
 
     # Les étapes dans l'ordre : la sortie de chacune est l'entrée de la suivante. Chacune affiche sa
     # ligne dans le terminal : on voit laquelle tourne et combien de temps elle a pris.
-    df = lancer(1, "Prétraitement (lecture, doublons, grille, marché, ratios)", preparer_employes,
+    df = lancer(1, "Prétraitement (lecture, doublons, grille, marché, ratios, diplômes)", preparer_employes,
                 projet / "input" / "employes.xlsx", projet / "input" / "bands.xlsx", projet / "input" / "market.xlsx")
+    # Les diplômes ont-ils été retrouvés ? Dit tout de suite, sous la ligne de l'étape : si les
+    # matricules ne correspondent pas, on le voit avant d'aller lire les résultats.
+    print("      " + message_diplomes(df))
     df = lancer(2, "Groupes de collègues (cohortes)", former_cohortes, df, rule_params)
     df = lancer(3, "Règles", apply_rulebook, df, rule_params)
     df = lancer(4, "Score de l'IA (Isolation Forest)", ml_anomaly, df, rule_params)
@@ -80,7 +83,10 @@ if __name__ == "__main__":
     gg = lancer(8, "Écarts hommes / femmes", gender_gap_analysis, df)
 
     # Les colonnes les plus utiles en premier, toutes les autres ensuite.
+    # Les colonnes du diplôme juste après le niveau du poste : on lit le salaire en sachant déjà quel
+    # diplôme a le salarié. Le rang (0 à 7) suit le niveau d'études, pour pouvoir trier dans le bon ordre.
     front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Niveau",
+                  "Niveau_Etude_Max", "Rang_Etude_Max", "Tranche_Etude", "Cat_Ecole_Max",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",
                   "Market_Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
                   "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Explication_IA", "Reco",
