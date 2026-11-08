@@ -1,8 +1,8 @@
 @echo off
 chcp 65001 >nul
-rem Lance les trois analyses du diplôme (groupes de collègues, IA, régression), puis ouvre le dossier où
-rem arrivent leurs pages. Il suffit de double-cliquer sur ce fichier.
-rem Ces analyses ne changent pas la détection : elles la comparent, sans puis avec le diplôme.
+rem Fabrique la page « Faut-il utiliser le diplôme dans la détection ? », puis ouvre le dossier où elle
+rem arrive. Il suffit de double-cliquer sur ce fichier.
+rem Cette page ne change pas la détection : elle la compare, sans puis avec le diplôme.
 rem Pourquoi chcp 65001 (ligne 2) : sans ça, la fenêtre noire affiche mal les accents des messages.
 
 rem Se placer dans le dossier du projet (un cran au-dessus de ce fichier), même lancé depuis un autre
@@ -20,16 +20,10 @@ if not exist ".venv\Scripts\python.exe" (
 rem Pourquoi PYTHONIOENCODING : pour que les messages de Python gardent leurs accents dans la fenêtre.
 set "PYTHONIOENCODING=utf-8"
 
-echo 1/3 - Le diplôme dans les groupes de collègues...
-".venv\Scripts\python.exe" analyse_diplomes\cohortes.py || goto :fin
+echo Faut-il utiliser le diplôme dans la détection ? Calcul de la page (environ une minute)...
+".venv\Scripts\python.exe" analyse_diplomes\diplome.py || goto :fin
 echo.
-echo 2/3 - Le diplôme dans l'IA...
-".venv\Scripts\python.exe" analyse_diplomes\ia.py || goto :fin
-echo.
-echo 3/3 - Le diplôme dans la régression...
-".venv\Scripts\python.exe" analyse_diplomes\regression.py || goto :fin
-echo.
-echo Terminé. Les pages s'ouvrent avec un navigateur : la plus récente de chaque analyse est la dernière de la liste.
+echo Terminé. La page s'ouvre avec un navigateur : la plus récente est la dernière de la liste.
 start "" "output\analyse_diplomes"
 
 :fin

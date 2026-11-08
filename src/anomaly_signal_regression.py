@@ -20,7 +20,7 @@ from anomaly_pretraitement import preparer_employes
 COLONNES = ["Job_Family", "Niveau", "Anciennete", "Age", "Competence_N1", "Positionnement_9BOX",
             "Hot_job"]
 # Les colonnes du diplôme qu'on peut donner en plus au modèle (voir tableau_x). Le modèle de l'aide à
-# la décision ne les lit pas ; analyse_diplomes/regression.py les essaie, pour voir si elles rendent le
+# la décision ne les lit pas ; analyse_diplomes/diplome.py les essaie, pour voir si elles rendent le
 # salaire prédit plus juste.
 COLONNES_DIPLOME = ["Tranche_Etude", "Cat_Ecole_Max"]
 # Les colonnes qui sont des catégories et pas des nombres : chacune devient des colonnes 0/1.
@@ -40,7 +40,7 @@ def tableau_x(df: pd.DataFrame, colonnes: list) -> pd.DataFrame:
 
 def entrainer(df: pd.DataFrame, colonnes: list = COLONNES):
     # colonnes : ce que lit le modèle ; sans précision, COLONNES. Pourquoi pouvoir en donner d'autres :
-    # analyse_diplomes/regression.py compare le modèle sans et avec le diplôme.
+    # analyse_diplomes/diplome.py compare le modèle sans et avec le diplôme.
     # Métier et niveau (et le diplôme, s'il est demandé) en colonnes 0/1
     X = tableau_x(df, colonnes)
     # Log du salaire : l'écart se lit en %, comparable d'un niveau à l'autre

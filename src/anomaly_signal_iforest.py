@@ -46,7 +46,7 @@ def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, fe
     exactement le même modèle, donc exactement les mêmes scores.
 
     feats : les colonnes à regarder à la place de FEATS. La détection ne s'en sert pas (elle regarde
-    toujours FEATS) ; analyse_diplomes/ia.py s'en sert pour essayer l'IA avec le diplôme en plus, sans
+    toujours FEATS) ; analyse_diplomes/diplome.py s'en sert pour essayer l'IA avec le diplôme en plus, sans
     rien changer à la détection.
     """
     feats = FEATS if feats is None else list(feats)
