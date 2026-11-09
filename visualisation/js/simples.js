@@ -79,5 +79,22 @@
     tranches: C.TRANCHES, axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté', sansQuoi: 'ancienneté valable', aucun: 'aucune ancienneté renseignée',
     moyen: 'Ancienneté moyenne', median: 'ancienneté médiane' });
 
-  E.simples = { effectifAge, effectifAnciennete };
+  // ---------- effectif-niveau : effectif par niveau ----------
+
+  function effectifNiveau(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel));
+    // Les niveaux sont lus dans le fichier entier : un niveau sans personne dans le filtre garde sa place, avec 0.
+    const niveaux = C.modalites(df, 'Niveau'), libelles = niveaux.map(String), groupes = grouper(lignes, niveaux, l => l.Niveau);
+    const L = sansTitre();
+    axesHorizontaux(L, groupes, 'Niveau');
+    const clic = p => ({ titre: 'Niveau ' + p.y, lignes: groupes[p.pointNumber] });
+    montrer('g-effectif-niveau', [barresEffectif(groupes, libelles)], L, 110 + 32 * Math.max(4, niveaux.length), clic, F.libelle(sel));
+    const lib = F.libelle(sel), avec = compte(groupes), sans = lignes.length - avec;
+    if (!lignes.length) return constat('s-effectif-niveau', 'Aucun salarié pour ce filtre.');
+    if (!avec) return constat('s-effectif-niveau', `${lib} (${salaries(lignes.length)}) : aucun niveau renseigné.`);
+    constat('s-effectif-niveau', `${lib} (${salaries(avec)} avec un niveau${sans ? `, ${fr(sans)} sans` : ''}) : niveau le plus nombreux, `
+      + `${plusNombreuse(groupes, i => 'niveau ' + libelles[i], avec, true)}.`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau };
 })(window.Exploration = window.Exploration || {});
