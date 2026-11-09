@@ -241,5 +241,11 @@
   const salaireAge = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-age', tranche: 'Tranche_Age', tranches: C.TRANCHES_AGE,
     axe: "Tranche d'âge (années)", nom: 'Âge', quoi: 'un âge' });
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge };
+  // ---------- salaire-anciennete : salaire moyen et médian par tranche d'ancienneté ----------
+  // Le même graphe que pour l'âge, avec les tranches d'ancienneté de 2 ans.
+
+  const salaireAnciennete = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-anciennete', tranche: 'Tranche_Anciennete', tranches: C.TRANCHES,
+    axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté' });
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete };
 })(window.Exploration = window.Exploration || {});
