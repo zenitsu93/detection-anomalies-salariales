@@ -58,7 +58,7 @@ NOMS = {
 }
 # Le début du nom des colonnes 0/1 de catégorie de diplôme que fabrique analyse_diplomes/diplome.py, par
 # exemple « Categorie : DIPLOME D'INGENIEUR ». Pourquoi pas une liste fixe dans NOMS : les catégories
-# sont celles du fichier des diplômes, qu'on ne connaît pas à l'avance.
+# sont celles écrites dans le fichier des salariés, qu'on ne connaît pas à l'avance.
 CATEGORIE = "Categorie : "
 
 # Le rang d'un niveau d'études écrit en toutes lettres : 6 -> « BAC+5 ». Pour un rang que partagent deux

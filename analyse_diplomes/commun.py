@@ -51,7 +51,7 @@ def charger():
     print(message_diplomes(df))
     if df["Tranche_Etude"].notna().sum() == 0:
         raise SystemExit("Aucun salarié n'a de niveau d'études connu : il n'y a rien à analyser. "
-                         "Déposer le fichier des diplômes dans input/diplomes.xlsx.")
+                         "Ajouter les colonnes Niveau_Etude_Max et Cat_Ecole_Max dans input/employes.xlsx.")
     return rule_params, df
 
 

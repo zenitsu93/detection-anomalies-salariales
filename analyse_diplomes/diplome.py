@@ -164,7 +164,7 @@ def salaires_predits(df, colonne):
     toute la différence entre deux barres vient donc de lui.
     Pourquoi la médiane et pas la moyenne : quelques très gros salaires tireraient la moyenne vers le
     haut, et elle ne ressemblerait plus au salaire d'un salarié ordinaire.
-    Les valeurs viennent du fichier des diplômes, pas d'une liste écrite à l'avance : si les catégories
+    Les valeurs viennent des colonnes du diplôme du fichier des salariés, pas d'une liste écrite à l'avance : si les catégories
     sont écrites autrement, elles apparaissent quand même."""
     valeurs = list(df[colonne].value_counts().index)
     if colonne == "Tranche_Etude":
