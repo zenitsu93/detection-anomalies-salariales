@@ -209,10 +209,20 @@ details.methode summary { padding-top: 12px; font-size: 13px; font-weight: 600; 
 .aide li { break-inside: avoid; margin-bottom: 6px; }
 /* Glossaire : les mots rangés par thème, sur deux colonnes (une seule sur un écran étroit). */
 .glossaire h3 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
-.glossaire h3:first-child { margin-top: 0; }
+.glossaire h3:first-child, .gl-outils + h3 { margin-top: 0; }
 .glossaire dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 32px; margin: 0; font-size: 13px; }
 .glossaire dt { font-weight: 600; color: var(--ink); }
 .glossaire dd { margin: 2px 0 0; color: var(--muted); }
+/* La recherche du glossaire : la case reste en haut de l'écran quand on fait défiler les mots. Un mot ou un thème
+   écarté par la recherche est caché (« hidden » ne suffit pas sur les listes, qui sont en display: grid). */
+.gl-outils { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin: -16px -20px 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line-soft); }
+.gl-outils input { width: min(360px, 100%); }
+.gl-compte { font-size: 12px; color: var(--muted); }
+.glossaire [hidden] { display: none; }
+.gl-vide { margin: 0; color: var(--muted); font-size: 13px; }
+.gl-vide:empty { display: none; }
+::highlight(glossaire) { background-color: #fbe3a6; color: var(--ink); }
 
 /* ---------- Plein écran d'un graphe (bouton « Agrandir ») ---------- */
 .panel-actions { display: flex; align-items: center; gap: 12px; }
