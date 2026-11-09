@@ -138,7 +138,8 @@ details.panel:not([open]) > summary { border-bottom: 0; border-radius: var(--rad
 
 /* ---------- Mise en page : sommaire à gauche, sections à droite ---------- */
 .layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 20px; align-items: start; }
-.toc { position: sticky; top: 16px; }
+/* Le sommaire reste à l'écran pendant la lecture ; avec la vue simple, il dépasse la hauteur d'un écran : il défile alors tout seul. */
+.toc { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
 .toc ol { list-style: none; margin: 0; padding: 6px 0; }
 .toc a { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-size: 13px; color: var(--muted); text-decoration: none; border-left: 3px solid transparent; }
 .toc a:hover { background: var(--panel-head); color: var(--ink); }
@@ -147,10 +148,16 @@ details.panel:not([open]) > summary { border-bottom: 0; border-radius: var(--rad
 .toc a.actif .n { color: var(--brand-dark); }
 .toc .groupe { padding: 12px 14px 4px; border-top: 1px solid var(--line-soft); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--faint); }
 .toc li:first-child.groupe { border-top: 0; padding-top: 6px; }
+/* Les deux étages de la page (vue simple, analyses détaillées) : un cran au-dessus des groupes. */
+.toc .etage { padding: 14px 14px 2px; border-top: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--brand-dark); }
+.toc li:first-child.etage { border-top: 0; padding-top: 8px; }
+.toc .etage + .groupe { border-top: 0; padding-top: 6px; }
 .sections { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .sections > * { scroll-margin-top: 16px; }
 .partie { display: flex; align-items: center; gap: 12px; margin-top: 12px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
 .partie::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.etage { margin: 20px 0 0; font-size: 20px; font-weight: 600; color: var(--brand-dark); }
+.etage span { margin-left: 12px; font-size: 13px; font-weight: 400; color: var(--muted); }
 
 /* ---------- Chiffres clés (comme le tableau de bord) ---------- */
 .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; border-left: 4px solid var(--brand); }

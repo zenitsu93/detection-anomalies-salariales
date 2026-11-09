@@ -1,7 +1,7 @@
 // Chef d'orchestre de la page : boutons, messages, chiffres clés, contrôles de qualité et affichage de tous les graphes.
 (function (E) {
   'use strict';
-  const C = E.calculs, Fi = E.fichiers, A = E.analyses, P = E.pilotage, { filtrer } = E.filtres;
+  const C = E.calculs, Fi = E.fichiers, A = E.analyses, P = E.pilotage, S = E.simples, { filtrer } = E.filtres;
   const { $, fr, pct, signe, echapper } = E.communs;
 
   // ---------- Messages et actions ----------
@@ -61,6 +61,10 @@
     document.querySelectorAll('[data-liste]').forEach(b => b.onclick = () => E.liste.ouvrir(...listes[b.dataset.liste]));
 
     // Chaque graphe et ses filtres ; l'ordre d'affichage, lui, se règle dans la page HTML.
+    // Vue simple (js/simples.js) : des graphes usuels d'abord, filtrables par ce qui a du sens pour chacun ; par exemple pas
+    // de filtre par niveau sur l'effectif par niveau.
+    filtrer('f-effectif-age', df, { niveau: true, pole: true }, sel => S.effectifAge(df, sel));
+    // Analyses détaillées, reprises du notebook du comité.
     filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
     A.distribution(df, survol);
     filtrer('f-grille', df, { metier: true }, sel => A.grilleEtMarche(df, survol, sel));
