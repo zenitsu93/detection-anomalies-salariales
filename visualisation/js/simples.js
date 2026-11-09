@@ -326,5 +326,31 @@
       + `${plusNombreuse(groupes, i => t.libelles[i] + ' kMAD', lignes.length)}. Salaire moyen : ${fr(C.moyenne(sal), 1)} kMAD ; médian : ${fr(C.mediane(sal), 1)} kMAD.`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches };
+  // ---------- ecart-mid : effectif par tranche d'écart au milieu de la grille ----------
+
+  // Écart au Mid = de combien le salaire est au-dessus ou en dessous du milieu de sa grille, en % (Compa-Ratio − 1).
+  // Tranches de 10 %, écrites comme les tranches d'évolution du Total Cash de la présentation (« [0% ; 5%[ »).
+  const BORNES_ECART = [-20, -10, 0, 10, 20];
+  const ECARTS = ['inf à -20 %', '[-20 % ; -10 %[', '[-10 % ; 0 %[', '[0 % ; 10 %[', '[10 % ; 20 %[', 'sup à 20 %'];
+  // Arrondi au millionième : sans lui, un Compa-Ratio de 0,9 donne −10,000000000000009 % et tomberait dans la mauvaise tranche.
+  const ecartMid = l => Math.round((l.Compa_Ratio - 1) * 1e8) / 1e6;
+
+  function ecartAuMid(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel)), avec = lignes.filter(l => Number.isFinite(l.Compa_Ratio));
+    const groupes = grouper(avec, ECARTS, l => C.trancheDe(ecartMid(l), BORNES_ECART, ECARTS));
+    const L = sansTitre();
+    axesVerticaux(L, '', groupes, 'Écart du salaire au milieu de sa grille (Mid)');
+    // Sous le Mid en ardoise, au-dessus en gris clair : seul le trop bas compte comme anomalie (décision du 29/10/2026).
+    const couleurs = ECARTS.map((_, i) => i < 3 ? K.ARDOISE : K.PALE);
+    const clic = p => ({ titre: `Écart au Mid ${p.x}`, lignes: groupes[p.pointNumber] });
+    montrer('g-ecart-mid', [barresEffectif(groupes, ECARTS, { horizontal: false, couleurs })], L, 440, clic, F.libelle(sel));
+    const lib = F.libelle(sel), n = avec.length, sans = lignes.length - n;
+    if (!lignes.length) return constat('s-ecart-mid', 'Aucun salarié pour ce filtre.');
+    if (!n) return constat('s-ecart-mid', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois un salaire et une grille (Mid) pour son métier et son niveau.`);
+    const sous = groupes.slice(0, 3).reduce((a, g) => a + g.length, 0), loin = groupes[0].length;
+    constat('s-ecart-mid', `${lib} (${salaries(n)} avec un salaire et une grille${sans ? `, ${fr(sans)} sans` : ''}) : ${pct(sous, n, 0)} sont payés sous le milieu `
+      + `de leur grille, dont ${salaries(loin)} à plus de 20 % en dessous (${pct(loin, n)}).`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid };
 })(window.Exploration = window.Exploration || {});
