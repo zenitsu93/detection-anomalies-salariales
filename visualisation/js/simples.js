@@ -427,6 +427,62 @@
     constat('s-evaluations', `${lib} (${salaries(lignes.length)}). ${comp}${box}`);
   }
 
+  // ---------- matrice : matrice de positionnement, position dans la grille × évaluation, en % ----------
+  // Décision du point du 29/10/2026 : une matrice sur le modèle des campagnes d'augmentations individuelles. En colonnes,
+  // la position du salaire dans sa grille ; en lignes, l'évaluation (case 9-Box ou note de compétences, au choix) ; dans
+  // chaque case, la part des salariés. Les colonnes coupent la grille en quatre quarts du Min au Max, comme les matrices
+  // de campagne : le Mid sépare le 2e du 3e quart. Sous le Min et au-dessus du Max ont chacun leur colonne.
+
+  const QUARTS = ['Sous le Min', '1er quart', '2e quart', '3e quart', '4e quart', 'Au-dessus du Max'];
+  // Range_Penetration : 0 = au Min, 0,5 = au Mid, 1 = au Max. Un salaire pile au Max reste dans le 4e quart.
+  const quart = rp => !Number.isFinite(rp) ? null : QUARTS[rp < 0 ? 0 : rp > 1 ? 5 : Math.min(4, 1 + Math.floor(rp * 4))];
+  const minuscule = t => t.charAt(0).toLowerCase() + t.slice(1);   // « sous le Min », pas « sous le min »
+
+  function matrice(df, sel) {
+    const parBox = sel.vue === 'Positionnement_9BOX', t = parBox ? null : tranchesCompetence(df);
+    // Les lignes vont de la meilleure évaluation (en haut) à la moins bonne. Elles sont lues dans le fichier entier, jamais
+    // supposées : toutes les cases 9-Box, ou les tranches de notes du graphe « Notes de compétences et cases 9-Box ».
+    const rangs = parBox ? C.modalites(df, 'Positionnement_9BOX').reverse() : (t ? [...t.libelles].reverse() : []);
+    const rang = parBox ? (l => l.Positionnement_9BOX) : (l => t.tranche(l.Competence_N1));
+    const quoi = parBox ? 'une case 9-Box' : 'une note de compétences';
+    const nomRang = r => parBox ? 'case 9-Box ' + fr(r) : 'note ' + r;
+    const lignes = df.filter(l => F.garder(l, sel));
+    // Seuls les salariés qui ont une grille (Min et Max) et une évaluation ont une case : les autres sont comptés à part.
+    const avec = lignes.filter(l => quart(l.Range_Penetration) !== null && rangs.includes(rang(l))), n = avec.length;
+    const cases = rangs.map(r => QUARTS.map(q => avec.filter(l => rang(l) === r && quart(l.Range_Penetration) === q)));
+    // Dans chaque case : la part de tous les salariés de la matrice (les cases font 100 % ensemble). Au survol, aussi la
+    // part de la ligne : « parmi les salariés de cette case 9-Box, combien sont dans ce quart ».
+    const z = cases.map(ligne => ligne.map(g => n ? 100 * g.length / n : 0));
+    // Une case de quelques salariés sur des milliers s'écrirait « 0,0 % », comme une case vide : elle s'écrit « < 0,1 % ».
+    // Une case vide, elle, reste blanche et sans texte.
+    const trace = { type: 'heatmap', x: QUARTS, y: rangs.map(String), z, zmin: 0, colorscale: [[0, '#ffffff'], [1, K.ARDOISE]], showscale: false,
+      xgap: 2, ygap: 2, text: cases.map((ligne, i) => ligne.map((g, j) => !g.length ? '' : z[i][j] < 0.05 ? '< 0,1 %' : fr(z[i][j], 1) + ' %')), texttemplate: '%{text}', textfont: { size: 12 },
+      customdata: cases.map(ligne => { const tot = compte(ligne); return ligne.map(g => [g.length, tot ? fr(100 * g.length / tot, 1) : '–']); }),
+      hovertemplate: `${parBox ? 'Case 9-Box' : 'Note'} %{y} · %{x}<br><b>%{z:.1f} % des salariés</b> (%{customdata[0]:,})<br>%{customdata[1]} % de cette ligne<extra></extra>` };
+    const L = sansTitre();
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Position du salaire dans sa grille, du Min au Max (le Mid sépare le 2e et le 3e quart)') });
+    Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed',
+      title: titreAxe(parBox ? 'Case 9-Box (la plus haute en haut)' : 'Note de compétences (Competence_N1)') });
+    // Un trait marque le Mid, entre le 2e et le 3e quart : à gauche, les salariés payés sous le milieu de leur grille.
+    L.shapes.push({ type: 'line', xref: 'x', x0: 2.5, x1: 2.5, yref: 'y domain', y0: 0, y1: 1, line: { color: K.BRUN, dash: 'dash', width: 2 } });
+    L.annotations.push({ text: 'Mid', x: 2.5, xref: 'x', y: 1, yref: 'y domain', yanchor: 'bottom', showarrow: false, font: { size: 11, color: K.BRUN } });
+    const clic = p => { const [i, j] = p.pointNumber; const nom = nomRang(rangs[i]); return { titre: `${nom.charAt(0).toUpperCase() + nom.slice(1)} · ${minuscule(QUARTS[j])}`, lignes: cases[i][j] }; };
+    montrer('g-matrice', [trace], L, 140 + 52 * Math.max(4, rangs.length), clic, F.libelle(sel));
+    const lib = F.libelle(sel);
+    if (!lignes.length) return constat('s-matrice', 'Aucun salarié pour ce filtre.');
+    if (!n) return constat('s-matrice', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois une grille (Min et Max) et ${quoi}.`);
+    const sans = lignes.length - n;
+    const toutes = cases.flatMap((ligne, i) => ligne.map((g, j) => ({ nom: `${nomRang(rangs[i])}, ${minuscule(QUARTS[j])}`, n: g.length })));
+    const ex = extremes(toutes, c => c.n, 0);
+    const pleine = ` Case la plus remplie : ${enumerer(ex.haut.map(c => echapper(c.nom)))} (${pct(ex.haut[0].n, n)}${ex.haut.length > 1 ? ' chacune' : ''}).`;
+    // Les mieux évalués payés sous le milieu de leur grille : ceux qu'une campagne d'augmentations regarde en premier.
+    const nh = compte(cases[0]), sousMid = compte(cases[0].slice(0, 3));
+    const meilleurs = rangs.length < 2 ? '' : !nh ? ` Personne dans la meilleure évaluation (${nomRang(rangs[0])}).`
+      : ` Parmi les mieux évalués (${nomRang(rangs[0])}${parBox ? ', la case la plus haute, supposée la meilleure' : ''}), ${pct(sousMid, nh)} sont payés `
+        + `sous le milieu de leur grille (sous le Min, 1er ou 2e quart), soit ${salaries(sousMid)} sur ${fr(nh)}.`;
+    constat('s-matrice', `${lib} (${salaries(n)} avec une grille et ${quoi}${sans ? `, ${fr(sans)} sans` : ''}) : chaque case donne la part de ces salariés.${pleine}${meilleurs}`);
+  }
+
   E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob,
-    salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid, sousMin, evaluations };
+    salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid, sousMin, evaluations, matrice };
 })(window.Exploration = window.Exploration || {});
