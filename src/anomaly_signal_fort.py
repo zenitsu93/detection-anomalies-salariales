@@ -53,10 +53,10 @@ NOMS = {
     "Competence_N1": ("la note de compétences N-1", 1, 2, ""),
     "Positionnement_9BOX": ("la case 9-Box", 1, 0, ""),
     "Hot_job": ("le Hot job", 1, 0, ""),
-    # Pas regardé par la détection : seulement quand analyse_diplomes/ia.py essaie l'IA avec le diplôme.
+    # Pas regardé par la détection : seulement quand analyse_diplomes/diplome.py essaie l'IA avec le diplôme.
     "Rang_Etude_Max": ("le niveau d'études", 1, 0, ""),
 }
-# Le début du nom des colonnes 0/1 de catégorie de diplôme que fabrique analyse_diplomes/ia.py, par
+# Le début du nom des colonnes 0/1 de catégorie de diplôme que fabrique analyse_diplomes/diplome.py, par
 # exemple « Categorie : DIPLOME D'INGENIEUR ». Pourquoi pas une liste fixe dans NOMS : les catégories
 # sont celles du fichier des diplômes, qu'on ne connaît pas à l'avance.
 CATEGORIE = "Categorie : "
@@ -146,7 +146,7 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict, feats=None) -> p
     # (mêmes salariés, mêmes réglages, même hasard fixé) : il donne exactement les mêmes scores. Il
     # n'est pas reçu de l'étape précédente, qui ne passe que le tableau des salariés.
     # feats : les colonnes que regarde l'IA, si on lui en donne d'autres que FEATS (voir entrainer_ia).
-    # La détection n'en donne pas ; analyse_diplomes/ia.py, si : l'explication doit alors être tirée du
+    # La détection n'en donne pas ; analyse_diplomes/diplome.py, si : l'explication doit alors être tirée du
     # même modèle que le score.
     modele, X = entrainer_ia(df, rule_params, feats=feats)
     habituel = X.median()

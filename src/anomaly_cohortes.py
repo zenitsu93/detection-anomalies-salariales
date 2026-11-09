@@ -42,8 +42,8 @@ dans config/rules.yaml) :
 On prend le premier qui compte au moins 15 personnes.
 
 Un salarié dont une des colonnes de l'étape est vide saute cette étape (voir « connus » dans la recette
-former_cohortes). C'est ce qui permet à analyse_diplomes/cohortes.py d'essayer une étape avec la tranche
-de diplôme : un salarié au diplôme inconnu passe directement à l'étape suivante.
+former_cohortes). C'est ce qui permettrait d'ajouter une étape avec la tranche de diplôme : un salarié
+au diplôme inconnu passerait directement à l'étape suivante.
 
 
 3. Pourquoi cette règle remplace l'ancienne

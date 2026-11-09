@@ -2,16 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """
-CE QUE LES TROIS ANALYSES DU DIPLÔME ONT EN COMMUN
-==================================================
+LES OUTILS DE LA PAGE DU DIPLÔME
+===============================
 
-Les trois analyses de ce dossier (cohortes.py, ia.py, regression.py) lisent les mêmes fichiers, lancent
-la même détection et écrivent le même genre de page. Ce qu'elles partagent est rangé ici, pour ne pas
-le recopier trois fois. Ce fichier ne se lance pas seul.
+Ce que diplome.py utilise sans que ce soit propre au diplôme : lire les fichiers, lancer la détection,
+écrire les nombres à la française et écrire la page. Ce fichier ne se lance pas seul.
 
-Aucune de ces analyses ne change la détection : elles la lancent avec ses réglages habituels, puis avec
-le diplôme en plus, et montrent la différence. Les résultats de python src/detect_salary_anomalies.py
-restent les mêmes.
+La page ne change pas la détection : elle la lance avec ses réglages habituels, puis avec le diplôme en
+plus, et montre la différence. Les résultats de python src/detect_salary_anomalies.py restent les mêmes.
 """
 
 import json
@@ -37,7 +35,6 @@ from anomaly_signal_fort import apply_ml_strong_signal  # noqa: E402
 from anomaly_score_general import aggregate_risk  # noqa: E402
 from generate_dashboard_html import VENDOR  # noqa: E402
 
-PRIORITES = ["Critical", "Major", "Minor", "Info"]
 # Les tranches de diplôme dans l'ordre (voir tranche_etude dans src/anomaly_pretraitement.py), plus les
 # diplômes inconnus, toujours mis à part.
 TRANCHES = ["BAC+2 ou moins", "BAC+3 ou BAC+4", "BAC+5 et plus"]
@@ -81,58 +78,6 @@ def pour_cent(x, decimales=0):
     return f"{virgule(x * 100, decimales)} %"
 
 
-def salaries(n) -> str:
-    """« 1 salarié », « 2 salariés », « aucun salarié »."""
-    n = int(n)
-    return "aucun salarié" if n == 0 else f"{virgule(n, 0)} salarié{'s' if n > 1 else ''}"
-
-
-def mouvement(entrent: pd.DataFrame, sortent: pd.DataFrame, mots=("Entrent", "sortent"), conclure=True) -> str:
-    """La phrase qui dit qui entre dans une liste et qui en sort quand on ajoute le diplôme, et si ceux qui
-    entrent sont plus mal payés que ceux qui sortent. Par exemple : « Entrent : 34 salariés (CompaRatio
-    médian 0,70) ; sortent : 8 salariés (CompaRatio médian 0,44). Le diplôme fait entrer des salariés
-    mieux payés que ceux qu'il fait sortir : il éloigne la détection des salaires trop bas. »
-    Pourquoi c'est la question : la détection cherche les salaires trop bas.
-    mots : comment appeler ceux qui entrent et ceux qui sortent (« Nouvelles alertes », « disparues »...).
-    conclure : False pour ne pas ajouter la phrase de conclusion, quand une autre section de la page vient
-    de la dire pour presque les mêmes salariés."""
-    if entrent.empty and sortent.empty:
-        return "Personne ne change."
-
-    def detail(groupe):
-        cr = groupe["CompaRatio"].dropna()
-        return salaries(len(groupe)) + (f" (CompaRatio médian {virgule(cr.median())})" if len(cr) else "")
-
-    texte = f"{mots[0]} : {detail(entrent)} ; {mots[1]} : {detail(sortent)}."
-    a, b = entrent["CompaRatio"].dropna(), sortent["CompaRatio"].dropna()
-    if not conclure or a.empty or b.empty:
-        return texte
-    # Les médianes sont comparées telles qu'elles sont écrites (deux chiffres après la virgule) : deux
-    # valeurs écrites pareil ne sont pas dites « plus » ou « moins ».
-    if round(a.median(), 2) < round(b.median(), 2):
-        return texte + (" Le diplôme fait entrer des salariés plus mal payés que ceux qu'il fait sortir : il aide à "
-                        "trouver les salaires trop bas.")
-    if round(a.median(), 2) > round(b.median(), 2):
-        return texte + (" Le diplôme fait entrer des salariés mieux payés que ceux qu'il fait sortir : il éloigne "
-                        "la détection des salaires trop bas.")
-    return texte + " Les deux groupes sont aussi bien payés l'un que l'autre."
-
-
-def tableau_priorites(avant: pd.DataFrame, apres: pd.DataFrame) -> str:
-    """Le tableau croisé des priorités, sans le diplôme (lignes) et avec (colonnes), en HTML. La diagonale
-    est grisée : ce sont les salariés qui ne changent pas."""
-    croise = pd.crosstab(avant["Severity"], apres["Severity"]).reindex(index=PRIORITES, columns=PRIORITES,
-                                                                      fill_value=0)
-
-    def case(p, q):
-        classe = ' class="diag"' if p == q else ""
-        return f"<td{classe}>{virgule(croise.at[p, q], 0)}</td>"
-
-    return ("<table><tr><th>Sans ↓ / avec →</th>" + "".join(f"<th>{p}</th>" for p in PRIORITES) + "</tr>"
-            + "".join("<tr><th>" + p + "</th>" + "".join(case(p, q) for q in PRIORITES) + "</tr>"
-                      for p in PRIORITES) + "</table>")
-
-
 def ecrire_page(nom: str, titre: str, df: pd.DataFrame, corps: str, graphes: dict) -> Path:
     """Écrit la page dans output/analyse_diplomes/, sous un nom daté (une page de plus à chaque
     lancement, sans effacer les anciennes), et rend son chemin.
@@ -160,7 +105,7 @@ h1 {{ font-size: 24px; }} h2 {{ font-size: 18px; margin-top: 36px; border-bottom
 p, li {{ line-height: 1.5; }} .lire {{ color: #5b6b7d; }}
 .constat {{ background: #fdf5e4; border-left: 4px solid #e9a21b; padding: 10px 14px; }}
 table {{ border-collapse: collapse; margin: 10px 0; }} th, td {{ border: 1px solid #d9dde2; padding: 6px 12px; text-align: right; }}
-th {{ background: #f4f5f7; }} td.diag {{ color: #5b6b7d; }} .graphe {{ height: 420px; }}
+th {{ background: #f4f5f7; }} .graphe {{ height: 420px; }}
 </style><script>{plotly_js}</script></head><body>
 <h1>{titre}</h1>
 <p class="lire">Analyse du {maintenant:%d/%m/%Y à %H:%M}. {message_diplomes(df)}</p>
