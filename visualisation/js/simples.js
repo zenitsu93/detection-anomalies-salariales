@@ -205,5 +205,41 @@
     constat('s-hot-job', `${lib} (${salaries(avec)} avec un Hot_job${sans ? `, ${fr(sans)} sans` : ''}) : ${parts}${sens}.`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob };
+  // ---------- salaire-age : salaire moyen et médian par tranche d'âge ----------
+  // La même fonction sert aussi pour l'ancienneté (graphe suivant). Deux barres par tranche : la moyenne et la médiane. La médiane ne bouge pas pour un seul très haut salaire, la moyenne
+  // si : quand les deux s'écartent, quelques salaires hors norme tirent la moyenne.
+
+  const STATS = [['Salaire moyen', C.moyenne, K.ARDOISE], ['Salaire médian', C.mediane, K.BRUN]];
+
+  function salaireParTranche(df, sel, o) {
+    const lignes = df.filter(l => F.garder(l, sel)), groupes = grouper(lignes, o.tranches, l => l[o.tranche]);
+    const sal = groupes.map(g => g.map(l => l.Fixe_Annuel_MAD).filter(Number.isFinite));
+    const valeurs = STATS.map(([, f]) => sal.map(s => s.length ? f(s) : null));
+    const traces = STATS.map(([nom, , couleur], k) => ({ type: 'bar', name: nom, x: o.tranches, y: valeurs[k], marker: { color: couleur },
+      text: valeurs[k].map(v => v === null ? '' : fr(v, 0)), textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE },
+      customdata: sal.map(s => s.length), hovertemplate: `%{x} ans<br>${nom} : <b>%{y:,.1f} kMAD</b><br>%{customdata:,} salariés avec un salaire<extra></extra>` }));
+    const L = sansTitre();
+    L.barmode = 'group';
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe(o.axe) });
+    L.yaxis.title = titreAxe('Fixe_Annuel_MAD (kMAD)');
+    const clic = p => ({ titre: `${o.nom} ${p.x} ans`, lignes: groupes[p.pointNumber] });
+    montrer('g-' + o.id, traces, L, 460, clic, F.libelle(sel));
+    const s = 's-' + o.id, lib = F.libelle(sel), avec = sal.reduce((a, v) => a + v.length, 0);
+    if (!lignes.length) return constat(s, 'Aucun salarié pour ce filtre.');
+    if (!avec) return constat(s, `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois ${o.quoi} et un salaire.`);
+    const tranches = o.tranches.map((t, i) => ({ t, v: valeurs[0][i] })).filter(x => x.v !== null);
+    const ex = extremes(tranches, x => x.v, 0), noms = t => enumerer(t.map(x => x.t + ' ans'));
+    const lecture = tranches.length < 2 ? ` Une seule tranche a des salariés : ${noms(tranches)} (${fr(tranches[0].v, 0)} kMAD de salaire moyen).`
+      : ex.egaux ? ` Même salaire moyen dans toutes les tranches (${fr(ex.haut[0].v, 0)} kMAD).`
+      : ` Salaire moyen le plus haut : ${noms(ex.haut)} (${fr(ex.haut[0].v, 0)} kMAD) ; le plus bas : ${noms(ex.bas)} (${fr(ex.bas[0].v, 0)} kMAD).`;
+    // Sans filtre de niveau, une tranche peut sembler mieux payée seulement parce qu'elle compte plus de niveaux élevés : le constat le rappelle.
+    const conseil = sel.niveau === null || sel.niveau.length > 1
+      ? ' Plusieurs niveaux sont mélangés : choisir un seul niveau dans le filtre pour comparer des salariés de même niveau.' : '';
+    constat(s, `${lib} (${salaries(avec)} avec ${o.quoi} et un salaire).${lecture}${conseil}`);
+  }
+
+  const salaireAge = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-age', tranche: 'Tranche_Age', tranches: C.TRANCHES_AGE,
+    axe: "Tranche d'âge (années)", nom: 'Âge', quoi: 'un âge' });
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge };
 })(window.Exploration = window.Exploration || {});
