@@ -287,5 +287,44 @@
       + `le salaire moyen des hommes est ${enumerer(repart)}.${max} Le graphe « Équité femmes / hommes et pratiques par pôle » compare aussi à métier égal.${nonComptes}`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe };
+  // ---------- tranches-salaire : effectif par tranche de salaire ----------
+
+  // Même chose en barres verticales : de la place en haut pour le nombre écrit au-dessus de la plus haute barre.
+  function axesVerticaux(L, s, groupes, titre) {
+    Object.assign(L['xaxis' + s], { type: 'category', showgrid: false, title: titreAxe(titre) });
+    Object.assign(L['yaxis' + s], { range: [0, Math.max(1, ...groupes.map(g => g.length)) * 1.15], title: titreAxe('Nombre de salariés') });
+  }
+
+  // Tranches de 50 kMAD. Les tranches sont calculées sur le fichier entier, pour ne pas changer d'un filtre à l'autre.
+  // Les salaires les plus bas (5 %) et les plus hauts (5 %) sont regroupés dans « inf à … » et « sup à … » : sinon, un
+  // seul très haut salaire étirerait le graphe sur des dizaines de barres vides. S'il fallait plus de 20 barres, la
+  // largeur double (100 kMAD, puis 200…), pour que le graphe reste lisible.
+  const PAS_SALAIRE = 50;
+  function tranchesSalaire(df) {
+    const v = df.map(l => l.Fixe_Annuel_MAD).filter(Number.isFinite);
+    if (!v.length) return null;
+    const bas = C.quantile(v, 0.05), haut = C.quantile(v, 0.95);
+    let pas = PAS_SALAIRE;
+    while (Math.ceil(haut / pas) - Math.floor(bas / pas) > 20) pas *= 2;
+    // « inf à 0 » n'aurait pas de sens : la première borne est au moins une largeur de tranche.
+    const debut = Math.max(pas, Math.floor(bas / pas) * pas), fin = Math.max(debut + pas, Math.ceil(haut / pas) * pas), bornes = [];
+    for (let b = debut; b <= fin; b += pas) bornes.push(b);
+    return { pas, bornes, libelles: C.libellesTranches(bornes) };
+  }
+
+  function salaireEnTranches(df, sel) {
+    const t = tranchesSalaire(df), lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Fixe_Annuel_MAD));
+    if (!t) { Plotly.purge('g-tranches-salaire'); return constat('s-tranches-salaire', 'Aucun salaire renseigné dans employes.xlsx.'); }
+    const groupes = grouper(lignes, t.libelles, l => C.trancheDe(l.Fixe_Annuel_MAD, t.bornes, t.libelles));
+    const L = sansTitre();
+    axesVerticaux(L, '', groupes, `Fixe_Annuel_MAD (kMAD), tranches de ${fr(t.pas)}`);
+    const clic = p => ({ titre: `Salaire ${p.x} kMAD`, lignes: groupes[p.pointNumber] });
+    montrer('g-tranches-salaire', [barresEffectif(groupes, t.libelles, { horizontal: false })], L, 440, clic, F.libelle(sel));
+    if (!lignes.length) return constat('s-tranches-salaire', 'Aucun salarié avec un salaire pour ce filtre.');
+    const sal = lignes.map(l => l.Fixe_Annuel_MAD);
+    constat('s-tranches-salaire', `${F.libelle(sel)} (${salaries(lignes.length)} avec un salaire) : tranche la plus nombreuse, `
+      + `${plusNombreuse(groupes, i => t.libelles[i] + ' kMAD', lignes.length)}. Salaire moyen : ${fr(C.moyenne(sal), 1)} kMAD ; médian : ${fr(C.mediane(sal), 1)} kMAD.`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches };
 })(window.Exploration = window.Exploration || {});
