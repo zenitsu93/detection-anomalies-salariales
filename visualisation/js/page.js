@@ -67,6 +67,7 @@
     filtrer('f-effectif-anciennete', df, { niveau: true, pole: true }, sel => S.effectifAnciennete(df, sel));
     filtrer('f-effectif-niveau', df, { pole: true, metier: true }, sel => S.effectifNiveau(df, sel));
     filtrer('f-effectif-metier', df, { niveau: true, pole: true }, sel => S.effectifMetier(df, sel));
+    filtrer('f-femmes-hommes', df, { niveau: true, metier: true }, sel => S.femmesHommes(df, sel));
     // Analyses détaillées, reprises du notebook du comité.
     filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
     A.distribution(df, survol);
