@@ -209,7 +209,8 @@
   // La même fonction sert aussi pour l'ancienneté (graphe suivant). Deux barres par tranche : la moyenne et la médiane. La médiane ne bouge pas pour un seul très haut salaire, la moyenne
   // si : quand les deux s'écartent, quelques salaires hors norme tirent la moyenne.
 
-  const STATS = [['Salaire moyen', C.moyenne, K.ARDOISE], ['Salaire médian', C.mediane, K.BRUN]];
+  // Médiane en cuivre, comme dans « SAR et effectifs par pôle », où le brun est déjà pris par le SAR : la médiane a la même couleur partout.
+  const STATS = [['Salaire moyen', C.moyenne, K.ARDOISE], ['Salaire médian', C.mediane, K.CUIVRE]];
 
   function salaireParTranche(df, sel, o) {
     const lignes = df.filter(l => F.garder(l, sel)), groupes = grouper(lignes, o.tranches, l => l[o.tranche]);
