@@ -352,5 +352,43 @@
       + `de leur grille, dont ${salaries(loin)} à plus de 20 % en dessous (${pct(loin, n)}).`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid };
+  // ---------- sous-min : part des salariés sous le Min de la grille et sous le P25 du marché, par pôle ----------
+  // L'équivalent du « taux de turnover par pôle » de la présentation : une part en %, pôle par pôle. Seul le trop bas est
+  // regardé : depuis le 29/10/2026, un salaire trop haut n'est plus une anomalie.
+
+  function sousMin(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Fixe_Annuel_MAD));
+    const poles = C.modalites(lignes, 'Entite_N1');
+    const groupes = [['Ensemble', lignes], ...poles.map(p => [String(p), lignes.filter(l => l.Entite_N1 === p)])];
+    // Chaque part se calcule sur les salariés qui ont la borne : ceux sans grille ne comptent pas pour le Min, ceux sans P25 pas pour le marché.
+    const series = [['Sous le Min de la grille', 'Min', K.ROUGE], ['Sous le P25 du marché', 'Market_P25', K.BLEU]]
+      .filter(([, c]) => df.some(l => Number.isFinite(l[c])));   // sans aucun P25 dans market.xlsx, seule la grille est montrée
+    const calc = series.map(([, c]) => groupes.map(([, g]) => { const avec = g.filter(l => Number.isFinite(l[c])); return [avec.filter(l => l.Fixe_Annuel_MAD < l[c]), avec.length]; }));
+    const traces = series.map(([nom, , couleur], k) => {
+      const v = calc[k].map(([sous, n]) => n ? 100 * sous.length / n : null);
+      return { type: 'bar', name: nom, x: groupes.map(g => g[0]), y: v, marker: { color: couleur }, text: v.map(p => p === null ? '' : fr(p, 1) + ' %'),
+        textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE }, customdata: calc[k].map(([sous, n]) => [sous.length, n]),
+        hovertemplate: `%{x}<br>${nom} : <b>%{y:.1f} %</b><br>%{customdata[0]:,} salariés sur %{customdata[1]:,}<extra></extra>` };
+    });
+    const L = sansTitre();
+    L.barmode = 'group';
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Pôle') });
+    Object.assign(L.yaxis, { rangemode: 'tozero', ticksuffix: ' %', title: titreAxe('Part des salariés') });
+    if (groupes.length > 1) L.shapes.push({ type: 'line', xref: 'x', x0: 0.5, x1: 0.5, yref: 'y domain', y0: 0, y1: 1, line: { color: K.TRAIT, dash: 'dot', width: 1.5 } });
+    const clic = p => ({ titre: `${series[p.curveNumber][0]} · ${groupes[p.pointNumber][0]}`, lignes: calc[p.curveNumber][p.pointNumber][0] });
+    montrer('g-sous-min', traces, L, 460, clic, F.libelle(sel));
+    const lib = F.libelle(sel);
+    if (!lignes.length) return constat('s-sous-min', 'Aucun salarié avec un salaire pour ce filtre.');
+    const phrases = series.map(([nom], k) => {
+      const [sous, n] = calc[k][0], quoi = nom.charAt(0).toLowerCase() + nom.slice(1);
+      if (!n) return `${quoi} : aucun salarié n'a cette borne`;
+      const pp = groupes.slice(1).map((g, i) => ({ nom: g[0], v: calc[k][i + 1][1] ? 100 * calc[k][i + 1][0].length / calc[k][i + 1][1] : NaN }));
+      const ex = extremes(pp, x => x.v, 1);
+      const pire = ex && pp.length > 1 && !ex.egaux ? ` ; part la plus forte : ${enumerer(ex.haut.map(x => echapper(x.nom)))} (${fr(ex.haut[0].v, 1)} %)` : '';
+      return `${quoi} : ${salaries(sous.length)} sur ${fr(n)} (${pct(sous.length, n)})${pire}`;
+    });
+    constat('s-sous-min', `${lib}. ${phrases.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('. ')}.`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid, sousMin };
 })(window.Exploration = window.Exploration || {});
