@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-rem Ouvre Fiabilisation_Diplomes_pas_a_pas_v12.ipynb dans le navigateur, avec le Python du venv du projet.
+rem Ouvre Fiabilisation_Diplomes_pas_a_pas_v13.ipynb dans le navigateur, avec le Python du venv du projet.
 rem Il suffit de double-cliquer sur ce fichier.
 rem Tout le travail (venv, bibliothèques, kernel « Python (.venv salaires) ») est fait par le
 rem lancer_notebook.bat du dossier du projet, comme pour le notebook de l'EDA : on lui dit seulement quel notebook ouvrir.
@@ -10,7 +10,7 @@ rem Pourquoi vérifier que celui du projet est là : il manque si ce dossier a �
 rem a été lancé directement depuis le zip téléchargé, sans l'extraire. La fenêtre se fermerait alors
 rem aussitôt, sans rien expliquer.
 if not exist "%~dp0..\lancer_notebook.bat" goto :projet_incomplet
-call "%~dp0..\lancer_notebook.bat" "fiabilisation_diplomes\Fiabilisation_Diplomes_pas_a_pas_v12.ipynb"
+call "%~dp0..\lancer_notebook.bat" "fiabilisation_diplomes\Fiabilisation_Diplomes_pas_a_pas_v13.ipynb"
 exit /b
 
 :projet_incomplet
