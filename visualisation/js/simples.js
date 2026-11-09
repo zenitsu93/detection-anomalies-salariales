@@ -96,5 +96,43 @@
       + `${plusNombreuse(groupes, i => 'niveau ' + libelles[i], avec, true)}.`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau };
+  // ---------- effectif-metier : effectif par famille de métier ----------
+
+  // Un anneau quand il y a peu de parts (6 au plus), comme les anneaux de la présentation des départs. Au-delà, les
+  // petites parts ne se lisent plus : des barres rangées de la plus longue à la plus courte prennent le relais.
+  const PARTS_MAX = 6;
+  const TEINTES = [K.ARDOISE, K.OR, K.BLEU, K.CUIVRE, K.BRUN, K.PALE];
+  function repartition(id, groupes, libelles, { couleurs = TEINTES, trier = true, titreClic, sel }) {
+    let ordre = groupes.map((_, i) => i);
+    if (trier) ordre.sort((a, b) => groupes[b].length - groupes[a].length);   // la plus grosse part d'abord
+    const g = ordre.map(i => groupes[i]), lib = ordre.map(i => libelles[i]), total = compte(g);
+    const clic = p => ({ titre: `${titreClic}${lib[p.pointNumber]}`, lignes: g[p.pointNumber] });
+    if (libelles.length > PARTS_MAX) {
+      const L = sansTitre();
+      axesHorizontaux(L, g, '');
+      return montrer('g-' + id, [barresEffectif(g, lib)], L, 120 + 30 * lib.length, clic, F.libelle(sel));
+    }
+    const n = g.map(x => x.length);
+    // Le nom et la part s'écrivent autour de l'anneau ; le centre rappelle sur combien de salariés portent les parts.
+    const trace = { type: 'pie', hole: 0.55, labels: lib.map(String), values: n, sort: false, direction: 'clockwise', rotation: 0,
+      marker: { colors: ordre.map(i => couleurs[i % couleurs.length]), line: { color: '#fff', width: 2 } },
+      text: n.map((v, i) => `${echapper(lib[i])}<br>${pct(v, total)}`), textinfo: 'text', textposition: 'outside', textfont: { size: 12, color: K.ENCRE },
+      customdata: n.map(v => pct(v, total)), hovertemplate: '%{label}<br><b>%{value:,} salariés</b> (%{customdata})<extra></extra>', showlegend: false };
+    const L = { margin: { t: 40, b: 40 }, annotations: [{ text: `<b>${fr(total)}</b><br>${total > 1 ? 'salariés' : 'salarié'}`, x: 0.5, y: 0.5,
+      xref: 'paper', yref: 'paper', showarrow: false, font: { size: 14, color: K.ENCRE } }] };
+    montrer('g-' + id, total ? [trace] : [], L, 420, clic, F.libelle(sel));
+  }
+
+  function effectifMetier(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel)), familles = C.modalites(df, 'Job_Family'), groupes = grouper(lignes, familles, l => l.Job_Family);
+    repartition('effectif-metier', groupes, familles.map(String), { titreClic: 'Métier ', sel });
+    const lib = F.libelle(sel), avec = compte(groupes), sans = lignes.length - avec;
+    if (!lignes.length) return constat('s-effectif-metier', 'Aucun salarié pour ce filtre.');
+    if (!avec) return constat('s-effectif-metier', `${lib} (${salaries(lignes.length)}) : aucun métier renseigné.`);
+    const n = groupes.filter(g => g.length).length;
+    constat('s-effectif-metier', `${lib} (${salaries(avec)} avec un métier${sans ? `, ${fr(sans)} sans` : ''}, répartis dans ${fr(n)} famille${n > 1 ? 's' : ''}) : `
+      + `famille la plus nombreuse, ${plusNombreuse(groupes, i => echapper(familles[i]), avec)}.`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier };
 })(window.Exploration = window.Exploration || {});
