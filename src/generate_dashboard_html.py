@@ -89,7 +89,7 @@ FLAG_FR = {
 COL_FR = {
     "Matricule": "Matricule", "Entite_N1": "Pôle", "Job_Family": "Métier", "Job_Title": "Poste",
     "Niveau": "Niveau",
-    # Vides pour tout le monde s'il n'y a pas de fichier des diplômes (input/diplomes.xlsx). Le rang
+    # Vides pour tout le monde si input/employes.xlsx n'a pas de colonnes du diplôme. Le rang
     # (0 = secondaire, 7 = BAC+7) est là pour trier : trié comme un texte, « Niveau d'études » mettrait
     # SECONDAIRE après BAC+7.
     "Niveau_Etude_Max": "Niveau d'études", "Rang_Etude_Max": "Rang d'études (0 à 7)",

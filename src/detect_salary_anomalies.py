@@ -70,8 +70,8 @@ if __name__ == "__main__":
     # ligne dans le terminal : on voit laquelle tourne et combien de temps elle a pris.
     df = lancer(1, "Prétraitement (lecture, doublons, grille, marché, ratios, diplômes)", preparer_employes,
                 projet / "input" / "employes.xlsx", projet / "input" / "bands.xlsx", projet / "input" / "market.xlsx")
-    # Les diplômes ont-ils été retrouvés ? Dit tout de suite, sous la ligne de l'étape : si les
-    # matricules ne correspondent pas, on le voit avant d'aller lire les résultats.
+    # Combien de salariés ont un diplôme connu ? Dit tout de suite, sous la ligne de l'étape : si les
+    # colonnes du diplôme manquent dans employes.xlsx, on le voit avant d'aller lire les résultats.
     print("      " + message_diplomes(df))
     df = lancer(2, "Groupes de collègues (cohortes)", former_cohortes, df, rule_params)
     df = lancer(3, "Règles", apply_rulebook, df, rule_params)
