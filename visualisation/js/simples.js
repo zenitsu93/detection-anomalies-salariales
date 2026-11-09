@@ -390,5 +390,42 @@
     constat('s-sous-min', `${lib}. ${phrases.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('. ')}.`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid, sousMin };
+  // ---------- evaluations : effectif par tranche de compétences et par case 9-Box ----------
+
+  // Tranches de note de 0,5 point, sur l'échelle lue dans le fichier entier (jamais supposée de 1 à 5). La dernière
+  // tranche est fermée à droite (« [4,5 ; 5] ») pour garder la note la plus haute. Plus de 12 tranches : la largeur double.
+  function tranchesCompetence(df) {
+    const v = df.map(l => l.Competence_N1).filter(Number.isFinite);
+    if (!v.length) return null;
+    const min = Math.min(...v), max = Math.max(...v);
+    let pas = 0.5;
+    while (Math.ceil(max / pas) - Math.floor(min / pas) > 12) pas *= 2;
+    const debut = Math.floor(min / pas) * pas, k = Math.max(1, Math.ceil(max / pas - 1e-9) - Math.floor(min / pas));
+    const note = x => fr(x, Number.isInteger(Math.round(x * 1e6) / 1e6) ? 0 : 1);
+    const libelles = Array.from({ length: k }, (_, i) => `[${note(debut + i * pas)} ; ${note(debut + (i + 1) * pas)}${i === k - 1 ? ']' : '['}`);
+    // 1e-9 : une note pile sur une borne (3,0) tombe dans la tranche qui commence à cette borne, malgré les arrondis du calcul.
+    return { libelles, tranche: x => Number.isFinite(x) ? libelles[Math.min(k - 1, Math.max(0, Math.floor((x - debut) / pas + 1e-9)))] : null };
+  }
+
+  function evaluations(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel)), t = tranchesCompetence(df), cases = C.modalites(df, 'Positionnement_9BOX');
+    const gc = t ? grouper(lignes, t.libelles, l => t.tranche(l.Competence_N1)) : [], g9 = grouper(lignes, cases, l => l.Positionnement_9BOX);
+    const L = grille({ colonnes: 2, titres: ['Note de compétences (Competence_N1), par tranche', 'Case 9-Box (Positionnement_9BOX)'] });
+    axesVerticaux(L, '', gc, 'Competence_N1');
+    axesVerticaux(L, '2', g9, 'Case 9-Box');
+    const traces = [barresEffectif(gc, t ? t.libelles : [], { horizontal: false }),
+      barresEffectif(g9, cases.map(String), { horizontal: false, axes: { xaxis: 'x2', yaxis: 'y2' } })];
+    const clic = p => p.curveNumber ? { titre: '9-Box ' + p.x, lignes: g9[p.pointNumber] } : { titre: 'Competence_N1 ' + p.x, lignes: gc[p.pointNumber] };
+    montrer('g-evaluations', traces, L, 440, clic, F.libelle(sel));
+    const lib = F.libelle(sel);
+    if (!lignes.length) return constat('s-evaluations', 'Aucun salarié pour ce filtre.');
+    const notes = gc.flat().map(l => l.Competence_N1), n9 = compte(g9);
+    const comp = notes.length ? `Note de compétences médiane : ${fr(C.mediane(notes), 2)} ; tranche la plus nombreuse, ${plusNombreuse(gc, i => t.libelles[i], notes.length)}.`
+      : 'Aucune note de compétences.';
+    const box = n9 ? ` Case 9-Box la plus fréquente : ${plusNombreuse(g9, i => fr(cases[i]), n9)}.` : ' Aucune case 9-Box.';
+    constat('s-evaluations', `${lib} (${salaries(lignes.length)}). ${comp}${box}`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob,
+    salaireAge, salaireAnciennete, salaireSexe, salaireEnTranches, ecartAuMid, sousMin, evaluations };
 })(window.Exploration = window.Exploration || {});
