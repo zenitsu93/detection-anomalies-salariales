@@ -134,5 +134,57 @@
       + `famille la plus nombreuse, ${plusNombreuse(groupes, i => echapper(familles[i]), avec)}.`);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier };
+  // ---------- femmes-hommes : part des femmes et des hommes, dans l'ensemble et par pôle ----------
+
+  // Femmes et hommes : les couleurs du graphe de l'équité. Un autre code dans Sexe garde son code et une couleur neutre.
+  const SEXES = { F: ['Femmes', K.OR], M: ['Hommes', K.BLEU] };
+  const nomSexe = s => SEXES[s] ? SEXES[s][0] : `Sexe « ${s} »`;
+  const couleurSexe = s => SEXES[s] ? SEXES[s][1] : K.PALE;
+
+  function femmesHommes(df, sel) {
+    // Femmes, puis hommes, puis les autres codes éventuels : l'ordre alphabétique aurait glissé un code « H » entre les deux.
+    const lignes = df.filter(l => F.garder(l, sel)), sexes = C.modalites(lignes, 'Sexe').sort((a, b) => !!SEXES[b] - !!SEXES[a] || (a === 'M') - (b === 'M'));
+    const aSexe = l => sexes.includes(l.Sexe);   // la part se calcule sur les salariés dont le Sexe est renseigné
+    // « Ensemble » d'abord, puis chaque pôle : on compare chaque pôle à l'entreprise entière.
+    const groupes = [['Ensemble', lignes.filter(aSexe)],
+      ...C.modalites(lignes, 'Entite_N1').map(p => [String(p), lignes.filter(l => l.Entite_N1 === p && aSexe(l))])];
+    const x = groupes.map(g => g[0]);
+    const part = (s, g) => g.length ? 100 * g.filter(l => l.Sexe === s).length / g.length : null;
+    const traces = sexes.map(s => {
+      const v = groupes.map(([, g]) => part(s, g));
+      return { type: 'bar', name: nomSexe(s), x, y: v, marker: { color: couleurSexe(s) }, text: v.map(p => p === null ? '' : fr(p, 0) + ' %'),
+        textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE },
+        customdata: groupes.map(([, g]) => [g.filter(l => l.Sexe === s).length, g.length]),
+        hovertemplate: `%{x}<br>${nomSexe(s)} : <b>%{y:.1f} %</b><br>%{customdata[0]:,} salariés sur %{customdata[1]:,}<extra></extra>` };
+    });
+    const L = sansTitre();
+    L.barmode = 'group';   // les barres des femmes et des hommes d'un même pôle côte à côte, comme « Turnover par genre »
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Pôle') });
+    Object.assign(L.yaxis, { range: [0, 110], tickvals: [0, 25, 50, 75, 100], ticktext: ['0 %', '25 %', '50 %', '75 %', '100 %'], title: titreAxe('Part des salariés') });
+    // Un trait sépare « Ensemble » des pôles.
+    if (groupes.length > 1) L.shapes.push({ type: 'line', xref: 'x', x0: 0.5, x1: 0.5, yref: 'y domain', y0: 0, y1: 1, line: { color: K.TRAIT, dash: 'dot', width: 1.5 } });
+    const clic = p => {
+      const s = sexes[p.curveNumber], g = groupes[p.pointNumber];
+      return { titre: `${nomSexe(s)} · ${g[0]}`, lignes: g[1].filter(l => l.Sexe === s) };
+    };
+    montrer('g-femmes-hommes', traces, L, 460, clic, F.libelle(sel));
+    const lib = F.libelle(sel), tous = groupes[0][1], sans = lignes.length - tous.length;
+    if (!lignes.length) return constat('s-femmes-hommes', 'Aucun salarié pour ce filtre.');
+    if (!tous.length) return constat('s-femmes-hommes', `${lib} (${salaries(lignes.length)}) : la colonne Sexe est vide.`);
+    // « femmes 46 % » en minuscules au milieu de la phrase ; un autre code reste écrit tel quel (« Sexe « H » »).
+    const ensemble = sexes.map(s => `${SEXES[s] ? nomSexe(s).toLowerCase() : echapper(nomSexe(s))} ${fr(part(s, tous), 0)} %`);
+    // Un code autre que F ou M (H, Femme…) est montré tel quel et signalé : la page ne devine pas ce qu'il veut dire.
+    const autres = sexes.filter(s => !SEXES[s]).map(s => `« ${echapper(s)} »`);
+    const signal = autres.length ? ` Codes de Sexe autres que F et M : ${enumerer(autres)}.` : '';
+    const debut = `${lib} (${salaries(tous.length)} dont le Sexe est renseigné${sans ? `, ${fr(sans)} sans` : ''}) : ${enumerer(ensemble)}.`;
+    const poles = groupes.slice(1).filter(([, g]) => g.length);
+    if (!sexes.includes('F') || poles.length < 2) return constat('s-femmes-hommes', debut + signal);
+    // Le pôle le plus et le moins féminisé, comparés sur la part arrondie telle qu'elle est écrite.
+    const ex = extremes(poles, ([, g]) => part('F', g), 0), noms = t => enumerer(t.map(g => echapper(g[0]))), ecrit = t => fr(part('F', t[0][1]), 0) + ' %';
+    const comparaison = ex.egaux ? ` Même part de femmes dans tous les pôles (${ecrit(ex.haut)}).`
+      : ` Part de femmes la plus forte : ${noms(ex.haut)} (${ecrit(ex.haut)}) ; la plus faible : ${noms(ex.bas)} (${ecrit(ex.bas)}).`;
+    constat('s-femmes-hommes', debut + comparaison + signal);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes };
 })(window.Exploration = window.Exploration || {});
