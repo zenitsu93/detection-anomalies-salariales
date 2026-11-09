@@ -5,9 +5,14 @@
 FAUT-IL UTILISER LE DIPLÔME DANS LA DÉTECTION ?
 ===============================================
 
-Une seule page, qui regarde le diplôme de trois façons, sans rien changer à la détection :
+Une seule page, qui regarde le diplôme de trois façons, du plus simple au plus compliqué, sans rien
+changer à la détection :
 
-1. et 2. La régression qui prédit un salaire (src/anomaly_signal_regression.py, le repère de l'aide à la
+1. et 2. La position dans la grille (le CompaRatio : salaire divisé par le milieu de la grille du
+   niveau + métier) de chaque tranche de diplôme, en tout puis tranche d'ancienneté par tranche
+   d'ancienneté. Comme chacun est comparé à sa propre grille, tous les niveaux et tous les métiers vont
+   sur le même graphique.
+3. et 4. La régression qui prédit un salaire (src/anomaly_signal_regression.py, le repère de l'aide à la
    décision) : se trompe-t-elle moins si elle connaît le diplôme, et de combien le diplôme change-t-il
    le salaire qu'elle prédit ?
    - Elle est essayée 50 fois : on coupe les salariés en 5 paquets, le modèle apprend sur 4 et on regarde
@@ -18,10 +23,6 @@ Une seule page, qui regarde le diplôme de trois façons, sans rien changer à l
      un témoin, avec la tranche et la catégorie MÉLANGÉES AU HASARD entre salariés du même métier et du
      même niveau. Le témoin dit combien on gagne rien qu'en ajoutant des colonnes qui ne veulent rien
      dire : le diplôme n'aide vraiment que s'il fait nettement mieux que lui.
-3. et 4. La position dans la grille (le CompaRatio : salaire divisé par le milieu de la grille du
-   niveau + métier) de chaque tranche de diplôme, en tout puis tranche d'ancienneté par tranche
-   d'ancienneté. Comme chacun est comparé à sa propre grille, tous les niveaux et tous les métiers vont
-   sur le même graphique.
 5. L'IA (Isolation Forest) : quand elle regarde aussi le diplôme, remonte-t-elle certaines tranches de
    diplôme parmi les salariés les plus atypiques ? L'IA repère ce qui est RARE, pas forcément ce qui est
    mal payé : un diplôme rare peut suffire à faire remonter quelqu'un.
@@ -51,7 +52,76 @@ ANCIENNETES = ["0-2", "3-5", "6-12", "13-20", ">20"]
 
 
 # -----------------------------------------------------------------------------
-# 1. et 2. La régression
+# 1. et 2. La position dans la grille
+# -----------------------------------------------------------------------------
+
+def boite(valeurs, nom, couleur, x=None):
+    """Une boîte à moustaches. Les points isolés ne sont pas dessinés : avec des milliers de salariés, ils
+    cacheraient les boîtes."""
+    trace = {"type": "box", "y": [round(v, 3) for v in valeurs], "name": nom, "fillcolor": couleur,
+             "marker": {"color": couleur}, "line": {"color": "#4a2c1d", "width": 1.5}, "boxpoints": False,
+             "hovertemplate": "%{y:.2f}<extra>" + nom + "</extra>"}
+    if x is not None:
+        trace.update({"x": x, "legendgroup": nom, "offsetgroup": nom, "alignmentgroup": "a"})
+    return trace
+
+
+def partie_grille(df):
+    """Le CompaRatio de chaque tranche de diplôme, en tout (partie 1) puis par ancienneté (partie 2) : le
+    HTML des deux parties et leurs graphes."""
+    cr = df[df["CompaRatio"].notna()].assign(Tranche=lambda d: d["Tranche_Etude"].fillna(INCONNU))
+    presentes = [t for t in TRANCHES + [INCONNU] if (cr["Tranche"] == t).any()]
+    graphe1 = [boite(cr.loc[cr["Tranche"] == t, "CompaRatio"], f"{t} ({virgule((cr['Tranche'] == t).sum(), 0)})",
+                     COULEURS[t]) for t in presentes]
+    connus = cr[cr["Tranche"] != INCONNU].groupby("Tranche")["CompaRatio"]
+    medianes = connus.median().reindex(TRANCHES).dropna()
+    if len(medianes) >= 2:
+        ecart = medianes.max() - medianes.min()
+        # La hauteur moyenne d'une boîte, pour juger l'écart : un écart bien plus petit qu'une boîte veut
+        # dire que les boîtes se recouvrent presque entièrement.
+        hauteur = connus.quantile(0.75).sub(connus.quantile(0.25)).mean()
+        constat1 = ("CompaRatio médian : " + " ; ".join(f"{t} : {virgule(m)}" for t, m in medianes.items())
+                    + f". Entre la tranche la mieux placée et la moins bien placée, l'écart est de "
+                    f"{virgule(ecart * 100, 1)} % du milieu de la grille, pour des boîtes hautes de "
+                    f"{virgule(hauteur * 100, 0)} % en moyenne.")
+    else:
+        constat1 = "Une seule tranche de diplôme est connue : il n'y a rien à comparer."
+
+    anciennetes = [a for a in ANCIENNETES if (cr["Anciennete_Bucket"] == a).any()]
+    graphe2 = [boite(sous["CompaRatio"], t, COULEURS[t], x=sous["Anciennete_Bucket"].tolist())
+               for t in TRANCHES
+               if len(sous := cr[(cr["Tranche"] == t) & cr["Anciennete_Bucket"].isin(anciennetes)])]
+
+    axe_cr = {"title": {"text": "CompaRatio (salaire ÷ milieu de la grille)"}, "tickformat": ".2f",
+              "gridcolor": "#e6e8eb", "zeroline": False}
+    ligne_1 = [{"type": "line", "xref": "paper", "x0": 0, "x1": 1, "y0": 1, "y1": 1,
+                "line": {"color": "#5b6b7d", "dash": "dash", "width": 1}}]
+    marges = {"l": 70, "r": 20, "t": 20, "b": 60}
+    graphes = {
+        "g1": (graphe1, {"showlegend": False, "yaxis": axe_cr, "shapes": ligne_1, "margin": marges}),
+        "g2": (graphe2, {"boxmode": "group", "yaxis": axe_cr, "shapes": ligne_1, "margin": marges,
+                         "legend": {"orientation": "h", "y": 1.08},
+                         "xaxis": {"title": {"text": "Tranche d'ancienneté (années)"},
+                                   "categoryorder": "array", "categoryarray": anciennetes}}),
+    }
+    html = f"""
+<h2>1. La position dans la grille selon le diplôme</h2>
+<p class="lire">Chaque boîte regroupe la moitié des salariés d'une tranche de diplôme (leur nombre est entre
+parenthèses), et le trait du milieu est la médiane. Chacun est comparé à la grille de son niveau et de son métier, ce
+qui permet de mettre tout le monde sur le même graphique. <b>Boîtes à la même hauteur</b> : à niveau et métier égaux,
+le diplôme ne change pas le salaire. <b>Boîtes en escalier</b> : il le change.</p>
+<div id="g1" class="graphe"></div>
+<p class="constat">{constat1}</p>
+
+<h2>2. Même chose, selon l'ancienneté</h2>
+<p class="lire">Un escalier chez les plus récents qui disparaît avec les années veut dire que le diplôme ne joue qu'à
+l'embauche. Un escalier à toutes les anciennetés veut dire qu'il joue toute la carrière.</p>
+<div id="g2" class="graphe"></div>"""
+    return html, graphes
+
+
+# -----------------------------------------------------------------------------
+# 3. et 4. La régression
 # -----------------------------------------------------------------------------
 
 def essais(df, colonnes):
@@ -110,7 +180,7 @@ def signe(x):
 
 
 def partie_regression(df):
-    """Le tableau des erreurs (partie 1) et les graphes de l'effet du diplôme (partie 2) : le HTML des
+    """Le tableau des erreurs (partie 3) et les graphes de l'effet du diplôme (partie 4) : le HTML des
     deux parties et leurs graphes."""
     # Un salarié sans salaire utilisable ne peut pas servir à apprendre un salaire.
     df = df[df["Fixe_Annuel_MAD"] > 0].reset_index(drop=True)
@@ -138,7 +208,7 @@ def partie_regression(df):
     else:
         verdict = (f"Le diplôme ne rend pas le salaire prédit nettement plus juste : il ne fait mieux que dans "
                    f"{virgule(mieux * 100, 0)} % des essais.")
-    constat1 = (f"Erreur moyenne : {virgule(sans['mae'].mean(), 1)} kMAD sans le diplôme, "
+    constat3 = (f"Erreur moyenne : {virgule(sans['mae'].mean(), 1)} kMAD sans le diplôme, "
                 f"{virgule(avec['mae'].mean(), 1)} kMAD avec, {virgule(temoin['mae'].mean(), 1)} kMAD avec le témoin. "
                 f"{verdict}")
 
@@ -169,7 +239,7 @@ def partie_regression(df):
         blocs.append(f'<div id="{cle}" class="graphe" style="height: 300px"></div>')
 
     html = f"""
-<h2>1. Les erreurs du modèle, sans et avec le diplôme</h2>
+<h2>3. Les erreurs du modèle, sans et avec le diplôme</h2>
 <p class="lire">Le modèle est la régression qui devine le salaire d'un salarié à partir de son métier, son niveau,
 son ancienneté, son âge, ses notes et le Hot job. Chaque modèle est essayé 50 fois : il apprend sur 80 % des
 salariés, puis on mesure son erreur sur les 20 % qu'il n'a pas vus. Le <b>témoin</b> a des diplômes mélangés au
@@ -177,82 +247,13 @@ hasard : il montre ce qu'on gagne avec des colonnes qui ne veulent rien dire. Le
 nettement mieux que lui.</p>
 <table><tr><th>Modèle</th><th>Erreur moyenne (kMAD)</th><th>Part du salaire expliquée (0 = rien, 1 = tout)</th>
 <th>Marge d'erreur (9 fois sur 10)</th></tr>{lignes}</table>
-<p class="constat">{constat1}</p>
+<p class="constat">{constat3}</p>
 
-<h2>2. De combien le diplôme change le salaire prédit</h2>
+<h2>4. De combien le diplôme change le salaire prédit</h2>
 <p class="lire">À métier, niveau, ancienneté, âge, notes et Hot job égaux, par rapport à la valeur la plus fréquente.
 Une barre proche de 0 veut dire que le diplôme ne change presque rien au salaire prédit.</p>
 {"".join(blocs)}
 <p class="constat">{" ".join(phrases)}</p>"""
-    return html, graphes
-
-
-# -----------------------------------------------------------------------------
-# 3. et 4. La position dans la grille
-# -----------------------------------------------------------------------------
-
-def boite(valeurs, nom, couleur, x=None):
-    """Une boîte à moustaches. Les points isolés ne sont pas dessinés : avec des milliers de salariés, ils
-    cacheraient les boîtes."""
-    trace = {"type": "box", "y": [round(v, 3) for v in valeurs], "name": nom, "fillcolor": couleur,
-             "marker": {"color": couleur}, "line": {"color": "#4a2c1d", "width": 1.5}, "boxpoints": False,
-             "hovertemplate": "%{y:.2f}<extra>" + nom + "</extra>"}
-    if x is not None:
-        trace.update({"x": x, "legendgroup": nom, "offsetgroup": nom, "alignmentgroup": "a"})
-    return trace
-
-
-def partie_grille(df):
-    """Le CompaRatio de chaque tranche de diplôme, en tout (partie 3) puis par ancienneté (partie 4) : le
-    HTML des deux parties et leurs graphes."""
-    cr = df[df["CompaRatio"].notna()].assign(Tranche=lambda d: d["Tranche_Etude"].fillna(INCONNU))
-    presentes = [t for t in TRANCHES + [INCONNU] if (cr["Tranche"] == t).any()]
-    graphe3 = [boite(cr.loc[cr["Tranche"] == t, "CompaRatio"], f"{t} ({virgule((cr['Tranche'] == t).sum(), 0)})",
-                     COULEURS[t]) for t in presentes]
-    connus = cr[cr["Tranche"] != INCONNU].groupby("Tranche")["CompaRatio"]
-    medianes = connus.median().reindex(TRANCHES).dropna()
-    if len(medianes) >= 2:
-        ecart = medianes.max() - medianes.min()
-        # La hauteur moyenne d'une boîte, pour juger l'écart : un écart bien plus petit qu'une boîte veut
-        # dire que les boîtes se recouvrent presque entièrement.
-        hauteur = connus.quantile(0.75).sub(connus.quantile(0.25)).mean()
-        constat3 = ("CompaRatio médian : " + " ; ".join(f"{t} : {virgule(m)}" for t, m in medianes.items())
-                    + f". Entre la tranche la mieux placée et la moins bien placée, l'écart est de "
-                    f"{virgule(ecart * 100, 1)} % du milieu de la grille, pour des boîtes hautes de "
-                    f"{virgule(hauteur * 100, 0)} % en moyenne.")
-    else:
-        constat3 = "Une seule tranche de diplôme est connue : il n'y a rien à comparer."
-
-    anciennetes = [a for a in ANCIENNETES if (cr["Anciennete_Bucket"] == a).any()]
-    graphe4 = [boite(sous["CompaRatio"], t, COULEURS[t], x=sous["Anciennete_Bucket"].tolist())
-               for t in TRANCHES
-               if len(sous := cr[(cr["Tranche"] == t) & cr["Anciennete_Bucket"].isin(anciennetes)])]
-
-    axe_cr = {"title": {"text": "CompaRatio (salaire ÷ milieu de la grille)"}, "tickformat": ".2f",
-              "gridcolor": "#e6e8eb", "zeroline": False}
-    ligne_1 = [{"type": "line", "xref": "paper", "x0": 0, "x1": 1, "y0": 1, "y1": 1,
-                "line": {"color": "#5b6b7d", "dash": "dash", "width": 1}}]
-    marges = {"l": 70, "r": 20, "t": 20, "b": 60}
-    graphes = {
-        "g3": (graphe3, {"showlegend": False, "yaxis": axe_cr, "shapes": ligne_1, "margin": marges}),
-        "g4": (graphe4, {"boxmode": "group", "yaxis": axe_cr, "shapes": ligne_1, "margin": marges,
-                         "legend": {"orientation": "h", "y": 1.08},
-                         "xaxis": {"title": {"text": "Tranche d'ancienneté (années)"},
-                                   "categoryorder": "array", "categoryarray": anciennetes}}),
-    }
-    html = f"""
-<h2>3. La position dans la grille selon le diplôme</h2>
-<p class="lire">Chaque boîte regroupe la moitié des salariés d'une tranche de diplôme (leur nombre est entre
-parenthèses), et le trait du milieu est la médiane. Chacun est comparé à la grille de son niveau et de son métier, ce
-qui permet de mettre tout le monde sur le même graphique. <b>Boîtes à la même hauteur</b> : à niveau et métier égaux,
-le diplôme ne change pas le salaire. <b>Boîtes en escalier</b> : il le change.</p>
-<div id="g3" class="graphe"></div>
-<p class="constat">{constat3}</p>
-
-<h2>4. Même chose, selon l'ancienneté</h2>
-<p class="lire">Un escalier chez les plus récents qui disparaît avec les années veut dire que le diplôme ne joue qu'à
-l'embauche. Un escalier à toutes les anciennetés veut dire qu'il joue toute la carrière.</p>
-<div id="g4" class="graphe"></div>"""
     return html, graphes
 
 
@@ -344,14 +345,17 @@ dire que l'IA remonte ces salariés à cause de leur diplôme, pas forcément de
 
 if __name__ == "__main__":
     rule_params, df = charger()
-    regression_html, regression_graphes = partie_regression(df)
+    # Les parties vont du plus simple au plus compliqué : d'abord les vrais salaires, sans modèle (la
+    # grille) ; puis la régression, qui confirme en tenant compte de tout le reste en même temps ; enfin
+    # l'IA, qui ne compte que si le diplôme joue sur le salaire.
     grille_html, grille_graphes = partie_grille(df)
+    regression_html, regression_graphes = partie_regression(df)
     ia_html, ia_graphes = partie_ia(df, rule_params)
     corps = f"""
-<p class="lire">Cette page compare les salaires sans puis avec le diplôme, de trois façons : la régression qui
-prédit un salaire (parties 1 et 2), la position dans la grille (parties 3 et 4) et l'IA (partie 5). Elle ne change
-rien à la détection.</p>
-{regression_html}{grille_html}{ia_html}"""
+<p class="lire">Cette page compare les salaires sans puis avec le diplôme, du plus simple au plus compliqué : la
+position dans la grille (parties 1 et 2), la régression qui prédit un salaire (parties 3 et 4) et l'IA (partie 5).
+Elle ne change rien à la détection.</p>
+{grille_html}{regression_html}{ia_html}"""
     page = ecrire_page("diplome", "Faut-il utiliser le diplôme dans la détection ?", df, corps,
-                       {**regression_graphes, **grille_graphes, **ia_graphes})
+                       {**grille_graphes, **regression_graphes, **ia_graphes})
     print(f"Page : {page}")
