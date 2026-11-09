@@ -72,5 +72,12 @@
   const effectifAge = (df, sel) => effectifParTranche(df, sel, { id: 'effectif-age', colonne: 'Age', tranche: 'Tranche_Age', tranches: C.TRANCHES_AGE,
     axe: "Tranche d'âge (années)", nom: 'Âge', quoi: 'un âge', sansQuoi: 'âge valable', aucun: 'aucun âge renseigné', moyen: 'Âge moyen', median: 'âge médian' });
 
-  E.simples = { effectifAge };
+  // ---------- effectif-anciennete : effectif par tranche d'ancienneté ----------
+  // Le même graphe que pour l'âge, avec les tranches d'ancienneté de 2 ans.
+
+  const effectifAnciennete = (df, sel) => effectifParTranche(df, sel, { id: 'effectif-anciennete', colonne: 'Anciennete', tranche: 'Tranche_Anciennete',
+    tranches: C.TRANCHES, axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté', sansQuoi: 'ancienneté valable', aucun: 'aucune ancienneté renseignée',
+    moyen: 'Ancienneté moyenne', median: 'ancienneté médiane' });
+
+  E.simples = { effectifAge, effectifAnciennete };
 })(window.Exploration = window.Exploration || {});

@@ -64,6 +64,7 @@
     // Vue simple (js/simples.js) : des graphes usuels d'abord, filtrables par ce qui a du sens pour chacun ; par exemple pas
     // de filtre par niveau sur l'effectif par niveau.
     filtrer('f-effectif-age', df, { niveau: true, pole: true }, sel => S.effectifAge(df, sel));
+    filtrer('f-effectif-anciennete', df, { niveau: true, pole: true }, sel => S.effectifAnciennete(df, sel));
     // Analyses détaillées, reprises du notebook du comité.
     filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
     A.distribution(df, survol);
