@@ -247,5 +247,45 @@
   const salaireAnciennete = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-anciennete', tranche: 'Tranche_Anciennete', tranches: C.TRANCHES,
     axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté' });
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete };
+  // ---------- salaire-sexe : salaire moyen des femmes et des hommes, par niveau ----------
+
+  function salaireSexe(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Fixe_Annuel_MAD));
+    const niveaux = C.modalites(lignes, 'Niveau'), x = niveaux.map(String);
+    const groupe = (s, n) => lignes.filter(l => l.Sexe === s && l.Niveau === n);
+    const moyennes = { F: [], M: [] };
+    const traces = ['F', 'M'].map(s => {
+      const g = niveaux.map(n => groupe(s, n)), v = g.map(x => x.length ? C.moyenne(x.map(l => l.Fixe_Annuel_MAD)) : null);
+      moyennes[s] = v;
+      return { type: 'bar', name: nomSexe(s), x, y: v, marker: { color: couleurSexe(s) }, text: v.map(m => m === null ? '' : fr(m, 0)),
+        textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE }, customdata: g.map(x => x.length),
+        hovertemplate: `Niveau %{x} · ${nomSexe(s)}<br>Salaire moyen : <b>%{y:,.1f} kMAD</b><br>%{customdata:,} salariés<extra></extra>` };
+    });
+    const L = sansTitre();
+    L.barmode = 'group';   // femmes et hommes d'un même niveau côte à côte, comme « Turnover par genre » dans la présentation
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Niveau') });
+    L.yaxis.title = titreAxe('Salaire moyen (kMAD)');
+    const clic = p => { const s = ['F', 'M'][p.curveNumber]; return { titre: `${nomSexe(s)}, niveau ${p.x}`, lignes: groupe(s, niveaux[p.pointNumber]) }; };
+    montrer('g-salaire-sexe', traces, L, 460, clic, F.libelle(sel));
+    const lib = F.libelle(sel), nF = lignes.filter(l => l.Sexe === 'F').length, nM = lignes.filter(l => l.Sexe === 'M').length;
+    if (!lignes.length) return constat('s-salaire-sexe', 'Aucun salarié avec un salaire pour ce filtre.');
+    // Seuls F et M sont comparés : un autre code est signalé, pas deviné (comme dans le graphe de l'équité).
+    const horsMF = lignes.length - nF - nM, autres = C.modalites(lignes.filter(l => l.Sexe !== 'F' && l.Sexe !== 'M'), 'Sexe').map(s => `« ${echapper(s)} »`);
+    const nonComptes = horsMF ? ` Non comptés : ${salaries(horsMF)} dont le Sexe n'est ni F ni M${autres.length ? ` (${enumerer(autres)})` : ''}.` : '';
+    const debut = `${lib} (${fr(nF)} femme${nF > 1 ? 's' : ''} et ${fr(nM)} homme${nM > 1 ? 's' : ''} avec un salaire)`;
+    // L'écart de chaque niveau où il y a des femmes et des hommes, arrondi à 0,1 % comme il est écrit : « 0,0 % » veut dire « égal ».
+    const ecarts = niveaux.map((n, i) => ({ n, e: moyennes.F[i] > 0 && moyennes.M[i] !== null ? Math.round(1000 * (moyennes.M[i] / moyennes.F[i] - 1)) / 10 : null }))
+      .filter(x => x.e !== null);
+    if (!ecarts.length) return constat('s-salaire-sexe', `${debut} : aucun niveau ne compte à la fois des femmes et des hommes, pas de comparaison possible.${nonComptes}`);
+    const dessus = ecarts.filter(x => x.e > 0).length, dessous = ecarts.filter(x => x.e < 0).length, egal = ecarts.length - dessus - dessous;
+    const niv = k => `${fr(k)} niveau${k > 1 ? 'x' : ''}`;
+    const repart = [dessus && `au-dessus de celui des femmes dans ${niv(dessus)}`, dessous && `en dessous dans ${niv(dessous)}`, egal && `égal dans ${niv(egal)}`].filter(Boolean);
+    const plusGrand = ecarts.reduce((a, b) => Math.abs(b.e) > Math.abs(a.e) ? b : a);
+    const max = plusGrand.e ? ` Plus grand écart : niveau ${plusGrand.n}, où le salaire moyen des hommes est ${fr(Math.abs(plusGrand.e), 1)} % `
+      + `${plusGrand.e > 0 ? 'au-dessus de' : 'en dessous de'} celui des femmes.` : '';
+    constat('s-salaire-sexe', `${debut} : sur ${fr(ecarts.length)} niveau${ecarts.length > 1 ? 'x' : ''} qui comptent des femmes et des hommes, `
+      + `le salaire moyen des hommes est ${enumerer(repart)}.${max} Le graphe « Équité femmes / hommes et pratiques par pôle » compare aussi à métier égal.${nonComptes}`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob, salaireAge, salaireAnciennete, salaireSexe };
 })(window.Exploration = window.Exploration || {});
