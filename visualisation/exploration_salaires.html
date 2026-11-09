@@ -88,23 +88,24 @@
         <li><a href="#ecart-mid"><span class="n">11</span>Écart au milieu de la grille</a></li>
         <li><a href="#sous-min"><span class="n">12</span>Sous le Min et sous le marché</a></li>
         <li><a href="#evaluations"><span class="n">13</span>Compétences et 9-Box</a></li>
+        <li><a href="#matrice"><span class="n">14</span>Matrice de positionnement</a></li>
         <li class="etage">Analyses détaillées</li>
         <li class="groupe">Population et SAR</li>
-        <li><a href="#masse"><span class="n">14</span>SAR et effectifs par pôle</a></li>
-        <li><a href="#distribution"><span class="n">15</span>Distribution du salaire</a></li>
+        <li><a href="#masse"><span class="n">15</span>SAR et effectifs par pôle</a></li>
+        <li><a href="#distribution"><span class="n">16</span>Distribution du salaire</a></li>
         <li class="groupe">Position dans la grille</li>
-        <li><a href="#grille"><span class="n">16</span>Grille et marché par niveau</a></li>
-        <li><a href="#hors-grille"><span class="n">17</span>Salaires hors grille</a></li>
-        <li><a href="#metiers"><span class="n">18</span>Familles de métier</a></li>
+        <li><a href="#grille"><span class="n">17</span>Grille et marché par niveau</a></li>
+        <li><a href="#hors-grille"><span class="n">18</span>Salaires hors grille</a></li>
+        <li><a href="#metiers"><span class="n">19</span>Familles de métier</a></li>
         <li class="groupe">Position face au marché</li>
-        <li><a href="#marche"><span class="n">19</span>Position face au marché</a></li>
-        <li><a href="#tension"><span class="n">20</span>Métiers en tension</a></li>
+        <li><a href="#marche"><span class="n">20</span>Position face au marché</a></li>
+        <li><a href="#tension"><span class="n">21</span>Métiers en tension</a></li>
         <li class="groupe">Ce qui fait varier la position</li>
-        <li><a href="#anciennete"><span class="n">21</span>Ancienneté et âge</a></li>
-        <li><a href="#competences"><span class="n">22</span>Compétences et tension</a></li>
-        <li><a href="#talents"><span class="n">23</span>Talents et rémunération</a></li>
+        <li><a href="#anciennete"><span class="n">22</span>Ancienneté et âge</a></li>
+        <li><a href="#competences"><span class="n">23</span>Compétences et tension</a></li>
+        <li><a href="#talents"><span class="n">24</span>Talents et rémunération</a></li>
         <li class="groupe">Équité</li>
-        <li><a href="#equite"><span class="n">24</span>Équité et pôles</a></li>
+        <li><a href="#equite"><span class="n">25</span>Équité et pôles</a></li>
         <li class="groupe">Aide</li>
         <li><a href="#glossaire"><span class="n">i</span>Glossaire</a></li>
         <li><a href="#aide"><span class="n">?</span>Se servir des graphes</a></li>
@@ -274,12 +275,23 @@
         </div>
       </section>
 
+      <!-- Matrice de positionnement (point du 29/10/2026) : sur le modèle des campagnes d'augmentations individuelles -->
+      <section class="panel" id="matrice">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">14</span>Matrice de positionnement, en %</h2><span class="panel-unit">par case 9-Box ou par note de compétences, filtrable par niveau et pôle</span></div>
+        <div class="panel-body">
+          <p class="question">Comme dans une campagne d'augmentations individuelles : où se placent les salariés dans leur grille, selon leur évaluation ? Chaque case donne la part des salariés.</p>
+          <div class="filtres" id="f-matrice"></div>
+          <div class="graphe" id="g-matrice"></div>
+          <p class="constat" id="s-matrice"></p>
+        </div>
+      </section>
+
       <h2 class="etage">Analyses détaillées<span>les analyses du notebook du comité</span></h2>
 
       <h2 class="partie">Population et SAR</h2>
 
       <section class="panel" id="masse">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">14</span>SAR et effectifs par pôle</h2><span class="panel-unit">filtrable par niveau</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">15</span>SAR et effectifs par pôle</h2><span class="panel-unit">filtrable par niveau</span></div>
         <div class="panel-body">
           <p class="question">Comment le SAR (salaire annuel de référence) se répartit-il entre les pôles, et quels sont le salaire moyen et le salaire médian de chaque pôle ?</p>
           <div class="filtres" id="f-masse"></div>
@@ -289,7 +301,7 @@
       </section>
 
       <section class="panel" id="distribution">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">15</span>Distribution du salaire</h2><span class="panel-unit">Fixe_Annuel_MAD, en kMAD</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">16</span>Distribution du salaire</h2><span class="panel-unit">Fixe_Annuel_MAD, en kMAD</span></div>
         <div class="panel-body">
           <p class="question">La distribution des salaires est-elle symétrique, et le passage au logarithme la rééquilibre-t-il ?</p>
           <div class="graphe" id="g-distribution"></div>
@@ -300,7 +312,7 @@
       <h2 class="partie">Position dans la grille</h2>
 
       <section class="panel" id="grille">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">16</span>Salaires, grille interne et marché</h2><span class="panel-unit">filtrable par métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">17</span>Salaires, grille interne et marché</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
           <p class="question">Les salaires réels suivent-ils la grille interne et le marché, niveau par niveau ? Comment se répartissent-ils dans leur bande ?</p>
           <div class="filtres" id="f-grille"></div>
@@ -310,7 +322,7 @@
       </section>
 
       <section class="panel" id="hors-grille">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">17</span>Salaires hors grille, par pôle et par niveau</h2><span class="panel-unit">filtrable par métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">18</span>Salaires hors grille, par pôle et par niveau</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
           <p class="question">Où se concentrent les salaires sous le Min ou au-dessus du Max de leur grille ?</p>
           <div class="filtres" id="f-hors-grille"></div>
@@ -320,7 +332,7 @@
       </section>
 
       <section class="panel" id="metiers">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">18</span>Familles de métier et compétitivité des grilles</h2><span class="panel-unit">filtrable par niveau</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">19</span>Familles de métier et compétitivité des grilles</h2><span class="panel-unit">filtrable par niveau</span></div>
         <div class="panel-body">
           <p class="question">Certaines familles de métier sont-elles mieux placées dans leur grille, et est-ce lié à l'écart entre la grille et le marché ?</p>
           <div class="filtres" id="f-metiers"></div>
@@ -332,7 +344,7 @@
       <h2 class="partie">Position face au marché</h2>
 
       <section class="panel" id="marche">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">19</span>Position face au marché</h2><span class="panel-unit">par pôle ou par métier, filtrable par niveau</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">20</span>Position face au marché</h2><span class="panel-unit">par pôle ou par métier, filtrable par niveau</span></div>
         <div class="panel-body">
           <p class="question">Chaque pôle ou métier paie-t-il au-dessus ou en dessous du marché, à métier et niveau égaux ?</p>
           <div class="filtres" id="f-marche"></div>
@@ -342,7 +354,7 @@
       </section>
 
       <section class="panel" id="tension">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">20</span>Métiers en tension</h2><span class="panel-unit">filtrable par niveau et pôle</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">21</span>Métiers en tension</h2><span class="panel-unit">filtrable par niveau et pôle</span></div>
         <div class="panel-body">
           <p class="question">Les métiers les plus recherchés sur le marché (Hot_job élevé) sont-ils bien placés dans leur grille ?</p>
           <div class="filtres" id="f-tension"></div>
@@ -354,7 +366,7 @@
       <h2 class="partie">Ce qui fait varier la position</h2>
 
       <section class="panel" id="anciennete">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">21</span>Ancienneté, âge à l'embauche et compression</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">22</span>Ancienneté, âge à l'embauche et compression</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
         <div class="panel-body">
           <p class="question">À poste égal, est-on mieux placé dans sa grille selon l'ancienneté (à gauche, par tranche) ou selon l'âge à l'embauche (à droite) ?</p>
           <div class="filtres" id="f-anciennete"></div>
@@ -364,7 +376,7 @@
       </section>
 
       <section class="panel" id="competences">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">22</span>Compétences et tension métier</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">23</span>Compétences et tension métier</h2><span class="panel-unit">filtrable par niveau et métier</span></div>
         <div class="panel-body">
           <p class="question">La note de compétences se traduit-elle dans la position salariale, quelle que soit la tension du métier ?</p>
           <div class="filtres" id="f-competences"></div>
@@ -374,7 +386,7 @@
       </section>
 
       <section class="panel" id="talents">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">23</span>Talents et rémunération</h2><span class="panel-unit">filtrable par Hot_job, pôle et métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">24</span>Talents et rémunération</h2><span class="panel-unit">filtrable par Hot_job, pôle et métier</span></div>
         <div class="panel-body">
           <p class="question">Les mieux évalués sont-ils bien placés dans leur grille ? Qui est sous-payé malgré une bonne évaluation, ou très bien payé malgré une évaluation basse ?</p>
           <div class="filtres" id="f-talents"></div>
@@ -386,7 +398,7 @@
       <h2 class="partie">Équité</h2>
 
       <section class="panel" id="equite">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">24</span>Équité femmes / hommes et pratiques par pôle</h2><span class="panel-unit">filtrable par métier</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">25</span>Équité femmes / hommes et pratiques par pôle</h2><span class="panel-unit">filtrable par métier</span></div>
         <div class="panel-body">
           <p class="question">À niveau égal, les femmes et les hommes sont-ils placés de la même façon dans leur grille ? Les pôles ont-ils des pratiques différentes ?</p>
           <div class="filtres" id="f-equite"></div>
@@ -428,6 +440,7 @@
           </dl>
           <h3>Lire les graphes</h3>
           <dl>
+            <div><dt>Matrice de positionnement</dt><dd>Un tableau comme celui des campagnes d'augmentations individuelles. En colonnes, la position du salaire dans sa grille : sous le Min, puis les quatre quarts de la grille (du Min au Max, le Mid entre le 2e et le 3e quart), puis au-dessus du Max. En lignes, l'évaluation : case 9-Box ou note de compétences. Chaque case donne la part des salariés : 12 % = 12 salariés sur 100.</dd></div>
             <div><dt>Boîte à moustaches</dt><dd>La boîte contient la moitié centrale des salariés et le trait dans la boîte est la médiane. Les « moustaches » vont jusqu'aux valeurs habituelles ; les points isolés sont les valeurs éloignées.</dd></div>
             <div><dt>Corrélation</dt><dd>De −1 à 1. Proche de 1 : les deux grandeurs montent ensemble ; proche de −1 : quand l'une monte, l'autre baisse ; proche de 0 : pas de lien en ligne droite.</dd></div>
             <div><dt>Pente (droite de tendance)</dt><dd>De combien une valeur change en moyenne quand l'autre augmente de 1. Exemple : une pente de 0,02 veut dire +0,02 de Compa-Ratio par point de note de compétences.</dd></div>
