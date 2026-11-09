@@ -154,29 +154,37 @@ def melanger(df):
     return df
 
 
-def effets(df, colonne):
-    """De combien le salaire prédit change, en %, quand on donne à TOUS les salariés la même valeur de la
-    colonne, comparé à la valeur la plus fréquente, tout le reste égal. Rend la valeur de référence et
-    les écarts des autres valeurs.
-    Pourquoi la valeur la plus fréquente comme référence : elle existe toujours, quelle que soit la façon
-    dont le fichier écrit les diplômes (un nom écrit en dur pourrait ne pas y être)."""
-    valeurs = df[colonne].value_counts()
-    reference = valeurs.index[0]
+def salaires_predits(df, colonne):
+    """Pour chaque valeur de la colonne (chaque tranche, ou chaque catégorie de diplôme) : le salaire que
+    le modèle prédit quand on donne cette valeur à TOUS les salariés, sans rien changer d'autre. Rend,
+    pour chaque valeur, le salaire du milieu (la médiane) de ces salaires prédits, en kMAD (milliers de
+    MAD), comme dans les fichiers d'entrée.
+    Pourquoi donner la valeur à tout le monde : chaque barre est alors calculée sur les mêmes salariés,
+    avec les mêmes métiers, niveaux, anciennetés, etc. Seul le diplôme change d'une barre à l'autre :
+    toute la différence entre deux barres vient donc de lui.
+    Pourquoi la médiane et pas la moyenne : quelques très gros salaires tireraient la moyenne vers le
+    haut, et elle ne ressemblerait plus au salaire d'un salarié ordinaire.
+    Les valeurs viennent du fichier des diplômes, pas d'une liste écrite à l'avance : si les catégories
+    sont écrites autrement, elles apparaissent quand même."""
+    valeurs = list(df[colonne].value_counts().index)
+    if colonne == "Tranche_Etude":
+        # Les tranches dans leur ordre, du moins au plus diplômé, plutôt que de la plus à la moins fréquente.
+        valeurs = [t for t in TRANCHES if t in valeurs]
     X = tableau_x(df, AVEC_TOUT)
     modele = LinearRegression().fit(X, np.log(df["Fixe_Annuel_MAD"]))
 
     def predit(valeur):
-        return modele.predict(tableau_x(df.assign(**{colonne: valeur}), AVEC_TOUT).reindex(columns=X.columns, fill_value=0))
+        x = tableau_x(df.assign(**{colonne: valeur}), AVEC_TOUT).reindex(columns=X.columns, fill_value=0)
+        # Le modèle apprend les salaires sous une forme qui compte les écarts en % plutôt qu'en kMAD (np.log,
+        # voir essais) : np.exp les remet en kMAD.
+        return np.exp(modele.predict(x))
 
-    base = predit(reference)
-    ecarts = pd.Series({v: (np.mean(np.exp(predit(v) - base)) - 1) * 100 for v in valeurs.index[1:]}, dtype=float)
-    return reference, ecarts
+    return pd.Series({v: float(np.median(predit(v))) for v in valeurs}, dtype=float)
 
 
-def signe(x):
-    """2.31 -> « +2,3 % » ; -0.04 -> « 0,0 % »."""
-    texte = virgule(x, 1)
-    return f"{'+' if texte != '0,0' and x > 0 else ''}{texte} %"
+def kmad(x):
+    """206.43 -> « 206,4 kMAD » (206 400 MAD)."""
+    return f"{virgule(x, 1)} kMAD"
 
 
 def partie_regression(df):
@@ -212,30 +220,34 @@ def partie_regression(df):
                 f"{virgule(avec['mae'].mean(), 1)} kMAD avec, {virgule(temoin['mae'].mean(), 1)} kMAD avec le témoin. "
                 f"{verdict}")
 
-    print("Régression : effet du diplôme sur le salaire prédit...")
+    print("Régression : salaire prédit pour chaque diplôme...")
     graphes, phrases, blocs = {}, [], []
     for cle, colonne, nom, couleur in [("r_t", "Tranche_Etude", "la tranche de diplôme", "#e9a21b"),
                                        ("r_c", "Cat_Ecole_Max", "la catégorie de diplôme", "#5b6b7d")]:
-        reference, ecarts = effets(df, colonne)
-        if ecarts.empty:
-            phrases.append(f"Pour {nom}, une seule valeur est connue ({reference}) : rien à comparer.")
+        salaires = salaires_predits(df, colonne)
+        if len(salaires) < 2:
+            connu = "aucune valeur n'est connue" if salaires.empty else f"une seule valeur est connue ({salaires.index[0]})"
+            phrases.append(f"Pour {nom}, {connu} : rien à comparer.")
             continue
-        # Les écarts sont déjà écrits au bout des barres : la phrase ne donne que le plus grand.
-        plus_grand = ecarts.abs().idxmax()
-        phrases.append(f"Pour {nom}, le plus grand écart avec « {reference} » est celui de « {plus_grand} » : "
-                       f"{signe(ecarts[plus_grand])}.")
-        # Pourquoi l'axe va au moins de -5 % à +5 % : sinon Plotly l'ajuste aux barres, et un écart de 0,3 %
-        # remplirait toute la largeur, comme s'il était énorme. Un écart plus grand élargit l'axe.
-        etendue = max(5.0, float(ecarts.abs().max()) * 1.25)
-        graphes[cle] = ([{"type": "bar", "orientation": "h", "y": [str(v) for v in ecarts.index],
-                          "x": ecarts.round(1).tolist(), "marker": {"color": couleur},
-                          "text": [signe(e) for e in ecarts], "textposition": "outside",
-                          "hovertemplate": "%{x:.1f} %<extra></extra>"}],
-                        {"showlegend": False, "margin": {"l": 200, "r": 60, "t": 40, "b": 50},
-                         "title": {"text": f"{nom[0].upper()}{nom[1:]}, par rapport à « {reference} »",
-                                   "font": {"size": 14}, "x": 0},
-                         "xaxis": {"title": {"text": "Écart de salaire prédit (%)"}, "gridcolor": "#e6e8eb",
-                                   "zerolinecolor": "#5b6b7d", "range": [-etendue, etendue]}})
+        # Les salaires sont déjà écrits au bout des barres : la phrase ne donne que l'écart entre le plus
+        # bas et le plus haut, en kMAD par an et en %.
+        bas, haut = salaires.idxmin(), salaires.idxmax()
+        ecart = salaires[haut] - salaires[bas]
+        phrases.append(f"Pour {nom}, le salaire prédit va de {kmad(salaires[bas])} (« {bas} ») à {kmad(salaires[haut])} "
+                       f"(« {haut} ») : {kmad(ecart)} d'écart par an, soit {pour_cent(ecart / salaires[bas], 1)}.")
+        # Pourquoi l'axe part de 0 : un axe qui commencerait plus haut grossirait les petites différences, et
+        # deux salaires presque égaux auraient l'air très différents. Le 1,25 laisse la place d'écrire le
+        # salaire au bout de la barre la plus longue.
+        graphes[cle] = ([{"type": "bar", "orientation": "h", "y": [str(v) for v in salaires.index],
+                          "x": salaires.round(1).tolist(), "marker": {"color": couleur},
+                          "text": [kmad(s) for s in salaires], "textposition": "outside",
+                          "hovertemplate": "%{x:,.1f} kMAD<extra></extra>"}],
+                        {"showlegend": False, "margin": {"l": 200, "r": 40, "t": 40, "b": 50},
+                         "title": {"text": f"Salaire prédit selon {nom}", "font": {"size": 14}, "x": 0},
+                         "xaxis": {"title": {"text": "Salaire annuel prédit, salarié du milieu (kMAD)"},
+                                   "gridcolor": "#e6e8eb", "tickformat": ",.0f",
+                                   "range": [0, float(salaires.max()) * 1.25]},
+                         "yaxis": {"autorange": "reversed"}})
         blocs.append(f'<div id="{cle}" class="graphe" style="height: 300px"></div>')
 
     html = f"""
@@ -250,8 +262,10 @@ nettement mieux que lui.</p>
 <p class="constat">{constat3}</p>
 
 <h2>4. De combien le diplôme change le salaire prédit</h2>
-<p class="lire">À métier, niveau, ancienneté, âge, notes et Hot job égaux, par rapport à la valeur la plus fréquente.
-Une barre proche de 0 veut dire que le diplôme ne change presque rien au salaire prédit.</p>
+<p class="lire">Pour chaque diplôme, on fait comme si tous les salariés l'avaient, sans rien changer d'autre (métier,
+niveau, ancienneté, âge, notes, Hot job), et on demande au modèle leur salaire. Chaque barre donne le salaire du
+milieu : la moitié des salariés auraient moins, l'autre moitié plus. <b>Des barres de même longueur</b> voudraient
+dire que le diplôme ne change pas le salaire prédit ; plus elles sont différentes, plus le diplôme pèse.</p>
 {"".join(blocs)}
 <p class="constat">{" ".join(phrases)}</p>"""
     return html, graphes
