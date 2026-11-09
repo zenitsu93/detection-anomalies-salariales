@@ -127,12 +127,32 @@
     return { x: uniques, y: ajuste };
   }
 
-  // Tranche d'ancienneté, les mêmes que pour les groupes de collègues de la détection (src/anomaly_pretraitement.py).
-  const TRANCHES = ['0-2', '3-5', '6-12', '13-20', '>20'];
-  function tranche(annees) {
-    if (!Number.isFinite(annees) || annees < 0) return null;
-    return annees <= 2 ? '0-2' : annees <= 5 ? '3-5' : annees <= 12 ? '6-12' : annees <= 20 ? '13-20' : '>20';
+  // Découpe une valeur en tranches écrites comme dans la présentation « Analyse prédictive des départs » (RPB, 30/08/2024),
+  // pour que la page parle la même langue que les supports habituels : « inf à 2 », « [2, 4[ », …, « sup à 14 ».
+  // « [2, 4[ » veut dire « de 2 compris à 4 non compris » : 3,9 ans tombe dans [2, 4[, 4 ans pile dans [4, 6[.
+  // « sup à 14 » prend tout ce qui vaut 14 ou plus, comme dans la présentation, où [12, 14[ s'arrête juste avant.
+  function libellesTranches(bornes) {
+    return [`inf à ${bornes[0]}`, ...bornes.slice(1).map((b, i) => `[${bornes[i]}, ${b}[`), `sup à ${bornes[bornes.length - 1]}`];
   }
+  function trancheDe(valeur, bornes, libelles) {
+    if (!Number.isFinite(valeur)) return null;   // case vide : aucune tranche, plutôt qu'une fausse
+    const i = bornes.findIndex(b => valeur < b);
+    return libelles[i < 0 ? bornes.length : i];
+  }
+
+  // Tranches d'ancienneté de 2 ans, celles de la présentation des départs (avant : 0-2, 3-5, 6-12, 13-20 et plus de 20,
+  // reprises des groupes de collègues de la détection). La détection, elle, garde ses propres tranches :
+  // src/anomaly_pretraitement.py n'est pas touché, seule la page change sa façon de regrouper.
+  const BORNES_ANCIENNETE = [2, 4, 6, 8, 10, 12, 14];
+  const TRANCHES = libellesTranches(BORNES_ANCIENNETE);
+  // Une ancienneté ou un âge négatif est une erreur de saisie : pas de tranche (comme avant pour l'ancienneté).
+  const tranche = annees => annees < 0 ? null : trancheDe(annees, BORNES_ANCIENNETE, TRANCHES);
+
+  // Tranches d'âge de 5 ans, celles de la présentation des départs. Elle s'arrêtait à [50, 55[ parce qu'elle ne comptait
+  // que des démissionnaires, souvent jeunes ; ici, tous les salariés sont comptés, donc les tranches vont jusqu'à 60.
+  const BORNES_AGE = [25, 30, 35, 40, 45, 50, 55, 60];
+  const TRANCHES_AGE = libellesTranches(BORNES_AGE);
+  const trancheAge = age => age < 0 ? null : trancheDe(age, BORNES_AGE, TRANCHES_AGE);
 
   // Position du salaire dans la fourchette du marché du métier + niveau (P25, médiane, P75).
   const POSITIONS_MARCHE = ['Sous le P25', 'Entre P25 et médiane', 'Entre médiane et P75', 'Au-dessus du P75'];
@@ -184,6 +204,7 @@
       };
       l.Age_Embauche = l.Age - l.Anciennete;
       l.Tranche_Anciennete = tranche(l.Anciennete);
+      l.Tranche_Age = trancheAge(l.Age);
       l.Compa_Ratio = l.Fixe_Annuel_MAD / l.Mid;
       l.Range_Penetration = (l.Fixe_Annuel_MAD - l.Min) / (l.Max - l.Min);
       l.Market_Ratio = l.Fixe_Annuel_MAD / l.Median;
@@ -232,7 +253,7 @@
 
   const api = {
     nombre, somme, moyenne, mediane, quantile, ecartType, asymetrie, correlation, histogramme, courbeLissee, droite, lowess,
-    TRANCHES, tranche, POSITIONS_MARCHE, positionMarche, COLONNES_REQUISES, colonnesManquantes, preparer, colonne, modalites, ordreParMediane,
+    libellesTranches, trancheDe, TRANCHES, tranche, TRANCHES_AGE, trancheAge, POSITIONS_MARCHE, positionMarche, COLONNES_REQUISES, colonnesManquantes, preparer, colonne, modalites, ordreParMediane,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else (racine.Exploration = racine.Exploration || {}).calculs = api;

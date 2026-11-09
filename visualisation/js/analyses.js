@@ -153,7 +153,8 @@
       { type: 'scatter', mode: 'lines', x: courbe.x, y: courbe.y, line: { color: K.BRUN, width: 3 }, name: 'Tendance non linéaire (Lowess)',
         hovertemplate: "Âge à l'embauche %{x}<br>tendance : %{y:.3f}<extra></extra>", xaxis: 'x2', yaxis: 'y2' },
     ];
-    Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: C.TRANCHES, title: titreAxe("Ancienneté (tranches d'années)") });
+    Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: C.TRANCHES, title: titreAxe("Ancienneté (tranches de 2 ans)") });
+    // Pourquoi « tranches de 2 ans » : les tranches suivent la présentation des départs (voir TRANCHES dans calculs.js).
     L.xaxis2.title = titreAxe("Âge à l'embauche (années)");
     for (const s of ['', '2']) { L['yaxis' + s].title = titreAxe('Compa-Ratio (Salaire / Mid)'); L.shapes.push(ligneH(s, 1, K.PALE)); }
     // Clic, dans l'ordre des courbes : boîte (la tranche, ou le salarié d'un point isolé), médianes (la tranche),
