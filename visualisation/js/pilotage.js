@@ -17,28 +17,37 @@
     const lignes = df.filter(l => F.garder(l, sel));
     const stats = C.modalites(lignes, 'Entite_N1').map(p => {
       const g = lignes.filter(l => l.Entite_N1 === p), sal = g.map(l => l.Fixe_Annuel_MAD).filter(Number.isFinite);
-      return { pole: String(p), n: g.length, masse: C.somme(sal), moyen: C.moyenne(sal) };
+      return { pole: String(p), n: g.length, masse: C.somme(sal), moyen: C.moyenne(sal), median: C.mediane(sal) };
     }).sort((a, b) => a.masse - b.masse);   // en barres horizontales, la dernière est en haut : le pôle le plus lourd
     const total = C.somme(stats.map(s => s.masse)), effectif = C.somme(stats.map(s => s.n));
     const y = stats.map(s => s.pole), masses = stats.map(s => s.masse / 1000);   // kMAD → millions de MAD
-    const L = grille({ colonnes: 3, espH: 0.06, titres: ['Effectif', 'SAR (millions de MAD)', 'Salaire moyen (kMAD)'] });
-    const barre = (s, x, textes, couleur) => ({ type: 'bar', orientation: 'h', y, x, text: textes, textposition: 'outside', cliponaxis: false,
-      textfont: { size: 11, color: K.ENCRE }, marker: { color: couleur }, showlegend: false, xaxis: 'x' + s, yaxis: 'y' + s,
-      hovertemplate: '%{y}<br><b>%{text}</b><extra></extra>' });
+    const L = grille({ colonnes: 3, espH: 0.06, titres: ['Effectif', 'SAR (millions de MAD)', 'Salaire moyen et médian (kMAD)'] });
+    // nom : le nom écrit dans la légende et au survol ; sans nom, la barre n'a pas besoin de légende (le titre du petit graphe suffit).
+    const barre = (s, x, textes, couleur, nom = '') => ({ type: 'bar', orientation: 'h', y, x, text: textes, textposition: 'outside', cliponaxis: false,
+      textfont: { size: 11, color: K.ENCRE }, marker: { color: couleur }, name: nom, showlegend: !!nom, xaxis: 'x' + s, yaxis: 'y' + s,
+      hovertemplate: `%{y}<br>${nom ? nom + ' : ' : ''}<b>%{text}</b><extra></extra>` });
     const traces = [
       barre('', stats.map(s => s.n), stats.map(s => `${fr(s.n)} · ${pct(s.n, effectif, 0)}`), K.ARDOISE),
       barre('2', masses, stats.map(s => `${fr(s.masse / 1000, 1)} · ${pct(s.masse, total, 0)}`), K.BRUN),
-      barre('3', stats.map(s => s.moyen), stats.map(s => fr(s.moyen, 1)), K.ARDOISE),
+      // Pourquoi la médiane à côté de la moyenne (point du 29/10/2026) : un seul très haut salaire tire la moyenne d'un pôle
+      // vers le haut, pas sa médiane. Quand les deux barres s'écartent, quelques salaires hors norme pèsent dans la moyenne.
+      // Couleurs de la page : ardoise pour la moyenne, cuivre pour la médiane (le brun est déjà pris par le SAR).
+      // La médiane est donnée avant la moyenne : en barres horizontales côte à côte, plotly dessine la première en bas, et la
+      // moyenne doit être en haut. legendrank remet la moyenne en premier dans la légende.
+      { ...barre('3', stats.map(s => s.median), stats.map(s => fr(s.median, 1)), K.CUIVRE, 'Salaire médian'), legendrank: 2 },
+      { ...barre('3', stats.map(s => s.moyen), stats.map(s => fr(s.moyen, 1)), K.ARDOISE, 'Salaire moyen'), legendrank: 1 },
     ];
+    L.barmode = 'group';   // la moyenne et la médiane d'un même pôle côte à côte ; les deux autres petits graphes n'ont qu'une barre par pôle
     // Les trois graphes partagent la liste des pôles : seuls les noms du premier sont écrits.
     Object.assign(L.yaxis, { type: 'category', showgrid: false });
     for (const s of ['2', '3']) Object.assign(L['yaxis' + s], { matches: 'y', showticklabels: false, showgrid: false });
     const plusGrand = v => Math.max(0, ...v.filter(Number.isFinite));
-    [['', stats.map(s => s.n)], ['2', masses], ['3', stats.map(s => s.moyen)]].forEach(([s, v]) =>
+    [['', stats.map(s => s.n)], ['2', masses], ['3', stats.flatMap(s => [s.moyen, s.median])]].forEach(([s, v]) =>
       Object.assign(L['xaxis' + s], { range: [0, plusGrand(v) * 1.45 || 1], showgrid: false, showticklabels: false }));
     // Clic sur une barre, dans l'un des trois graphes : les salariés du pôle.
     const clic = p => ({ titre: 'Pôle ' + p.y, lignes: lignes.filter(l => String(l.Entite_N1) === p.y) });
-    montrer('g-masse', traces, L, 150 + 46 * Math.max(4, stats.length), clic, F.libelle(sel));
+    // 56 px par pôle (au lieu de 46) : la ligne de chaque pôle porte maintenant deux barres de salaire, chacune avec son chiffre.
+    montrer('g-masse', traces, L, 150 + 56 * Math.max(4, stats.length), clic, F.libelle(sel));
     if (!stats.length) return constat('s-masse', 'Aucun salarié pour ce filtre.');
     // Les salariés sans salaire comptent dans l'effectif mais pas dans le SAR : le constat le dit.
     const sansSalaire = lignes.filter(l => !Number.isFinite(l.Fixe_Annuel_MAD)).length;
@@ -46,14 +55,15 @@
     const debut = `${F.libelle(sel)} : ${salaries(effectif)}${sansSalaire ? ` (dont ${fr(sansSalaire)} sans salaire renseigné)` : ''}, ${millions(total)} de SAR`;
     if (stats.length === 1) return constat('s-masse', `${debut}, tous dans le pôle ${echapper(stats[0].pole)}.`);
     // Le plus lourd et le plus cher se lisent sur les valeurs écrites dans le constat ; les ex aequo sont tous cités.
-    const lourd = extremes(stats, s => 100 * s.masse / total, 0), cher = extremes(stats, s => s.moyen, 1);
+    const lourd = extremes(stats, s => 100 * s.masse / total, 0), cher = extremes(stats, s => s.moyen, 1), cherMedian = extremes(stats, s => s.median, 1);
     const noms = t => enumerer(t.map(s => echapper(s.pole)));
     // Sans aucun salaire renseigné, le SAR est nul : il n'y a ni pôle le plus lourd ni salaire moyen à citer.
     const plusLourd = !lourd ? '' : lourd.haut.length > 1
       ? ` Pôles les plus lourds, à égalité : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} du SAR chacun).`
       : ` Pôle le plus lourd : ${noms(lourd.haut)} (${pct(lourd.haut[0].masse, total, 0)} du SAR, ${pct(lourd.haut[0].n, effectif, 0)} des effectifs).`;
     const plusCher = cher ? ` Salaire moyen le plus haut : ${noms(cher.haut)} (${fr(cher.haut[0].moyen, 1)} kMAD).` : '';
-    constat('s-masse', `${debut}.${plusLourd}${plusCher}`);
+    const plusCherMedian = cherMedian ? ` Salaire médian le plus haut : ${noms(cherMedian.haut)} (${fr(cherMedian.haut[0].median, 1)} kMAD).` : '';
+    constat('s-masse', `${debut}.${plusLourd}${plusCher}${plusCherMedian}`);
   }
 
   // ---------- Salaires hors grille par pôle et par niveau (filtrable par métier) ----------
