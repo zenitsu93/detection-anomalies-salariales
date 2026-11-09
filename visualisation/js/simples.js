@@ -186,5 +186,24 @@
     constat('s-femmes-hommes', debut + comparaison + signal);
   }
 
-  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes };
+  // ---------- hot-job : répartition des salariés selon la tension du métier ----------
+
+  // Les mêmes teintes que dans le graphe « Compétences et tension métier » : bleu = tension faible, cuivre = forte.
+  const TENSION = [K.BLEU, K.OR, K.CUIVRE];
+
+  function hotJob(df, sel) {
+    // Les valeurs de Hot_job sont lues dans le fichier entier, jamais supposées de 0 à 2 : la plus haute est la tension la plus forte.
+    const lignes = df.filter(l => F.garder(l, sel)), echelle = C.modalites(df, 'Hot_job'), groupes = grouper(lignes, echelle, l => l.Hot_job);
+    // Les parts restent dans l'ordre de l'échelle (de la tension la plus faible à la plus forte) : leur ordre a un sens.
+    repartition('hot-job', groupes, echelle.map(h => 'Hot_job ' + fr(h)),
+      { couleurs: echelle.length <= TENSION.length ? TENSION : TEINTES, trier: false, titreClic: '', sel });
+    const lib = F.libelle(sel), avec = compte(groupes), sans = lignes.length - avec;
+    if (!lignes.length) return constat('s-hot-job', 'Aucun salarié pour ce filtre.');
+    if (!avec) return constat('s-hot-job', `${lib} (${salaries(lignes.length)}) : Hot_job est vide.`);
+    const parts = echelle.map((h, i) => `Hot_job ${fr(h)} : ${pct(groupes[i].length, avec)}`).join(' · ');
+    const sens = echelle.length > 1 ? ` (${fr(echelle[0])} = tension la plus faible, ${fr(echelle[echelle.length - 1])} = la plus forte)` : '';
+    constat('s-hot-job', `${lib} (${salaries(avec)} avec un Hot_job${sans ? `, ${fr(sans)} sans` : ''}) : ${parts}${sens}.`);
+  }
+
+  E.simples = { effectifAge, effectifAnciennete, effectifNiveau, effectifMetier, femmesHommes, hotJob };
 })(window.Exploration = window.Exploration || {});
