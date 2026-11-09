@@ -74,6 +74,7 @@
     filtrer('f-salaire-sexe', df, { pole: true, metier: true }, sel => S.salaireSexe(df, sel));
     filtrer('f-tranches-salaire', df, { niveau: true, pole: true }, sel => S.salaireEnTranches(df, sel));
     filtrer('f-ecart-mid', df, { niveau: true, pole: true }, sel => S.ecartAuMid(df, sel));
+    filtrer('f-sous-min', df, { niveau: true, metier: true }, sel => S.sousMin(df, sel));
     // Analyses détaillées, reprises du notebook du comité.
     filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
     A.distribution(df, survol);
