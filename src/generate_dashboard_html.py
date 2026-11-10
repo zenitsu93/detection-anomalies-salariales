@@ -16,6 +16,12 @@ Il ne recalcule rien : il compte et affiche. Un clic sur une barre, un point ou 
 affiche les salariés concernés, avec un export Excel. Chaque tableau se filtre et se trie comme dans
 Excel : une recherche au-dessus, et un menu ▾ dans chaque en-tête de colonne.
 
+Chaque graphe a son menu « Diplôme », qui ne garde que les salariés d'un niveau d'études (BAC+5,
+BAC+3...) : le graphe et les listes ouvertes depuis lui suivent ce choix, les autres graphes non. Les
+chiffres clés et les données détaillées comptent toujours tous les salariés. Les nombres de chaque
+diplôme sont comptés ici, en Python, comme ceux de tous les salariés. Sans colonne de diplôme dans
+input/employes.xlsx, les menus n'apparaissent pas.
+
 Un salarié est « à traiter » si sa priorité est Critical, Major ou Minor : les « Info » n'ont rien à
 faire.
 
@@ -117,8 +123,20 @@ def virgule(x):
     return f"{x:.2f}".replace(".", ",")
 
 
-def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
-    """Compte ce que les graphiques affichent."""
+def ecarts_sexes(df: pd.DataFrame) -> pd.DataFrame:
+    """Les écarts hommes / femmes d'une partie des salariés (gender_gap_analysis).
+
+    Pourquoi ce détour : avec un seul diplôme choisi, il peut ne rester que des femmes ou que des
+    hommes ; gender_gap_analysis s'arrêterait alors sur une erreur. Il n'y a dans ce cas aucun écart
+    à montrer : le tableau rendu est vide."""
+    if not {"F", "M"} <= set(df["Sexe"].dropna()):
+        return pd.DataFrame(columns=["Job_Family", "Niveau", "Median_F", "Median_M", "M_div_F"])
+    return gender_gap_analysis(df)
+
+
+def compter(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
+    """Compte ce que les chiffres clés, les graphiques et les « Données détaillées » affichent, pour
+    les salariés de df (tous, ou ceux d'un seul diplôme)."""
     a_traiter = df["Severity"] != "Info"
     flags = df["Rule_Flags"].str.split(";").explode()
     flags = flags[flags != ""].value_counts()
@@ -143,17 +161,15 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
     # Tous les écarts hommes / femmes (le choix des 10 plus marqués ou d'un niveau se fait dans la page),
     # avec le nombre de femmes et d'hommes : un écart sur 3 personnes ne pèse pas comme un écart sur 300.
     # Un métier + niveau sans femme ou sans homme n'a pas d'écart : il est écarté.
-    effectifs = df.groupby(["Job_Family", "Niveau", "Sexe"]).size().unstack(fill_value=0).reset_index()
+    # reindex : les colonnes F et M existent même si un groupe n'a que des femmes ou que des hommes.
+    effectifs = (df.groupby(["Job_Family", "Niveau", "Sexe"]).size().unstack(fill_value=0)
+                 .reindex(columns=["F", "M"], fill_value=0).reset_index())
     gap = gg.dropna(subset=["M_div_F"]).merge(effectifs, on=["Job_Family", "Niveau"])
     gap["Ecart_pct"] = (gap["M_div_F"] - 1) * 100
     gap = gap[["Job_Family", "Niveau", "Median_F", "Median_M", "F", "M", "Ecart_pct"]]
     gap = gap.round({"Median_F": 2, "Median_M": 2, "Ecart_pct": 1})
 
-    # La liste des salariés : cases vides en None, sinon le JSON serait invalide.
-    rec = df[list(COL_FR)].round(2)
-    rec = rec.astype(object).where(rec.notna(), None)
-
-    return {
+    vue = {
         "kpis": {
             "effectif": len(df),
             "a_traiter": int(a_traiter.sum()),
@@ -172,42 +188,72 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
         "cost": {"labels": cost.index.tolist(), "data": cost.round(1).tolist(),
                  "datasets": [{"code": code, "label": nom, "color": couleur,
                                "data": cout_action[code].round(1).tolist(), "n": nb_action[code].astype(int).tolist()}
-                              for code, (nom, couleur) in ACTIONS.items()],
-                 # Le seuil bas de la règle CompaRatio, cité dans la note sous le graphique.
-                 "seuil": virgule(rule_params["compa_ratio_low"])},
+                              for code, (nom, couleur) in ACTIONS.items()]},
         "flags": {"labels": [FLAG_FR.get(f, f) for f in flags.index], "codes": flags.index.tolist(),
                   "data": flags.tolist()},
         "scores": {"labels": [f"{b}-{b + 10}" for b in range(0, 100, 10)], "datasets": scores},
         "gap": gap.to_dict("records"),
+    }
+    p, c = vue["pole"], vue["cost"]
+    # Les tableaux des « Données détaillées » partent en JSON (titre, colonnes, lignes) et non en HTML
+    # tout fait : la page les dessine elle-même, avec la même recherche et les mêmes filtres que la liste
+    # des salariés. Pas de tableau des écarts hommes / femmes (le graphique par niveau le remplace) ni du
+    # score général (ses trois courbes et leur infobulle donnent déjà les nombres).
+    vue["tables"] = [
+        {"title": titre, "cols": entetes, "rows": [list(ligne) for ligne in lignes]}
+        for titre, entetes, lignes in [
+            ("Anomalies à traiter par pôle", ["Pôle"] + [d["label"] for d in p["datasets"]],
+             zip(p["labels"], *[d["data"] for d in p["datasets"]])),
+            ("Top métiers", ["Métier", "Salariés à traiter"], zip(vue["job"]["labels"], vue["job"]["data"])),
+            ("Coût par pôle et par action", ["Pôle"] + [d["label"] for d in c["datasets"]] + [f"Total ({UNITE})"],
+             zip(c["labels"], *[d["data"] for d in c["datasets"]], c["data"])),
+            ("Signaux déclencheurs", ["Signal", "Salariés"], zip(vue["flags"]["labels"], vue["flags"]["data"])),
+        ]
+    ]
+    return vue
+
+
+def diplomes_presents(df: pd.DataFrame) -> list:
+    """Les niveaux d'études du fichier, du plus bas au plus haut (rang 0 à 7), puis ceux sans rang
+    (NON DETERMINE...) par ordre alphabétique. Liste vide si le fichier n'a pas de diplôme."""
+    rangs = df.dropna(subset=["Niveau_Etude_Max"]).groupby("Niveau_Etude_Max")["Rang_Etude_Max"].first()
+    return sorted(rangs.index, key=lambda n: (pd.isna(rangs[n]), 0 if pd.isna(rangs[n]) else rangs[n], n))
+
+
+def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
+    """Compte ce que le tableau de bord affiche : une fois pour tous les salariés (la vue « »), puis
+    une fois par diplôme, pour le menu « Diplôme » de chaque graphe.
+
+    Pourquoi tout compter ici plutôt que dans la page : les nombres d'un diplôme sont faits par le même
+    code Python que ceux de tous les salariés ; on ne peut pas avoir deux façons de compter qui ne
+    donneraient pas tout à fait le même résultat."""
+    diplomes = diplomes_presents(df)
+    vues = {"": compter(df, gg, rule_params)}
+    for diplome in diplomes:
+        partie = df[df["Niveau_Etude_Max"] == diplome]
+        vues[diplome] = compter(partie, ecarts_sexes(partie), rule_params)
+
+    # La liste des salariés : cases vides en None, sinon le JSON serait invalide.
+    rec = df[list(COL_FR)].round(2)
+    rec = rec.astype(object).where(rec.notna(), None)
+
+    return {
+        "vues": vues,
+        "diplomes": diplomes,
+        # Le seuil bas de la règle CompaRatio, cité dans la note sous le graphique du coût.
+        "seuil": virgule(rule_params["compa_ratio_low"]),
         "records": {"cols": list(COL_FR), "rows": rec.values.tolist()},
     }
 
 
 def build_html(data: dict, maintenant: datetime) -> str:
-    kpis = data["kpis"]
+    kpis = data["vues"][""]["kpis"]
     # Un « < » dans un libellé ne doit pas pouvoir fermer la balise <script>.
     data_json = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
     names_json = json.dumps({"cols": COL_FR, "flags": FLAG_FR, "sev": SEVERITY_FR}, ensure_ascii=False).replace("<", "\\u003c")
     # La même heure que dans le nom du fichier.
     generated = maintenant.strftime("%d/%m/%Y à %H:%M")
     pct = kpis["a_traiter"] / kpis["effectif"] * 100 if kpis["effectif"] else 0.0
-
-    p, c = data["pole"], data["cost"]
-    # Les tableaux des « Données détaillées » partent en JSON (titre, colonnes, lignes) et non plus en
-    # HTML tout fait : la page les dessine elle-même, avec la même recherche et les mêmes filtres que la
-    # liste des salariés. Pas de tableau des écarts hommes / femmes (le graphique par niveau le remplace)
-    # ni du score général (ses trois courbes et leur infobulle donnent déjà les nombres).
-    tables_json = json.dumps([
-        {"title": titre, "cols": entetes, "rows": list(lignes)}
-        for titre, entetes, lignes in [
-            ("Anomalies à traiter par pôle", ["Pôle"] + [d["label"] for d in p["datasets"]],
-             zip(p["labels"], *[d["data"] for d in p["datasets"]])),
-            ("Top métiers", ["Métier", "Salariés à traiter"], zip(data["job"]["labels"], data["job"]["data"])),
-            ("Coût par pôle et par action", ["Pôle"] + [d["label"] for d in c["datasets"]] + [f"Total ({UNITE})"],
-             zip(c["labels"], *[d["data"] for d in c["datasets"]], c["data"])),
-            ("Signaux déclencheurs", ["Signal", "Salariés"], zip(data["flags"]["labels"], data["flags"]["data"])),
-        ]
-    ], ensure_ascii=False).replace("<", "\\u003c")
     plotly_js = (VENDOR / "plotly.min.js").read_text(encoding="utf-8")
     xlsx_js = (VENDOR / "xlsx.full.min.js").read_text(encoding="utf-8")
 
@@ -248,6 +294,12 @@ main {{ max-width: 1320px; margin: auto; padding: 24px 32px 32px; }}
 .crumb {{ font-size: 12px; color: var(--faint); margin-bottom: 2px; }}
 h1 {{ font-size: 22px; font-weight: 600; }}
 .page-hint {{ font-size: 13px; color: var(--muted); text-align: right; }}
+/* Filtre « Diplôme », en haut de chaque graphe : il ne vaut que pour ce graphe. */
+.filtre-graphe {{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; }}
+.filtre-graphe label {{ font-size: 12px; font-weight: 600; color: var(--muted); }}
+.filtre-graphe select {{ font: 13px var(--font); height: 30px; padding: 0 6px; color: var(--ink); background: var(--panel);
+  border: 1px solid #c4c9cf; border-radius: var(--radius); }}
+.filtre-compte {{ font-size: 12px; font-weight: 600; color: var(--brand-dark); }}
 
 .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }}
 .panel-head {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px;
@@ -324,6 +376,9 @@ button:disabled {{ opacity: .5; cursor: default; }}
 
 .overlay {{ position: fixed; inset: 0; background: rgba(31,35,40,.45); display: flex; align-items: flex-start; justify-content: center; padding: 5vh 16px; z-index: 50; }}
 .overlay[hidden] {{ display: none; }}
+/* Arrivé en haut ou en bas du tableau, la molette s'arrête là au lieu de faire défiler la page derrière. */
+.list-open, .list-open body {{ overflow: hidden; }}
+.overlay, .overlay .table-wrap, .tv-menu, .tv-values {{ overscroll-behavior: contain; }}
 .overlay .panel {{ width: 100%; max-width: 1100px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.2); }}
 .overlay h3 {{ font-size: 15px; font-weight: 600; }}
 .overlay .sub {{ font-size: 12px; color: var(--muted); }}
@@ -336,7 +391,7 @@ button:disabled {{ opacity: .5; cursor: default; }}
 button {{ font: 500 13px var(--font); height: 32px; padding: 0 12px; background: var(--panel); color: var(--ink);
   border: 1px solid #c4c9cf; border-radius: var(--radius); cursor: pointer; }}
 button:hover {{ background: var(--panel-head); border-color: var(--faint); }}
-button:focus-visible, summary:focus-visible, input:focus-visible {{ outline: 2px solid var(--brand); outline-offset: 2px; }}
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible {{ outline: 2px solid var(--brand); outline-offset: 2px; }}
 
 footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }}
 
@@ -405,7 +460,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
       <div class="panel-head"><h2 class="panel-title">Coût d'ajustement par pôle et par action</h2><span class="panel-unit">{UNITE}</span></div>
       <div class="panel-body"><div class="graphe" id="chart-cost"></div>
         <p class="note">Remise au Min : salaires sous le Min de la grille. Rapprochement du Mid : salaires trop bas
-          dans la grille (CompaRatio sous {c['seuil']}).</p></div>
+          dans la grille (CompaRatio sous {data['seuil']}).</p></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">Signaux déclencheurs</h2><span class="panel-unit">salariés</span></div>
@@ -451,7 +506,6 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 const DATA = {data_json};
 const NAMES = {names_json};
 const STATUS = {json.dumps(STATUS)};
-const TABLES = {tables_json};
 
 // ---- Liste des salariés concernés (clic sur une barre, un point ou un nombre de priorité) ----
 const RCOLS = DATA.records.cols, RROWS = DATA.records.rows, RIDX = {{}};
@@ -459,6 +513,12 @@ RCOLS.forEach((c, i) => RIDX[c] = i);
 const MAX_ROWS_SHOWN = 300;
 const NUM = new Intl.NumberFormat('fr-FR', {{ maximumFractionDigits: 2 }});
 const aTraiter = r => r[RIDX.Severity] !== 'Info';
+
+// ---- Filtre « Diplôme » de chaque graphe ----
+// Les nombres de tous les salariés (vue « »), puis ceux de chaque diplôme, sont comptés en Python (voir
+// build_data). choix : le diplôme choisi dans le menu de chaque graphe (« » ou absent = tous).
+const TOUS = DATA.vues[''], choix = {{}};
+const vueDe = id => DATA.vues[choix[id] || ''];
 
 const overlay = document.getElementById('panel-overlay');
 const panelTitle = document.getElementById('panel-title');
@@ -470,7 +530,9 @@ overlay.addEventListener('click', e => {{ if (e.target === overlay) closePanel()
 // Échap ferme d'abord le menu d'une colonne s'il est ouvert, et seulement ensuite la liste.
 document.addEventListener('keydown', e => {{ if (e.key === 'Escape') {{ if (menu) closeMenu(true); else closePanel(); }} }});
 
-function closePanel() {{ overlay.hidden = true; }}
+// Liste ouverte : la page derrière ne défile plus (classe list-open, voir le style). Sans ça, la molette
+// faisait défiler le tableau de bord sous la liste dès que le tableau arrivait en bas.
+function closePanel() {{ overlay.hidden = true; document.documentElement.classList.remove('list-open'); }}
 
 function escapeText(value) {{
   const cell = document.createElement('span');
@@ -492,8 +554,11 @@ function cellHtml(col, v) {{
   return typeof v === 'number' ? '<td class="num">' + text + '</td>' : '<td>' + text + '</td>';
 }}
 
-function showPopulation(title, predicate) {{
-  const matches = RROWS.filter(predicate);
+// diplome : celui choisi dans le menu du graphe cliqué (« » = tous). La liste ne garde que ses salariés,
+// comme le graphe, et le rappelle dans son titre et dans le nom du fichier exporté.
+function showPopulation(title, predicate, diplome = '') {{
+  const matches = RROWS.filter(r => (!diplome || r[RIDX.Niveau_Etude_Max] === diplome) && predicate(r));
+  if (diplome) title += ' · ' + diplome;
   lastTitle = title;
   panelTitle.textContent = title;
   panelSub.textContent = NUM.format(matches.length) + ' salarié(s) concerné(s)';
@@ -508,6 +573,7 @@ function showPopulation(title, predicate) {{
   // Un graphe en plein écran cache tout le reste de la page : la liste s'ouvre alors par-dessus lui.
   (document.fullscreenElement || document.body).appendChild(overlay);
   overlay.hidden = false;
+  document.documentElement.classList.add('list-open');
 }}
 
 // Export Excel des lignes gardées par la recherche et les filtres, dans l'ordre du tri, TOUTES (même
@@ -679,8 +745,9 @@ function tableView(box, cols, rows, limit) {{
 }}
 
 // ---- Données détaillées : un tableau repliable par graphique ----
-// Ces tableaux sont courts : toutes leurs lignes sont dessinées (pas de limite).
-TABLES.forEach(t => {{
+// Ces tableaux sont courts : toutes leurs lignes sont dessinées (pas de limite). Ils comptent tous les
+// salariés, quel que soit le diplôme choisi dans les graphes.
+TOUS.tables.forEach(t => {{
   const d = document.createElement('details');
   d.className = 'data-toggle';
   d.innerHTML = '<summary>' + escapeText(t.title) + '</summary><div></div>';
@@ -719,7 +786,9 @@ const H_POLE = 260, H_RANGEE = 400;
 const mesure = document.createElement('canvas').getContext('2d');
 mesure.font = '12px ' + POLICE;
 const largeur = textes => Math.ceil(Math.max(0, ...textes.map(t => mesure.measureText(String(t)).width)));
-const MARGE_G = largeur([...DATA.pole.labels, ...DATA.job.labels, ...DATA.cost.labels, ...DATA.flags.labels]) + 24;
+// Pourquoi mesurée sur tous les diplômes : les barres ne se décalent pas quand on change de diplôme.
+const VUES = Object.values(DATA.vues);
+const MARGE_G = largeur(VUES.flatMap(v => [...v.pole.labels, ...v.job.labels, ...v.cost.labels, ...v.flags.labels])) + 24;
 
 // En plein écran, le graphe prend toute la hauteur que lui laisse son panneau (voir « Agrandir », plus bas).
 const hauteurDisponible = div => Math.max(360, Math.floor(div.getBoundingClientRect().height));
@@ -756,76 +825,85 @@ function barresH(categories, hauteur, L = {{}}) {{
   }};
 }}
 
-// Une barre par pôle, découpée par priorité ; une priorité sans aucun salarié n'est pas affichée.
-const poleSets = DATA.pole.datasets.filter(d => d.data.some(v => v > 0));
-dessiner('chart-pole', poleSets.map(d => ({{
-  type: 'bar', orientation: 'h', name: d.label, y: DATA.pole.labels, x: d.data, marker: {{ color: d.color }},
-  hovertemplate: '%{{y}} · ' + d.label + '<br><b>%{{x:,}} salariés</b><extra></extra>',
-}})), barresH(DATA.pole.labels, H_POLE), H_POLE, p => {{
-  const pole = DATA.pole.labels[p.pointNumber], sev = poleSets[p.curveNumber];
-  showPopulation(pole + ' — ' + sev.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Severity] === sev.code);
-}});
-
-dessiner('chart-job', [{{
-  type: 'bar', orientation: 'h', y: DATA.job.labels, x: DATA.job.data, marker: {{ color: '{SLATE}' }},
-  hovertemplate: '%{{y}}<br><b>%{{x:,}} salariés à traiter</b><extra></extra>',
-}}], barresH(DATA.job.labels, H_RANGEE), H_RANGEE, p => {{
-  const label = DATA.job.labels[p.pointNumber];
-  showPopulation('Métier : ' + label, r => r[RIDX.Job_Family] === label && aTraiter(r));
-}});
-
-// Une barre par pôle, découpée par action : on voit ce que coûte chaque cible d'ajustement.
-const costSets = DATA.cost.datasets;
-dessiner('chart-cost', costSets.map(d => ({{
-  type: 'bar', orientation: 'h', name: d.label, y: DATA.cost.labels, x: d.data, customdata: d.n, marker: {{ color: d.color }},
-  hovertemplate: '%{{y}} · ' + d.label + '<br><b>%{{x:,.1f}} {UNITE}</b> (%{{customdata:,}} salariés)<extra></extra>',
-}})), barresH(DATA.cost.labels, H_RANGEE), H_RANGEE, p => {{
-  const pole = DATA.cost.labels[p.pointNumber], action = costSets[p.curveNumber];
-  showPopulation(pole + ' — ' + action.label, r => r[RIDX.Entite_N1] === pole && r[RIDX.Reco] === action.code);
-}});
-
-dessiner('chart-flags', [{{
-  type: 'bar', orientation: 'h', y: DATA.flags.labels, x: DATA.flags.data, customdata: DATA.flags.codes, marker: {{ color: '{SLATE}' }},
-  hovertemplate: '%{{y}} (%{{customdata}})<br><b>%{{x:,}} salariés</b><extra></extra>',
-}}], barresH(DATA.flags.labels, H_RANGEE, {{ margin: {{ b: MARGE_TITRE }} }}), H_RANGEE, p => {{
-  const code = DATA.flags.codes[p.pointNumber];
-  showPopulation('Signal : ' + DATA.flags.labels[p.pointNumber], r => r[RIDX.Rule_Flags].split(';').includes(code));
-}});
-
 // Une courbe par score : combien de salariés tombent dans chaque tranche de 10 points.
 const tranche = v => Math.min(Math.floor(v / 10), 9);
-const tranches = DATA.scores.labels.map((_, i) => i < 9 ? 'de ' + i * 10 + ' à moins de ' + (i * 10 + 10) : 'de 90 à 100');
-dessiner('chart-risk', DATA.scores.datasets.map((s, k) => ({{
-  type: 'scatter', mode: 'lines+markers', name: s.label, x: DATA.scores.labels, y: s.data, customdata: tranches,
-  // Le score général (le premier), celui qui fixe la priorité, en trait plus épais.
-  line: {{ color: s.color, width: k ? 2 : 3 }}, marker: {{ color: s.color, size: k ? 8 : 10, line: {{ color: '#fff', width: 2 }} }},
-  hovertemplate: s.label + ' %{{customdata}}<br><b>%{{y:,}} salariés</b><extra></extra>',
-}})), {{
-  xaxis: {{ ...AXE, type: 'category', showgrid: false, title: titreAxe('Score sur 100, par tranche de 10 points') }},
-  yaxis: {{ ...AXE, rangemode: 'tozero', tickformat: ',d', title: titreAxe('Nombre de salariés') }},
-  margin: {{ l: 72, b: MARGE_TITRE }},
-}}, H_RANGEE, p => {{
-  const s = DATA.scores.datasets[p.curveNumber];
-  showPopulation(s.label + ' ' + DATA.scores.labels[p.pointNumber], r => tranche(r[RIDX[s.code]]) === p.pointNumber);
-}});
+const tranches = DATA.vues[''].scores.labels.map((_, i) => i < 9 ? 'de ' + i * 10 + ' à moins de ' + (i * 10 + 10) : 'de 90 à 100');
+
+// Une fonction de dessin par graphe, avec les nombres du diplôme choisi dans SON menu (vueDe). Elle est
+// relancée quand ce menu change : le nouveau dessin remplace l'ancien, avec son clic. d : le diplôme
+// choisi, transmis à la liste des salariés ouverte au clic.
+const GRAPHES = {{
+  // Une barre par pôle, découpée par priorité ; une priorité sans aucun salarié n'est pas affichée.
+  'chart-pole': () => {{
+    const pole = vueDe('chart-pole').pole, d = choix['chart-pole'];
+    const poleSets = pole.datasets.filter(s => s.data.some(v => v > 0));
+    dessiner('chart-pole', poleSets.map(s => ({{
+      type: 'bar', orientation: 'h', name: s.label, y: pole.labels, x: s.data, marker: {{ color: s.color }},
+      hovertemplate: '%{{y}} · ' + s.label + '<br><b>%{{x:,}} salariés</b><extra></extra>',
+    }})), barresH(pole.labels, H_POLE), H_POLE, p => {{
+      const nom = pole.labels[p.pointNumber], sev = poleSets[p.curveNumber];
+      showPopulation(nom + ' — ' + sev.label, r => r[RIDX.Entite_N1] === nom && r[RIDX.Severity] === sev.code, d);
+    }});
+  }},
+
+  'chart-job': () => {{
+    const job = vueDe('chart-job').job, d = choix['chart-job'];
+    dessiner('chart-job', [{{
+      type: 'bar', orientation: 'h', y: job.labels, x: job.data, marker: {{ color: '{SLATE}' }},
+      hovertemplate: '%{{y}}<br><b>%{{x:,}} salariés à traiter</b><extra></extra>',
+    }}], barresH(job.labels, H_RANGEE), H_RANGEE, p => {{
+      const label = job.labels[p.pointNumber];
+      showPopulation('Métier : ' + label, r => r[RIDX.Job_Family] === label && aTraiter(r), d);
+    }});
+  }},
+
+  // Une barre par pôle, découpée par action : on voit ce que coûte chaque cible d'ajustement.
+  'chart-cost': () => {{
+    const cost = vueDe('chart-cost').cost, d = choix['chart-cost'], costSets = cost.datasets;
+    dessiner('chart-cost', costSets.map(s => ({{
+      type: 'bar', orientation: 'h', name: s.label, y: cost.labels, x: s.data, customdata: s.n, marker: {{ color: s.color }},
+      hovertemplate: '%{{y}} · ' + s.label + '<br><b>%{{x:,.1f}} {UNITE}</b> (%{{customdata:,}} salariés)<extra></extra>',
+    }})), barresH(cost.labels, H_RANGEE), H_RANGEE, p => {{
+      const nom = cost.labels[p.pointNumber], action = costSets[p.curveNumber];
+      showPopulation(nom + ' — ' + action.label, r => r[RIDX.Entite_N1] === nom && r[RIDX.Reco] === action.code, d);
+    }});
+  }},
+
+  'chart-flags': () => {{
+    const flags = vueDe('chart-flags').flags, d = choix['chart-flags'];
+    dessiner('chart-flags', [{{
+      type: 'bar', orientation: 'h', y: flags.labels, x: flags.data, customdata: flags.codes, marker: {{ color: '{SLATE}' }},
+      hovertemplate: '%{{y}} (%{{customdata}})<br><b>%{{x:,}} salariés</b><extra></extra>',
+    }}], barresH(flags.labels, H_RANGEE, {{ margin: {{ b: MARGE_TITRE }} }}), H_RANGEE, p => {{
+      const code = flags.codes[p.pointNumber];
+      showPopulation('Signal : ' + flags.labels[p.pointNumber], r => r[RIDX.Rule_Flags].split(';').includes(code), d);
+    }});
+  }},
+
+  'chart-risk': () => {{
+    const scores = vueDe('chart-risk').scores, d = choix['chart-risk'];
+    dessiner('chart-risk', scores.datasets.map((s, k) => ({{
+      type: 'scatter', mode: 'lines+markers', name: s.label, x: scores.labels, y: s.data, customdata: tranches,
+      // Le score général (le premier), celui qui fixe la priorité, en trait plus épais.
+      line: {{ color: s.color, width: k ? 2 : 3 }}, marker: {{ color: s.color, size: k ? 8 : 10, line: {{ color: '#fff', width: 2 }} }},
+      hovertemplate: s.label + ' %{{customdata}}<br><b>%{{y:,}} salariés</b><extra></extra>',
+    }})), {{
+      xaxis: {{ ...AXE, type: 'category', showgrid: false, title: titreAxe('Score sur 100, par tranche de 10 points') }},
+      yaxis: {{ ...AXE, rangemode: 'tozero', tickformat: ',d', title: titreAxe('Nombre de salariés') }},
+      margin: {{ l: 72, b: MARGE_TITRE }},
+    }}, H_RANGEE, p => {{
+      const s = scores.datasets[p.curveNumber];
+      showPopulation(s.label + ' ' + scores.labels[p.pointNumber], r => tranche(r[RIDX[s.code]]) === p.pointNumber, d);
+    }});
+  }},
+}};
 
 // ---- Écarts hommes / femmes : les 10 plus marqués, puis un bouton par niveau ----
-const GAP = DATA.gap;
 const plural = (n, mot) => n + ' ' + mot + (n > 1 ? 's' : '');
 const pctText = v => (v > 0 ? '+' : '') + NUM.format(v) + ' %';
 const gapName = (r, avecNiveau) => r.Job_Family + (avecNiveau ? ' · niveau ' + r.Niveau : '');
-// La même échelle pour toutes les vues : deux barres de même longueur montrent le même écart, d'un
-// niveau à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
-// arrondir à 20 près garde des graduations régulières (-40 %, -20 %, 0 %...).
-const gapMax = Math.ceil(Math.max(...GAP.map(r => Math.abs(r.Ecart_pct))) * 1.2 / 20) * 20;
-const graduations = [];
-for (let v = -gapMax; v <= gapMax; v += 20) graduations.push(v);
-const gapViews = [{{ name: 'Les 10 plus marqués', rows: [...GAP].sort((a, b) => Math.abs(b.Ecart_pct) - Math.abs(a.Ecart_pct)).slice(0, 10) }}]
-  .concat([...new Set(GAP.map(r => r.Niveau))].sort((a, b) => a - b).map(g => ({{
-    // Dans un niveau, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
-    name: 'Niveau ' + g, niveau: g, rows: GAP.filter(r => r.Niveau === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
-  }})));
-let gapRows = [];
+// Recalculés quand le menu « Diplôme » de ce graphe change (voir GRAPHES['chart-gap']).
+let gapMax = 20, graduations = [], gapViews = [], viewButtons = [], gapRows = [];
 // Deux lignes devant chaque barre : le métier (et le niveau s'ils sont mélangés), puis les effectifs.
 const effectifs = r => plural(r.F, 'femme') + ' · ' + plural(r.M, 'homme');
 const gapSurvol = r => '<b>' + escapeText(gapName(r, true)) + '</b>'
@@ -833,7 +911,8 @@ const gapSurvol = r => '<b>' + escapeText(gapName(r, true)) + '</b>'
   + '<br>Médiane hommes : ' + NUM.format(r.Median_M) + ' {UNITE} (' + plural(r.M, 'homme') + ')'
   + '<br>Les hommes touchent ' + NUM.format(Math.abs(r.Ecart_pct)) + ' % de ' + (r.Ecart_pct < 0 ? 'moins' : 'plus') + ' que les femmes';
 // La marge gauche se règle sur le plus long nom de toutes les vues : le zéro ne bouge pas quand on change de vue.
-const MARGE_GAP = largeur(GAP.flatMap(r => [gapName(r, true), effectifs(r)])) + 24;
+// Mesurée sur tous les diplômes, pour la même raison.
+const MARGE_GAP = largeur(VUES.flatMap(v => v.gap.flatMap(r => [gapName(r, true), effectifs(r)]))) + 24;
 
 function showGapView(view, button) {{
   gapRows = view.rows;
@@ -855,21 +934,63 @@ function showGapView(view, button) {{
       // La légende au-dessus du zéro : or à gauche, ardoise à droite, comme les barres.
       legend: {{ x: 0.5, xanchor: 'center' }},
       margin: {{ l: MARGE_GAP, b: MARGE_TITRE }},
+      // Avec un seul diplôme, il peut n'y avoir aucun métier + niveau où comparer femmes et hommes.
+      annotations: gapRows.length ? [] : [{{ text: 'Aucun métier + niveau ne compte à la fois des femmes et des hommes pour ce diplôme.',
+        showarrow: false, xref: 'paper', yref: 'paper', x: 0.5, y: 0.5, font: {{ size: 13, color: GRIS }} }}],
     }}), h, p => {{
       const r = gapRows[p.customdata];
-      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Niveau] === r.Niveau);
+      showPopulation(gapName(r, true), x => x[RIDX.Job_Family] === r.Job_Family && x[RIDX.Niveau] === r.Niveau, choix['chart-gap']);
     }});
   viewButtons.forEach(b => b.setAttribute('aria-pressed', b === button));
 }}
-const viewButtons = gapViews.map(view => {{
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.textContent = view.name;
-  b.addEventListener('click', () => showGapView(view, b));
-  document.getElementById('gap-views').appendChild(b);
-  return b;
+// Les vues des écarts (les 10 plus marqués, puis une par niveau) et leurs boutons, pour le diplôme choisi.
+// La vue affichée reste la même quand on change de diplôme, si elle existe encore.
+GRAPHES['chart-gap'] = () => {{
+  const GAP = vueDe('chart-gap').gap, avant = viewButtons.find(b => b.getAttribute('aria-pressed') === 'true');
+  // La même échelle pour toutes les vues : deux barres de même longueur montrent le même écart, d'un
+  // niveau à l'autre. La marge de 20 % laisse la place d'écrire l'écart au bout de la plus longue barre ;
+  // arrondir à 20 près garde des graduations régulières (-40 %, -20 %, 0 %...). Au moins ±20 %, pour
+  // garder une échelle quand il n'y a aucun écart.
+  gapMax = Math.max(20, Math.ceil(Math.max(0, ...GAP.map(r => Math.abs(r.Ecart_pct))) * 1.2 / 20) * 20);
+  graduations = [];
+  for (let v = -gapMax; v <= gapMax; v += 20) graduations.push(v);
+  gapViews = [{{ name: 'Les 10 plus marqués', rows: [...GAP].sort((a, b) => Math.abs(b.Ecart_pct) - Math.abs(a.Ecart_pct)).slice(0, 10) }}]
+    .concat([...new Set(GAP.map(r => r.Niveau))].sort((a, b) => a - b).map(g => ({{
+      // Dans un niveau, du plus favorable aux hommes (en haut) au plus favorable aux femmes (en bas).
+      name: 'Niveau ' + g, niveau: g, rows: GAP.filter(r => r.Niveau === g).sort((a, b) => b.Ecart_pct - a.Ecart_pct),
+    }})));
+  const zone = document.getElementById('gap-views');
+  zone.innerHTML = '';
+  viewButtons = gapViews.map(view => {{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = view.name;
+    b.addEventListener('click', () => showGapView(view, b));
+    zone.appendChild(b);
+    return b;
+  }});
+  const k = Math.max(0, gapViews.findIndex(v => avant && v.name === avant.textContent));
+  showGapView(gapViews[k], viewButtons[k]);
+}};
+
+// Le menu « Diplôme » de chaque graphe, posé en haut de son panneau, avec le nombre de salariés gardés.
+// Pas de menu si le fichier des salariés n'a pas de diplôme.
+const OPTIONS = '<option value="">Tous les diplômes</option>'
+  + DATA.diplomes.map(d => '<option value="' + escapeText(d).replace(/"/g, '&quot;') + '">' + escapeText(d) + '</option>').join('');
+if (DATA.diplomes.length) Object.keys(GRAPHES).forEach(id => {{
+  const corps = document.getElementById(id).closest('.panel-body'), barre = document.createElement('div');
+  barre.className = 'filtre-graphe';
+  barre.innerHTML = '<label for="diplome-' + id + '">Diplôme</label><select id="diplome-' + id + '">' + OPTIONS + '</select>'
+    + '<span class="filtre-compte" aria-live="polite"></span>';
+  corps.prepend(barre);
+  const menuDiplome = barre.querySelector('select'), compte = barre.querySelector('.filtre-compte');
+  menuDiplome.addEventListener('change', () => {{
+    choix[id] = menuDiplome.value;
+    compte.textContent = choix[id] ? NUM.format(vueDe(id).kpis.effectif) + ' salariés sur ' + NUM.format(TOUS.kpis.effectif) : '';
+    GRAPHES[id]();
+  }});
 }});
-showGapView(gapViews[0], viewButtons[0]);
+Object.values(GRAPHES).forEach(dessin => dessin());
 
 // ---- Agrandir un graphe en plein écran : le même bouton que dans la page d'exploration ----
 // En plein écran, le graphe prend toute la hauteur disponible ; « Réduire » ou la touche Échap ramène à la page.
