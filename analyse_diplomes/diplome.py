@@ -304,7 +304,12 @@ def partie_ia(df, rule_params):
     """Pour chaque tranche de diplôme, la part des salariés qui sont parmi les plus atypiques pour l'IA,
     sans puis avec le diplôme (partie 5) : le HTML de la partie et son graphe."""
     df, categories = encoder_categories(df)
-    print("IA : détection avec l'IA habituelle...")
+    # Pourquoi forcer l'Isolation Forest : cette partie compare l'Isolation Forest sans et avec le diplôme.
+    # Depuis le 10/11/2026, la détection regarde par défaut l'écart au salaire attendu (ml_methode), qui
+    # lit déjà le diplôme par la régression : la comparer à l'Isolation Forest avec diplôme ne mesurerait
+    # plus l'effet du diplôme. Les parties 3 et 4 (la régression) disent, elles, ce qu'il apporte.
+    rule_params = {**rule_params, "ml_methode": "isolation_forest"}
+    print("IA : détection avec l'Isolation Forest...")
     avant = detection(df, rule_params)
     print("IA : détection avec le diplôme dans l'IA...")
     apres = detection(df, rule_params, feats=FEATS + ["Rang_Etude_Max"] + categories)

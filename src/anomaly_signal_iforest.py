@@ -31,6 +31,7 @@ from sklearn.ensemble import IsolationForest
 from anomaly_pretraitement import preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
+from anomaly_signal_regression import score_ecart_attendu
 
 # Les colonnes que le modèle regarde : le salaire et ses ratios, l'âge, l'ancienneté et les champs RH
 # (compétence et performance N-1, Hot job).
@@ -98,6 +99,16 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feat
     random_state=42 fixe le hasard : on obtient le même score à chaque lancement.
     feats : les colonnes à regarder à la place de FEATS (voir entrainer_ia) ; la détection n'en donne pas.
     """
+    # Depuis le 10/11/2026, la détection regarde d'abord l'écart au salaire attendu (ml_methode:
+    # ecart_attendu dans config/rules.yaml, voir score_ecart_attendu dans anomaly_signal_regression.py).
+    # Pourquoi : sur le banc d'essai (analyse_modeles/banc_essai_ia.py), l'Isolation Forest repère ce qui
+    # est RARE (un âge, un salaire de directeur), pas ce qui est MAL PAYÉ ; l'écart au salaire attendu
+    # repère 10 fois plus de salariés sous-payés dans leur grille. L'Isolation Forest reste disponible
+    # (ml_methode: isolation_forest), et c'est toujours elle qui tourne quand on lui donne des colonnes
+    # (feats), comme le fait analyse_diplomes/diplome.py.
+    if feats is None and rule_params.get("ml_methode", "isolation_forest") == "ecart_attendu":
+        return score_ecart_attendu(df, rule_params)
+
     df = df.copy()
 
     iso, X = entrainer_ia(df, rule_params, random_state, feats)

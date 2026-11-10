@@ -9,7 +9,7 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 1. anomaly_pretraitement.py        : lecture, doublons, grille, marché, ratios, diplômes ;
 2. anomaly_cohortes.py             : groupes de collègues et écart PeerZ ;
 3. anomaly_regles.py               : règles (étiquettes, points, motifs) ;
-4. anomaly_signal_iforest.py       : score de l'IA ;
+4. anomaly_signal_iforest.py       : score de l'IA (écart au salaire attendu, ou Isolation Forest selon ml_methode) ;
 5. anomaly_signal_fort.py          : signal ML_STRONG_SIGNAL pour les profils très atypiques, avec son explication (sans points) ;
 6. anomaly_score_general.py        : score général (règles + IA) et priorité de chaque salarié ;
 7. anomaly_recommandations.py      : recommandation et coût d'ajustement ;
@@ -75,7 +75,9 @@ if __name__ == "__main__":
     print("      " + message_diplomes(df))
     df = lancer(2, "Groupes de collègues (cohortes)", former_cohortes, df, rule_params)
     df = lancer(3, "Règles", apply_rulebook, df, rule_params)
-    df = lancer(4, "Score de l'IA (Isolation Forest)", ml_anomaly, df, rule_params)
+    methode = {"ecart_attendu": "écart au salaire attendu", "isolation_forest": "Isolation Forest"}.get(
+        rule_params.get("ml_methode", "isolation_forest"), rule_params.get("ml_methode"))
+    df = lancer(4, f"Score de l'IA ({methode})", ml_anomaly, df, rule_params)
     df = lancer(5, "Signal fort de l'IA", apply_ml_strong_signal, df, rule_params)
     df = lancer(6, "Score général et priorité", aggregate_risk, df, rule_params)
     df = lancer(7, "Recommandations et coût d'ajustement", recommendations, df, rule_params)
@@ -89,8 +91,11 @@ if __name__ == "__main__":
                   "Niveau_Etude_Max", "Rang_Etude_Max", "Tranche_Etude", "Cat_Ecole_Max",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",
                   "Market_Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
+                  "Salaire_Attendu", "Attendu_Bas", "Attendu_Haut", "Ecart_Attendu", "Z_Attendu",
                   "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Explication_IA", "Reco",
                   "Cout_Ajustement"]
+    # Les colonnes du salaire attendu n'existent qu'avec ml_methode: ecart_attendu.
+    front_cols = [c for c in front_cols if c in df.columns]
     df = df[front_cols + [c for c in df.columns if c not in front_cols]]
 
     # Tous les tableaux de bord au même endroit, quel que soit le programme qui les crée.
