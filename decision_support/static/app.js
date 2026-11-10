@@ -4,10 +4,8 @@ const form = $('profile-form');
 let meta, revision = 0, controller = null;
 const fmt = value => value == null ? 'Indisponible' : new Intl.NumberFormat('fr-FR', {maximumFractionDigits: 2}).format(value);
 const dash = value => value == null ? '—' : fmt(value);
-const pct = new Intl.NumberFormat('fr-FR', {style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero'});
 const node = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
-const mode = () => form.elements.mode.value;
-const submitLabel = () => mode() === 'evaluate' ? 'Vérifier le salaire' : 'Obtenir une proposition';
+const SUBMIT_LABEL = 'Obtenir une proposition';
 function resetResult() {
   revision++;
   if (controller) controller.abort();
@@ -16,7 +14,30 @@ function resetResult() {
   $('form-error').hidden = true;
   $('result-area').setAttribute('aria-busy', 'false');
   $('submit').disabled = !meta;
-  $('submit').textContent = submitLabel();
+  $('submit').textContent = SUBMIT_LABEL;
+}
+// Les champs du salaire prédit, décrits par le serveur (les colonnes que lit la régression) : une liste
+// de choix pour une catégorie, un nombre borné pour le reste. Ils sont facultatifs : sans eux, la
+// proposition se fait quand même, et le bandeau dit lesquels manquent pour le salaire prédit.
+function renderModelFields(fields) {
+  const box = $('model-fields');
+  for (const f of fields) {
+    const id = 'model-' + f.name, label = node('label', '', 'field');
+    label.htmlFor = id;
+    label.append(node('span', f.label, 'field-name'));
+    let input;
+    if (f.kind === 'choice') {
+      input = document.createElement('select');
+      input.append(new Option('Choisir', ''), ...f.options.map(o => new Option(o, o)));
+    } else {
+      input = document.createElement('input');
+      Object.assign(input, {type: 'number', min: f.min, max: f.max, step: f.step, placeholder: `De ${fmt(f.min)} à ${fmt(f.max)}`});
+    }
+    Object.assign(input, {id, name: f.name});
+    label.append(input);
+    box.append(label);
+  }
+  box.hidden = fields.length === 0;
 }
 function updateNiveaux() {
   $('niveau').replaceChildren(new Option('Choisir un niveau', ''));
@@ -25,13 +46,6 @@ function updateNiveaux() {
 }
 form.addEventListener('input', resetResult);
 $('job').addEventListener('change', updateNiveaux);
-for (const radio of form.elements.mode) radio.addEventListener('change', () => {
-  const evaluate = mode() === 'evaluate';
-  $('salary-field').hidden = !evaluate;
-  $('salary').required = evaluate;
-  $('salary').disabled = !evaluate;
-  resetResult();
-});
 const at = (el, name, value) => { el.style.setProperty(name, value + '%'); return el; };
 // Pas « rond » (1, 2 ou 5 × 10^n) pour que les graduations restent lisibles quel que soit l'ordre de grandeur.
 function niceStep(span) {
@@ -41,8 +55,8 @@ function niceStep(span) {
 // Place tous les repères sur une même échelle : c'est l'écart entre eux qui aide à décider.
 // Pourquoi style.setProperty : la CSP interdit les attributs style, pas le CSSOM.
 function renderRuler(data) {
-  const {band, market, peers, proposal: p, salary} = data;
-  const values = [band?.Min, band?.Max, market?.Median, peers.q25, peers.q75, peers.median, p.low, p.high, p.target, salary]
+  const {band, market, peers, proposal: p} = data;
+  const values = [band?.Min, band?.Max, market?.Median, peers.q25, peers.q75, peers.median, p.low, p.high, p.target]
     .filter(v => v != null && Number.isFinite(v));
   const ruler = $('ruler'); ruler.replaceChildren();
   $('ruler-card').hidden = values.length === 0;
@@ -92,30 +106,20 @@ function renderRuler(data) {
   const axis = node('div', '', 'axis');
   for (const t of ticks) axis.append(at(node('span', fmt(t), 'tick'), '--x', pos(t)));
   ruler.append(axis);
-  ruler.classList.toggle('has-cursor', salary != null);
-  if (salary != null) {
-    const x = pos(salary), overlay = node('div', '', 'overlay');
-    const cursor = at(node('div', '', 'cursor' + (x < 15 ? ' edge-left' : x > 85 ? ' edge-right' : '')), '--x', x);
-    cursor.append(node('span', `Salaire évalué · ${fmt(salary)}`));
-    overlay.append(cursor); ruler.append(overlay);
-  }
 }
 // Chiffres clés du bandeau : la décision à prendre. Le détail (bornes, médianes) est sur la règle
 // « Positionnement » ; on ne le répète pas ici.
 function renderFigures(data) {
   const p = data.proposal, mid = data.band?.Mid;
-  const items = [['Fourchette proposée', p.target == null ? '—' : `${fmt(p.low)} – ${fmt(p.high)}`], ['Cible', dash(p.target)]];
-  if (data.mode === 'evaluate') {
-    const gap = p.target == null ? null : (data.salary - p.target) / p.target;
-    items.push(['Écart à la cible', gap == null ? '—' : pct.format(gap), gap == null || gap === 0 ? '' : gap < 0 ? 'neg' : 'pos']);
-  } else {
-    items.push(['CompaRatio cible', mid && p.target != null ? fmt(Math.round(p.target / mid * 100) / 100) : '—']);
-  }
+  const items = [['Fourchette proposée', p.target == null ? '—' : `${fmt(p.low)} – ${fmt(p.high)}`], ['Cible', dash(p.target)],
+    ['CompaRatio cible', mid && p.target != null ? fmt(Math.round(p.target / mid * 100) / 100) : '—']];
   // Repère de la régression, en plus : le salaire prédit et la fourchette où le vrai salaire tombe
   // 9 fois sur 10. Il ne change ni le verdict ni la fourchette proposée.
   const r = data.regression;
   items.push(['Salaire prédit', dash(r.predicted), '',
-    r.predicted == null ? 'Matricule à renseigner' : `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`]);
+    r.predicted != null ? `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`
+      : !r.available ? 'Modèle indisponible'
+      : r.missing.length ? `À renseigner : ${r.missing.join(', ')}` : 'Pas de grille ou de marché pour ce niveau']);
   $('summary-figures').replaceChildren(...items.map(([label, value, cls, note]) => {
     const cell = node('div', ''), dd = node('dd', value, cls);
     if (note) dd.append(node('small', note, 'range'));
@@ -127,18 +131,9 @@ function render(data) {
   $('result').hidden = false;
   $('verdict').className = 'panel verdict ' + data.status;
   $('result-title').textContent = data.title;
-  $('result-mode').textContent = data.mode === 'evaluate' ? 'Évaluation du salaire' : 'Proposition de référence';
-  $('result-mode').hidden = $('result-mode').textContent === data.title;
   const {profile, proposal: p, peers} = data;
   $('result-profile').textContent = [`${profile.job_family} · Niveau ${profile.niveau}`,
-    profile.seniority == null ? null : `${fmt(profile.seniority)} ans d’ancienneté`,
-    data.salary == null ? null : `${fmt(data.salary)} ${data.unit}`].filter(Boolean).join(' · ');
-  // Au-dessus du Max : ce n'est plus une anomalie (le verdict ne change pas), mais on le signale.
-  const note = $('result-note'), above = data.above_max;
-  note.hidden = above == null;
-  note.textContent = above == null ? '' : `Ce salaire dépasse de ${new Intl.NumberFormat('fr-FR', {style: 'percent', maximumFractionDigits: 1}).format(above)} `
-    + `le Max de la grille (${fmt(data.band.Max)} ${data.unit}). Ce n’est pas une anomalie, mais une embauche ou une promotion `
-    + `au-dessus de la grille doit pouvoir se justifier.`;
+    profile.seniority == null ? null : `${fmt(profile.seniority)} ans d’ancienneté`].filter(Boolean).join(' · ');
   renderFigures(data);
   renderRuler(data);
   $('ruler-note').textContent = `Collègues comparés : ${peers.count} · ${peers.scope.toLowerCase()}.` +
@@ -166,7 +161,7 @@ form.addEventListener('submit', async event => {
   } finally {
     if (requestRevision === revision) {
       $('submit').disabled = false;
-      $('submit').textContent = submitLabel();
+      $('submit').textContent = SUBMIT_LABEL;
       $('result-area').setAttribute('aria-busy', 'false');
     }
   }
@@ -179,6 +174,7 @@ form.addEventListener('submit', async event => {
     $('job').replaceChildren(new Option('Choisir un métier', ''));
     for (const job of Object.keys(meta.jobs)) $('job').append(new Option(job, job));
     $('job').disabled = false; $('submit').disabled = false;
+    renderModelFields(meta.fields || []);
     for (const label of document.querySelectorAll('.unit-label')) label.textContent = meta.unit;
     $('employees-count').textContent = `${fmt(meta.employees)} salaires`;
     $('source-note').textContent = 'Références chargées au démarrage : redémarrer l’application après modification des sources.';

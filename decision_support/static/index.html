@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Repères — Aide à la décision salariale</title>
-  <meta name="description" content="Vérifier un salaire ou obtenir une proposition à partir de la grille métier, du marché et des collègues comparables.">
+  <meta name="description" content="Obtenir une proposition de salaire à partir de la grille métier, du marché et des collègues comparables.">
   <meta name="theme-color" content="#e9a21b">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Repères — Aide à la décision salariale">
-  <meta property="og:description" content="Vérifier un salaire ou obtenir une proposition à partir de la grille métier, du marché et des collègues comparables.">
+  <meta property="og:description" content="Obtenir une proposition de salaire à partir de la grille métier, du marché et des collègues comparables.">
   <meta property="og:image" content="/apercu.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -34,20 +34,17 @@
       <section class="panel form-panel" aria-labelledby="profile-title">
         <h2 class="panel-title" id="profile-title">Paramètres</h2>
         <form id="profile-form">
-          <fieldset class="modes"><legend>Type d’analyse</legend>
-            <label><input type="radio" name="mode" value="evaluate" checked><span>Vérifier un salaire</span></label>
-            <label><input type="radio" name="mode" value="propose"><span>Obtenir une proposition</span></label>
-          </fieldset>
           <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select></label>
           <label class="field" for="niveau"><span class="field-name">Niveau</span><select id="niveau" name="niveau" required disabled><option value="">Choisir d’abord le métier</option></select></label>
           <label class="field" for="seniority"><span class="field-name">Ancienneté <span class="optional">(facultatif)</span></span><span class="input-unit"><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6"><span>ans</span></span></label>
-          <p class="hint">Affine le groupe de collègues. Aucun bonus automatique d’ancienneté.</p>
-          <div id="salary-field"><label class="field" for="salary"><span class="field-name">Salaire fixe annuel envisagé</span><span class="input-unit"><input id="salary" name="salary" type="number" min="0.01" step="0.01" placeholder="Ex. 200" required><span class="unit-label">kMAD / an</span></span></label><p class="hint">200 kMAD = 200 000 MAD par an.</p></div>
-          <details class="existing"><summary>Il s’agit d’un salarié existant</summary><label class="field" for="employee-id"><span class="field-name">Matricule</span><input id="employee-id" name="employee_id" maxlength="100" placeholder="Ex. Mat00001"></label><p class="hint">Exclut son salaire actuel des comparaisons entre collègues, et donne le salaire prédit par la régression à partir de ses données du fichier.</p></details>
-          <button type="submit" id="submit" disabled>Vérifier le salaire</button>
+          <p class="hint">Affine le groupe de collègues et sert au salaire prédit. Aucun bonus automatique d’ancienneté.</p>
+          <fieldset class="model-fields" id="model-fields" hidden><legend>Pour le salaire prédit</legend>
+            <p class="hint">Le profil de la personne : la régression prédit son salaire à partir de ces champs, du métier, du niveau, de l’ancienneté, de la grille et du marché. Sans eux, la proposition se fait quand même.</p>
+          </fieldset>
+          <button type="submit" id="submit" disabled>Obtenir une proposition</button>
           <p id="form-error" class="error" role="alert" hidden></p>
         </form>
-        <p class="footnote">L’âge, la compétence, le 9Box et le Hot job ne servent qu’au salaire prédit par la régression ; le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</p>
+        <p class="footnote">Les champs « Pour le salaire prédit » ne servent qu’à la régression : ils ne changent ni la fourchette ni la cible proposées. Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</p>
       </section>
       <section class="result-area" aria-live="polite" aria-busy="false" id="result-area">
         <div class="panel empty-state" id="empty">
@@ -59,10 +56,8 @@
         <div id="result" hidden>
           <section id="verdict" class="panel verdict">
             <div class="verdict-main">
-              <p class="verdict-mode" id="result-mode"></p>
               <h2 id="result-title"></h2>
               <p class="verdict-profile" id="result-profile"></p>
-              <p class="verdict-note" id="result-note" hidden></p>
             </div>
             <dl class="figures" id="summary-figures"></dl>
           </section>

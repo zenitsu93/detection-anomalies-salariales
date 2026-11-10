@@ -60,16 +60,7 @@ h1 { font-size: 22px; font-weight: 600; }
 /* ---------- Formulaire ---------- */
 .form-panel { padding: 0 16px 16px; position: sticky; top: 16px; }
 .form-panel > .panel-title { margin: 0 -16px 16px; padding: 10px 16px; background: var(--panel-head); border-bottom: 1px solid var(--line); }
-.modes { border: 0; padding: 0; margin: 0 0 4px; display: grid; grid-template-columns: 1fr 1fr; }
-.modes legend, .field-name { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
-.modes label { position: relative; cursor: pointer; border: 1px solid var(--line); }
-.modes label:first-of-type { border-radius: var(--radius) 0 0 var(--radius); }
-.modes label:last-of-type { border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; }
-.modes input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.modes span { display: block; padding: 8px 6px; text-align: center; font-size: 13px; color: var(--muted); }
-.modes label:hover span { background: var(--panel-head); }
-.modes input:checked + span { background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; box-shadow: inset 0 -2px 0 var(--brand); }
-.modes input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 1px; }
+.field-name { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
 
 .field { display: block; margin: 16px 0 4px; }
 .optional { font-weight: 400; color: var(--faint); }
@@ -85,15 +76,17 @@ h1 { font-size: 22px; font-weight: 600; }
 .input-unit input { padding-right: 88px; }
 .input-unit > span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--faint); pointer-events: none; }
 .hint, .footnote { font-size: 12px; color: var(--muted); }
+/* Les champs du salaire prédit, regroupés sous leur titre et séparés du haut du formulaire par un trait. */
+.model-fields { border: 0; border-top: 1px solid var(--line-soft); margin: 16px 0 0; padding: 12px 0 0; }
+.model-fields legend { padding: 0 6px 0 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.model-fields .hint { margin: 4px 0 0; }
 .footnote { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line-soft); }
-.existing { margin: 16px 0; font-size: 13px; color: var(--muted); }
-summary { cursor: pointer; }
 
 button { font: 600 14px var(--font); border-radius: var(--radius); cursor: pointer; }
-button[type=submit] { width: 100%; height: 40px; background: var(--brand-dark); color: #fff; border: 1px solid var(--brand-dark); }
+button[type=submit] { width: 100%; height: 40px; margin-top: 16px; background: var(--brand-dark); color: #fff; border: 1px solid var(--brand-dark); }
 button[type=submit]:hover:not(:disabled) { background: #3a2216; }
 button:disabled { opacity: .5; cursor: wait; }
-input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .error { color: var(--error); background: var(--error-soft); border: 1px solid #f3c7c3; border-radius: var(--radius); padding: 8px 10px; font-size: 13px; margin: 12px 0 0; }
 
 /* ---------- État vide ---------- */
@@ -126,12 +119,10 @@ input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-v
 .verdict.review { border-left-color: var(--warn); }
 .verdict.insufficient { border-left-color: var(--faint); }
 .verdict-main { padding: 16px 20px; }
-.verdict-mode { font-size: 12px; color: var(--faint); margin: 0 0 2px; }
 .verdict h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
 .verdict-profile { margin: 0; color: var(--muted); font-size: 13px; }
 /* Avertissement sous le verdict (salaire au-dessus du Max) : dans la couleur des points à examiner,
    avec un trait à gauche, pour qu'on le voie sans le confondre avec le verdict lui-même. */
-.verdict-note { margin: 10px 0 0; padding-left: 10px; border-left: 3px solid var(--warn); color: var(--warn); font-size: 13px; }
 .figures { display: flex; flex-wrap: wrap; margin: 0; border-top: 1px solid var(--line); }
 .figures div { flex: 1; padding: 16px 20px; min-width: 130px; display: flex; flex-direction: column; justify-content: center; }
 .figures div + div { border-left: 1px solid var(--line-soft); }
@@ -140,12 +131,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-v
 .figures dd small { font-size: 12px; font-weight: 400; color: var(--faint); margin-left: 4px; }
 /* La fourchette de la régression passe sous le salaire prédit. */
 .figures dd small.range { display: block; margin: 2px 0 0; }
-.figures .neg { color: var(--error); }
-.figures .pos { color: var(--ok); }
 
 /* ---------- Positionnement ---------- */
 .ruler { position: relative; }
-.ruler.has-cursor { padding-top: 26px; }
 .lane { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; align-items: center; min-height: 64px; border-bottom: 1px solid var(--line-soft); }
 .lane-label { font-size: 13px; font-weight: 600; line-height: 1.25; }
 .lane-label small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
@@ -170,12 +158,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-v
 .lane-empty { font-size: 12px; line-height: 64px; color: var(--faint); }
 .overlay { position: absolute; top: 0; bottom: 26px; left: 186px; right: 0; pointer-events: none; z-index: 1; }
 .overlay:first-child { z-index: 0; }
-.gridline { position: absolute; top: 26px; bottom: 0; left: var(--x); width: 0; border-left: 1px dashed var(--line); }
-.ruler:not(.has-cursor) .gridline { top: 0; }
-.cursor { position: absolute; left: var(--x); top: 22px; bottom: 0; width: 2px; margin-left: -1px; background: var(--brand-dark); }
-.cursor span { position: absolute; top: -24px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 1px 6px; background: var(--brand-dark); color: #fff; font-size: 12px; font-weight: 600; border-radius: 2px; }
-.cursor.edge-left span { left: 0; transform: none; }
-.cursor.edge-right span { left: auto; right: 0; transform: none; }
+.gridline { position: absolute; top: 0; bottom: 0; left: var(--x); width: 0; border-left: 1px dashed var(--line); }
 .axis { position: relative; height: 26px; margin-left: 186px; }
 .tick { position: absolute; top: 6px; left: var(--x); transform: translateX(-50%); font-size: 11px; color: var(--muted); }
 .ruler-note { margin: 10px 0 0; }
