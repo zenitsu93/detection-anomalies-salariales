@@ -214,6 +214,7 @@ Chaque étape se lance seule : elle refait d'elle-même les étapes dont elle a 
 | 7 | `python src/anomaly_recommandations.py` | recommandation et coût de l'ajustement | `output/recommandations/employes_recommandations.xlsx` |
 | 8 | `python src/anomaly_ecarts_hommes_femmes.py` | écarts femmes / hommes par métier + niveau | `output/ecarts_hommes_femmes/gender_gap.xlsx` |
 | 9 | `python src/generate_dashboard_html.py` | tableau de bord | `output/dashboard/dashboard_anomalies_<date>_<heure>.html` |
+| 10 | `python src/generate_accueil.py` | écran d'accueil : trois cartes qui ouvrent l'exploration, le dernier tableau de bord et l'aide à la décision, avec les chiffres de la dernière détection. À ouvrir en premier, d'un double-clic | `accueil.html`, à la racine du projet |
 
 Les seuils des règles, les poids et les priorités se règlent dans `config/rules.yaml`. Après une modification, relancer la commande.
 
