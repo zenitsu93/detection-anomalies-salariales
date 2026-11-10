@@ -224,14 +224,20 @@ class DecisionEngine:
             return {"count": len(peers), "available": False, "scope": scope}
         salaries = peers.Fixe_Annuel_MAD
         median = float(salaries.median())
-        mad = float((salaries - median).abs().median())
-        std = float(salaries.std())
         # Même calcul que robust_zscore (src/anomaly_cohortes.py), mais sur les collègues seuls : le
         # salaire envisagé n'en fait pas partie.
-        center, scale = (median, mad / .6745) if mad > 0 else (float(salaries.mean()), std)
+        # Comme là-bas, l'écart se mesure en proportion (le log du salaire) quand peer_z_echelle vaut
+        # « log » : center et scale sont alors en log. Seule différence : pour un groupe « même niveau »,
+        # tous métiers confondus, la détection compare les CompaRatio ; ici, les salaires.
+        log = self.rules.get("peer_z_echelle", "log") == "log"
+        values = np.log(salaries) if log else salaries
+        v_median = float(values.median())
+        mad = float((values - v_median).abs().median())
+        std = float(values.std())
+        center, scale = (v_median, mad / .6745) if mad > 0 else (float(values.mean()), std)
         return {"count": len(peers), "available": True, "scope": scope, "median": median,
                 "q25": float(salaries.quantile(.25)), "q75": float(salaries.quantile(.75)),
-                "center": center, "scale": scale}
+                "center": center, "scale": scale, "log": log}
 
     def analyze(self, payload):
         if not isinstance(payload, dict):
@@ -254,7 +260,7 @@ class DecisionEngine:
                   "insufficient": "Références incomplètes"}
         return {"profile": profile, "unit": UNIT, "status": status, "title": titles[status],
                 "band": band, "market": market,
-                "peers": {k: v for k, v in peers.items() if k not in {"center", "scale"}},
+                "peers": {k: v for k, v in peers.items() if k not in {"center", "scale", "log"}},
                 "proposal": proposal, "regression": self._regression(profile, band, market, inputs)}
 
     def _read_inputs(self, payload):
@@ -314,8 +320,9 @@ class DecisionEngine:
             if peers["scale"] > 0:
                 # Le seuil d'alerte est inclusif : la proposition doit rester à l'intérieur.
                 margin = (self.peer_threshold - 1e-9) * peers["scale"]
-                low = max(low, peers["center"] - margin)
-                high = min(high, peers["center"] + margin)
+                borne = math.exp if peers["log"] else float
+                low = max(low, borne(peers["center"] - margin))
+                high = min(high, borne(peers["center"] + margin))
             else:
                 low, high = max(low, peers["median"]), min(high, peers["median"])
         # La fourchette ne descend jamais sous le salaire minimum du niveau.
@@ -344,7 +351,7 @@ class DecisionEngine:
                   "RangePenetration": (salary - band["Min"]) / (band["Max"] - band["Min"])
                   if band and band["Max"] > band["Min"] else np.nan,
                   "MarketRatio": salary / market["Median"] if market else np.nan,
-                  "PeerZ": (salary - peers["center"]) / peers["scale"]
+                  "PeerZ": ((math.log(salary) if peers["log"] else salary) - peers["center"]) / peers["scale"]
                   if peers["available"] and peers["scale"] > 0 else np.nan,
                   "Niveau": int(niveau) if niveau.isdigit() else niveau, "Fixe_Annuel_MAD": salary}
         for column, bounds in [("CompaRatio", ("compa_ratio_low", "compa_ratio_high")),
