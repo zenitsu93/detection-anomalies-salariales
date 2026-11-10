@@ -8,6 +8,8 @@
 
   // Une case vide ou du texte devient NaN : elle est ignorée dans les calculs, comme dans pandas.
   const nombre = v => (v === null || v === undefined || v === '') ? NaN : Number(v);
+  // Un texte (le diplôme) : une case vide ou faite d'espaces devient null, comme une case vide dans pandas.
+  const texte = v => (v === null || v === undefined || String(v).trim() === '') ? null : String(v).trim();
   const valides = t => t.filter(Number.isFinite);
   const somme = t => t.reduce((a, b) => a + b, 0);
   const moyenne = t => { const v = valides(t); return v.length ? somme(v) / v.length : NaN; };
@@ -140,13 +142,40 @@
     return libelles[i < 0 ? bornes.length : i];
   }
 
-  // Tranches d'ancienneté de 2 ans, celles de la présentation des départs (avant : 0-2, 3-5, 6-12, 13-20 et plus de 20,
-  // reprises des groupes de collègues de la détection). La détection, elle, garde ses propres tranches :
-  // src/anomaly_pretraitement.py n'est pas touché, seule la page change sa façon de regrouper.
-  const BORNES_ANCIENNETE = [2, 4, 6, 8, 10, 12, 14];
-  const TRANCHES = libellesTranches(BORNES_ANCIENNETE);
-  // Une ancienneté ou un âge négatif est une erreur de saisie : pas de tranche (comme avant pour l'ancienneté).
-  const tranche = annees => annees < 0 ? null : trancheDe(annees, BORNES_ANCIENNETE, TRANCHES);
+  // Tranches d'ancienneté : inf à 2, [2, 5[, puis des pas de 5 ans ([5, 10[, [10, 15[…), la dernière « sup à … ».
+  // Pourquoi pas des tranches de 2 ans partout (avant, comme la présentation des départs) : au-delà de 5 ans, une
+  // différence de 2 ans ne change plus grand-chose, et sur une banque où certains ont 30 ou 40 ans de maison, il
+  // fallait une quinzaine de barres. Les deux premières tranches restent courtes : les premières années (arrivée,
+  // confirmation) sont celles où tout bouge.
+  // Pourquoi pas un pas « optimal » au sens des statistiques (règle de Freedman-Diaconis, comme pour un histogramme) :
+  // il tombe sur des largeurs comme 3,7 ans, illisibles pour un comité. Ce qui est calculé, c'est où s'arrêter : la
+  // dernière borne est la première qui dépasse l'ancienneté de 95 % des salariés (lue dans le fichier entier, pas dans
+  // le filtre, pour que les tranches ne changent pas d'un filtre à l'autre). Les 5 % les plus anciens sont regroupés
+  // dans « sup à … », comme les salaires extrêmes dans les tranches de salaire : sinon, deux ou trois salariés à 40 ans
+  // de maison étireraient le graphe sur des barres presque vides. Et s'il fallait plus de 8 tranches après 5 ans, le
+  // pas passe à 10 ans. La détection, elle, garde ses propres tranches (src/anomaly_pretraitement.py n'est pas touché).
+  function tranchesAnciennete(valeurs) {
+    const v = valides(valeurs).filter(a => a >= 0), haut = v.length ? quantile(v, 0.95) : 0;
+    const pas = (haut - 5) / 5 > 8 ? 10 : 5, bornes = [2, 5];
+    // La borne suivante est le multiple du pas juste au-dessus : 5 → 10 → 15 (pas de 5) ou 5 → 10 → 20 (pas de 10).
+    while (bornes[bornes.length - 1] < haut) bornes.push((Math.floor(bornes[bornes.length - 1] / pas) + 1) * pas);
+    const libelles = libellesTranches(bornes);
+    // Une ancienneté négative est une erreur de saisie : pas de tranche.
+    return { bornes, libelles, tranche: a => a < 0 ? null : trancheDe(a, bornes, libelles) };
+  }
+
+  // Le niveau d'études (colonne Niveau_Etude_Max, facultative) : son rang, pour ranger les niveaux du moins au plus élevé
+  // dans le filtre « Diplôme ». C'est la même table que RANG_NIVEAU_ETUDE dans src/anomaly_pretraitement.py. Un niveau
+  // absent de la table (« NON DETERMINE ») va à la fin.
+  const RANG_ETUDE = { 'SECONDAIRE': 0, 'BAC': 1, 'BAC+1': 2, 'BAC+2': 3, 'BAC+3': 4, 'BAC+4': 5, 'BAC+5': 6, 'BAC+6': 6,
+    'BAC+7': 7, 'EXPERTISE COMPTABLE': 7 };
+  // Les espaces et les majuscules ne comptent pas : « Bac + 5 » vaut « BAC+5 », comme dans le Python.
+  const SANS_ESPACES = Object.fromEntries(Object.entries(RANG_ETUDE).map(([n, r]) => [n.replace(/\s+/g, ''), r]));
+  const rangEtude = n => SANS_ESPACES[String(n).replace(/\s+/g, '').toUpperCase()];
+  function niveauxEtude(df) {
+    const r = n => rangEtude(n) ?? 99;
+    return modalites(df, 'Niveau_Etude_Max').sort((a, b) => r(a) - r(b) || String(a).localeCompare(String(b), 'fr'));
+  }
 
   // Tranches d'âge de 5 ans, celles de la présentation des départs. Elle s'arrêtait à [50, 55[ parce qu'elle ne comptait
   // que des démissionnaires, souvent jeunes ; ici, tous les salariés sont comptés, donc les tranches vont jusqu'à 60.
@@ -201,9 +230,10 @@
         Min: nombre(b.Min), Mid: nombre(b.Mid), Max: nombre(b.Max), Median: nombre(m.Median),
         // P25 et P75 du marché : facultatifs, ils servent seulement au graphe de positionnement face au marché.
         Market_P25: nombre(m.P25), Market_P75: nombre(m.P75),
+        // Le diplôme : facultatif, il sert au filtre « Diplôme » et à la liste des salariés. Case vide → null.
+        Niveau_Etude_Max: texte(e.Niveau_Etude_Max), Cat_Ecole_Max: texte(e.Cat_Ecole_Max),
       };
       l.Age_Embauche = l.Age - l.Anciennete;
-      l.Tranche_Anciennete = tranche(l.Anciennete);
       l.Tranche_Age = trancheAge(l.Age);
       l.Compa_Ratio = l.Fixe_Annuel_MAD / l.Mid;
       l.Range_Penetration = (l.Fixe_Annuel_MAD - l.Min) / (l.Max - l.Min);
@@ -213,6 +243,9 @@
       l.Position_Marche = positionMarche(l);
       return l;
     });
+    // Les tranches d'ancienneté se calculent sur tous les salariés à la fois (voir tranchesAnciennete).
+    const ta = tranchesAnciennete(colonne(df, 'Anciennete'));
+    for (const l of df) l.Tranche_Anciennete = ta.tranche(l.Anciennete);
 
     // Postes (Job_Title) qui ont plusieurs valeurs de Hot_job.
     const hotjob = new Map();
@@ -253,7 +286,7 @@
 
   const api = {
     nombre, somme, moyenne, mediane, quantile, ecartType, asymetrie, correlation, histogramme, courbeLissee, droite, lowess,
-    libellesTranches, trancheDe, TRANCHES, tranche, TRANCHES_AGE, trancheAge, POSITIONS_MARCHE, positionMarche, COLONNES_REQUISES, colonnesManquantes, preparer, colonne, modalites, ordreParMediane,
+    libellesTranches, trancheDe, tranchesAnciennete, niveauxEtude, TRANCHES_AGE, trancheAge, POSITIONS_MARCHE, positionMarche, COLONNES_REQUISES, colonnesManquantes, preparer, colonne, modalites, ordreParMediane,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else (racine.Exploration = racine.Exploration || {}).calculs = api;

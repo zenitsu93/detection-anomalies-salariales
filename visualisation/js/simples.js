@@ -19,6 +19,11 @@
     return categories.map(c => m.get(c));
   }
   const compte = groupes => groupes.reduce((a, g) => a + g.length, 0);
+  // Les catégories qui ont au moins un salarié, avec leur numéro d'origine (i) pour garder leur couleur. Pourquoi
+  // (demande du 09/11/2026) : avec un filtre, des barres « 0 », des parts vides ou des lignes vides encombraient le
+  // graphe sans rien dire ; une catégorie sans personne n'est plus dessinée. Les constats, eux, se calculent toujours
+  // sur toutes les catégories.
+  const nonVides = (groupes, libelles) => groupes.map((g, i) => ({ g, lib: libelles[i], i })).filter(x => x.g.length);
 
   // Un seul graphe, sans titre au-dessus (le titre est déjà en tête du panneau) : la marge du haut, prévue pour un titre,
   // laisserait un grand vide ; on garde juste la place du nombre écrit au-dessus de la plus haute barre.
@@ -56,39 +61,43 @@
 
   function effectifParTranche(df, sel, o) {
     const lignes = df.filter(l => F.garder(l, sel)), groupes = grouper(lignes, o.tranches, l => l[o.tranche]);
+    const v = nonVides(groupes, o.tranches), vg = v.map(x => x.g);
     const L = sansTitre();
-    axesHorizontaux(L, groupes, o.axe);
-    const clic = p => ({ titre: `${o.nom} ${p.y} ans`, lignes: groupes[p.pointNumber] });
-    montrer('g-' + o.id, [barresEffectif(groupes, o.tranches)], L, 110 + 36 * o.tranches.length, clic, F.libelle(sel));
+    axesHorizontaux(L, vg, o.axe);
+    const clic = p => ({ titre: `${o.nom} ${p.y} ans`, lignes: vg[p.pointNumber] });
+    montrer('g-' + o.id, [barresEffectif(vg, v.map(x => x.lib))], L, 110 + 36 * Math.max(3, v.length), clic, F.libelle(sel));
     const s = 's-' + o.id, lib = F.libelle(sel), avec = compte(groupes), sans = lignes.length - avec;
     if (!lignes.length) return constat(s, 'Aucun salarié pour ce filtre.');
     if (!avec) return constat(s, `${lib} (${salaries(lignes.length)}) : ${o.aucun}.`);
     // Les salariés sans tranche (case vide ou valeur négative) ne comptent ni dans les barres ni dans la moyenne : le constat le dit.
-    const v = groupes.flat().map(l => l[o.colonne]);
+    const ans = groupes.flat().map(l => l[o.colonne]);
     constat(s, `${lib} (${salaries(avec)} avec ${o.quoi}${sans ? `, ${fr(sans)} sans ${o.sansQuoi}` : ''}) : tranche la plus nombreuse, `
-      + `${plusNombreuse(groupes, i => o.tranches[i] + ' ans', avec)}. ${o.moyen} : ${fr(C.moyenne(v), 1)} ans ; ${o.median} : ${fr(C.mediane(v), 1)} ans.`);
+      + `${plusNombreuse(groupes, i => o.tranches[i] + ' ans', avec)}. ${o.moyen} : ${fr(C.moyenne(ans), 1)} ans ; ${o.median} : ${fr(C.mediane(ans), 1)} ans.`);
   }
 
   const effectifAge = (df, sel) => effectifParTranche(df, sel, { id: 'effectif-age', colonne: 'Age', tranche: 'Tranche_Age', tranches: C.TRANCHES_AGE,
     axe: "Tranche d'âge (années)", nom: 'Âge', quoi: 'un âge', sansQuoi: 'âge valable', aucun: 'aucun âge renseigné', moyen: 'Âge moyen', median: 'âge médian' });
 
   // ---------- effectif-anciennete : effectif par tranche d'ancienneté ----------
-  // Le même graphe que pour l'âge, avec les tranches d'ancienneté de 2 ans.
+  // Le même graphe que pour l'âge, avec les tranches d'ancienneté : inf à 2, [2, 5[, puis des pas de 5 ans (voir
+  // tranchesAnciennete dans calculs.js). Elles sont recalculées sur le fichier entier, comme celles de chaque salarié.
+  const tranchesAnciennete = df => C.tranchesAnciennete(C.colonne(df, 'Anciennete')).libelles;
 
   const effectifAnciennete = (df, sel) => effectifParTranche(df, sel, { id: 'effectif-anciennete', colonne: 'Anciennete', tranche: 'Tranche_Anciennete',
-    tranches: C.TRANCHES, axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté', sansQuoi: 'ancienneté valable', aucun: 'aucune ancienneté renseignée',
+    tranches: tranchesAnciennete(df), axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté', sansQuoi: 'ancienneté valable', aucun: 'aucune ancienneté renseignée',
     moyen: 'Ancienneté moyenne', median: 'ancienneté médiane' });
 
   // ---------- effectif-niveau : effectif par niveau ----------
 
   function effectifNiveau(df, sel) {
     const lignes = df.filter(l => F.garder(l, sel));
-    // Les niveaux sont lus dans le fichier entier : un niveau sans personne dans le filtre garde sa place, avec 0.
+    // Les niveaux sont lus dans le fichier entier ; un niveau sans personne dans le filtre n'est plus dessiné (voir nonVides).
     const niveaux = C.modalites(df, 'Niveau'), libelles = niveaux.map(String), groupes = grouper(lignes, niveaux, l => l.Niveau);
+    const v = nonVides(groupes, libelles), vg = v.map(x => x.g);
     const L = sansTitre();
-    axesHorizontaux(L, groupes, 'Niveau');
-    const clic = p => ({ titre: 'Niveau ' + p.y, lignes: groupes[p.pointNumber] });
-    montrer('g-effectif-niveau', [barresEffectif(groupes, libelles)], L, 110 + 32 * Math.max(4, niveaux.length), clic, F.libelle(sel));
+    axesHorizontaux(L, vg, 'Niveau');
+    const clic = p => ({ titre: 'Niveau ' + p.y, lignes: vg[p.pointNumber] });
+    montrer('g-effectif-niveau', [barresEffectif(vg, v.map(x => x.lib))], L, 110 + 32 * Math.max(4, v.length), clic, F.libelle(sel));
     const lib = F.libelle(sel), avec = compte(groupes), sans = lignes.length - avec;
     if (!lignes.length) return constat('s-effectif-niveau', 'Aucun salarié pour ce filtre.');
     if (!avec) return constat('s-effectif-niveau', `${lib} (${salaries(lignes.length)}) : aucun niveau renseigné.`);
@@ -103,11 +112,12 @@
   const PARTS_MAX = 6;
   const TEINTES = [K.ARDOISE, K.OR, K.BLEU, K.CUIVRE, K.BRUN, K.PALE];
   function repartition(id, groupes, libelles, { couleurs = TEINTES, trier = true, titreClic, sel }) {
-    let ordre = groupes.map((_, i) => i);
+    // Une part vide n'est pas dessinée (voir nonVides) : sur un anneau, elle laissait son nom et « 0 % » autour.
+    let ordre = groupes.map((_, i) => i).filter(i => groupes[i].length);
     if (trier) ordre.sort((a, b) => groupes[b].length - groupes[a].length);   // la plus grosse part d'abord
     const g = ordre.map(i => groupes[i]), lib = ordre.map(i => libelles[i]), total = compte(g);
     const clic = p => ({ titre: `${titreClic}${lib[p.pointNumber]}`, lignes: g[p.pointNumber] });
-    if (libelles.length > PARTS_MAX) {
+    if (ordre.length > PARTS_MAX) {
       const L = sansTitre();
       axesHorizontaux(L, g, '');
       return montrer('g-' + id, [barresEffectif(g, lib)], L, 120 + 30 * lib.length, clic, F.libelle(sel));
@@ -216,14 +226,16 @@
     const lignes = df.filter(l => F.garder(l, sel)), groupes = grouper(lignes, o.tranches, l => l[o.tranche]);
     const sal = groupes.map(g => g.map(l => l.Fixe_Annuel_MAD).filter(Number.isFinite));
     const valeurs = STATS.map(([, f]) => sal.map(s => s.length ? f(s) : null));
-    const traces = STATS.map(([nom, , couleur], k) => ({ type: 'bar', name: nom, x: o.tranches, y: valeurs[k], marker: { color: couleur },
-      text: valeurs[k].map(v => v === null ? '' : fr(v, 0)), textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE },
-      customdata: sal.map(s => s.length), hovertemplate: `%{x} ans<br>${nom} : <b>%{y:,.1f} kMAD</b><br>%{customdata:,} salariés avec un salaire<extra></extra>` }));
+    // Seules les tranches où quelqu'un a un salaire sont dessinées (voir nonVides) : une tranche vide restait sur l'axe, sans barre.
+    const k0 = o.tranches.map((_, i) => i).filter(i => sal[i].length), x = k0.map(i => o.tranches[i]);
+    const traces = STATS.map(([nom, , couleur], k) => ({ type: 'bar', name: nom, x, y: k0.map(i => valeurs[k][i]), marker: { color: couleur },
+      text: k0.map(i => fr(valeurs[k][i], 0)), textposition: 'outside', cliponaxis: false, textfont: { size: 11, color: K.ENCRE },
+      customdata: k0.map(i => sal[i].length), hovertemplate: `%{x} ans<br>${nom} : <b>%{y:,.1f} kMAD</b><br>%{customdata:,} salariés avec un salaire<extra></extra>` }));
     const L = sansTitre();
     L.barmode = 'group';
     Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe(o.axe) });
     L.yaxis.title = titreAxe('Fixe_Annuel_MAD (kMAD)');
-    const clic = p => ({ titre: `${o.nom} ${p.x} ans`, lignes: groupes[p.pointNumber] });
+    const clic = p => ({ titre: `${o.nom} ${p.x} ans`, lignes: groupes[k0[p.pointNumber]] });
     montrer('g-' + o.id, traces, L, 460, clic, F.libelle(sel));
     const s = 's-' + o.id, lib = F.libelle(sel), avec = sal.reduce((a, v) => a + v.length, 0);
     if (!lignes.length) return constat(s, 'Aucun salarié pour ce filtre.');
@@ -243,9 +255,9 @@
     axe: "Tranche d'âge (années)", nom: 'Âge', quoi: 'un âge' });
 
   // ---------- salaire-anciennete : salaire moyen et médian par tranche d'ancienneté ----------
-  // Le même graphe que pour l'âge, avec les tranches d'ancienneté de 2 ans.
+  // Le même graphe que pour l'âge, avec les tranches du graphe « Effectif par tranche d'ancienneté ».
 
-  const salaireAnciennete = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-anciennete', tranche: 'Tranche_Anciennete', tranches: C.TRANCHES,
+  const salaireAnciennete = (df, sel) => salaireParTranche(df, sel, { id: 'salaire-anciennete', tranche: 'Tranche_Anciennete', tranches: tranchesAnciennete(df),
     axe: "Tranche d'ancienneté (années)", nom: 'Ancienneté', quoi: 'une ancienneté' });
 
   // ---------- salaire-sexe : salaire moyen des femmes et des hommes, par niveau ----------
@@ -317,10 +329,11 @@
     const t = tranchesSalaire(df), lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Fixe_Annuel_MAD));
     if (!t) { Plotly.purge('g-tranches-salaire'); return constat('s-tranches-salaire', 'Aucun salaire renseigné dans employes.xlsx.'); }
     const groupes = grouper(lignes, t.libelles, l => C.trancheDe(l.Fixe_Annuel_MAD, t.bornes, t.libelles));
+    const v = nonVides(groupes, t.libelles), vg = v.map(x => x.g);
     const L = sansTitre();
-    axesVerticaux(L, '', groupes, `Fixe_Annuel_MAD (kMAD), tranches de ${fr(t.pas)}`);
-    const clic = p => ({ titre: `Salaire ${p.x} kMAD`, lignes: groupes[p.pointNumber] });
-    montrer('g-tranches-salaire', [barresEffectif(groupes, t.libelles, { horizontal: false })], L, 440, clic, F.libelle(sel));
+    axesVerticaux(L, '', vg, `Fixe_Annuel_MAD (kMAD), tranches de ${fr(t.pas)}`);
+    const clic = p => ({ titre: `Salaire ${p.x} kMAD`, lignes: vg[p.pointNumber] });
+    montrer('g-tranches-salaire', [barresEffectif(vg, v.map(x => x.lib), { horizontal: false })], L, 440, clic, F.libelle(sel));
     if (!lignes.length) return constat('s-tranches-salaire', 'Aucun salarié avec un salaire pour ce filtre.');
     const sal = lignes.map(l => l.Fixe_Annuel_MAD);
     constat('s-tranches-salaire', `${F.libelle(sel)} (${salaries(lignes.length)} avec un salaire) : tranche la plus nombreuse, `
@@ -339,12 +352,14 @@
   function ecartAuMid(df, sel) {
     const lignes = df.filter(l => F.garder(l, sel)), avec = lignes.filter(l => Number.isFinite(l.Compa_Ratio));
     const groupes = grouper(avec, ECARTS, l => C.trancheDe(ecartMid(l), BORNES_ECART, ECARTS));
+    const v = nonVides(groupes, ECARTS), vg = v.map(x => x.g);
     const L = sansTitre();
-    axesVerticaux(L, '', groupes, 'Écart du salaire au milieu de sa grille (Mid)');
+    axesVerticaux(L, '', vg, 'Écart du salaire au milieu de sa grille (Mid)');
     // Sous le Mid en ardoise, au-dessus en gris clair : seul le trop bas compte comme anomalie (décision du 29/10/2026).
-    const couleurs = ECARTS.map((_, i) => i < 3 ? K.ARDOISE : K.PALE);
-    const clic = p => ({ titre: `Écart au Mid ${p.x}`, lignes: groupes[p.pointNumber] });
-    montrer('g-ecart-mid', [barresEffectif(groupes, ECARTS, { horizontal: false, couleurs })], L, 440, clic, F.libelle(sel));
+    // La couleur suit la tranche d'origine (x.i) : une tranche masquée ne décale pas les couleurs des suivantes.
+    const couleurs = v.map(x => x.i < 3 ? K.ARDOISE : K.PALE);
+    const clic = p => ({ titre: `Écart au Mid ${p.x}`, lignes: vg[p.pointNumber] });
+    montrer('g-ecart-mid', [barresEffectif(vg, v.map(x => x.lib), { horizontal: false, couleurs })], L, 440, clic, F.libelle(sel));
     const lib = F.libelle(sel), n = avec.length, sans = lignes.length - n;
     if (!lignes.length) return constat('s-ecart-mid', 'Aucun salarié pour ce filtre.');
     if (!n) return constat('s-ecart-mid', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois un salaire et une grille (Mid) pour son métier et son niveau.`);
@@ -411,12 +426,13 @@
   function evaluations(df, sel) {
     const lignes = df.filter(l => F.garder(l, sel)), t = tranchesCompetence(df), cases = C.modalites(df, 'Positionnement_9BOX');
     const gc = t ? grouper(lignes, t.libelles, l => t.tranche(l.Competence_N1)) : [], g9 = grouper(lignes, cases, l => l.Positionnement_9BOX);
+    const vc = nonVides(gc, t ? t.libelles : []), v9 = nonVides(g9, cases.map(String));
     const L = grille({ colonnes: 2, titres: ['Note de compétences (Competence_N1), par tranche', 'Case 9-Box (Positionnement_9BOX)'] });
-    axesVerticaux(L, '', gc, 'Competence_N1');
-    axesVerticaux(L, '2', g9, 'Case 9-Box');
-    const traces = [barresEffectif(gc, t ? t.libelles : [], { horizontal: false }),
-      barresEffectif(g9, cases.map(String), { horizontal: false, axes: { xaxis: 'x2', yaxis: 'y2' } })];
-    const clic = p => p.curveNumber ? { titre: '9-Box ' + p.x, lignes: g9[p.pointNumber] } : { titre: 'Competence_N1 ' + p.x, lignes: gc[p.pointNumber] };
+    axesVerticaux(L, '', vc.map(x => x.g), 'Competence_N1');
+    axesVerticaux(L, '2', v9.map(x => x.g), 'Case 9-Box');
+    const traces = [barresEffectif(vc.map(x => x.g), vc.map(x => x.lib), { horizontal: false }),
+      barresEffectif(v9.map(x => x.g), v9.map(x => x.lib), { horizontal: false, axes: { xaxis: 'x2', yaxis: 'y2' } })];
+    const clic = p => p.curveNumber ? { titre: '9-Box ' + p.x, lignes: v9[p.pointNumber].g } : { titre: 'Competence_N1 ' + p.x, lignes: vc[p.pointNumber].g };
     montrer('g-evaluations', traces, L, 440, clic, F.libelle(sel));
     const lib = F.libelle(sel);
     if (!lignes.length) return constat('s-evaluations', 'Aucun salarié pour ce filtre.');
@@ -453,21 +469,29 @@
     // Dans chaque case : la part de tous les salariés de la matrice (les cases font 100 % ensemble). Au survol, aussi la
     // part de la ligne : « parmi les salariés de cette case 9-Box, combien sont dans ce quart ».
     const z = cases.map(ligne => ligne.map(g => n ? 100 * g.length / n : 0));
-    // Une case de quelques salariés sur des milliers s'écrirait « 0,0 % », comme une case vide : elle s'écrit « < 0,1 % ».
-    // Une case vide, elle, reste blanche et sans texte.
-    const trace = { type: 'heatmap', x: QUARTS, y: rangs.map(String), z, zmin: 0, colorscale: [[0, '#ffffff'], [1, K.ARDOISE]], showscale: false,
-      xgap: 2, ygap: 2, text: cases.map((ligne, i) => ligne.map((g, j) => !g.length ? '' : z[i][j] < 0.05 ? '< 0,1 %' : fr(z[i][j], 1) + ' %')), texttemplate: '%{text}', textfont: { size: 12 },
-      customdata: cases.map(ligne => { const tot = compte(ligne); return ligne.map(g => [g.length, tot ? fr(100 * g.length / tot, 1) : '–']); }),
+    // Une ligne ou une colonne sans aucun salarié n'est pas dessinée (voir nonVides) ; une case vide au milieu, elle,
+    // reste blanche et sans texte. Une case de quelques salariés sur des milliers s'écrirait « 0,0 % », comme une case
+    // vide : elle s'écrit « < 0,1 % ».
+    const li = rangs.map((_, i) => i).filter(i => compte(cases[i])), co = QUARTS.map((_, j) => j).filter(j => li.some(i => cases[i][j].length));
+    const trace = { type: 'heatmap', x: co.map(j => QUARTS[j]), y: li.map(i => String(rangs[i])), z: li.map(i => co.map(j => z[i][j])), zmin: 0,
+      colorscale: [[0, '#ffffff'], [1, K.ARDOISE]], showscale: false, xgap: 2, ygap: 2,
+      text: li.map(i => co.map(j => !cases[i][j].length ? '' : z[i][j] < 0.05 ? '< 0,1 %' : fr(z[i][j], 1) + ' %')), texttemplate: '%{text}', textfont: { size: 12 },
+      customdata: li.map(i => { const tot = compte(cases[i]); return co.map(j => [cases[i][j].length, tot ? fr(100 * cases[i][j].length / tot, 1) : '–']); }),
       hovertemplate: `${parBox ? 'Case 9-Box' : 'Note'} %{y} · %{x}<br><b>%{z:.1f} % des salariés</b> (%{customdata[0]:,})<br>%{customdata[1]} % de cette ligne<extra></extra>` };
     const L = sansTitre();
     Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Position du salaire dans sa grille, du Min au Max (le Mid sépare le 2e et le 3e quart)') });
     Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed',
       title: titreAxe(parBox ? 'Case 9-Box (la plus haute en haut)' : 'Note de compétences (Competence_N1)') });
     // Un trait marque le Mid, entre le 2e et le 3e quart : à gauche, les salariés payés sous le milieu de leur grille.
-    L.shapes.push({ type: 'line', xref: 'x', x0: 2.5, x1: 2.5, yref: 'y domain', y0: 0, y1: 1, line: { color: K.BRUN, dash: 'dash', width: 2 } });
-    L.annotations.push({ text: 'Mid', x: 2.5, xref: 'x', y: 1, yref: 'y domain', yanchor: 'bottom', showarrow: false, font: { size: 11, color: K.BRUN } });
-    const clic = p => { const [i, j] = p.pointNumber; const nom = nomRang(rangs[i]); return { titre: `${nom.charAt(0).toUpperCase() + nom.slice(1)} · ${minuscule(QUARTS[j])}`, lignes: cases[i][j] }; };
-    montrer('g-matrice', [trace], L, 140 + 52 * Math.max(4, rangs.length), clic, F.libelle(sel));
+    // Sa place se compte en colonnes dessinées : celles avant le 3e quart (le 3e quart est la colonne 3 de QUARTS).
+    const mid = co.filter(j => j < 3).length - 0.5;
+    if (mid > -0.5 && mid < co.length - 0.5) {
+      L.shapes.push({ type: 'line', xref: 'x', x0: mid, x1: mid, yref: 'y domain', y0: 0, y1: 1, line: { color: K.BRUN, dash: 'dash', width: 2 } });
+      L.annotations.push({ text: 'Mid', x: mid, xref: 'x', y: 1, yref: 'y domain', yanchor: 'bottom', showarrow: false, font: { size: 11, color: K.BRUN } });
+    }
+    const clic = p => { const [a, b] = p.pointNumber, i = li[a], j = co[b], nom = nomRang(rangs[i]);
+      return { titre: `${nom.charAt(0).toUpperCase() + nom.slice(1)} · ${minuscule(QUARTS[j])}`, lignes: cases[i][j] }; };
+    montrer('g-matrice', n ? [trace] : [], L, 140 + 52 * Math.max(4, li.length), clic, F.libelle(sel));
     const lib = F.libelle(sel);
     if (!lignes.length) return constat('s-matrice', 'Aucun salarié pour ce filtre.');
     if (!n) return constat('s-matrice', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois une grille (Min et Max) et ${quoi}.`);

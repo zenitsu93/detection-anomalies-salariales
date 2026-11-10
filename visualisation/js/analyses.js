@@ -139,12 +139,15 @@
   function anciennete(df, survol, sel) {
     const { lignes, survol: surv } = F.sousEnsemble(df, survol, sel);
     const L = grille({ colonnes: 2, titres: ["Compa-Ratio par tranche d'ancienneté", "Compa-Ratio selon l'âge à l'embauche (Age − Anciennete)"] });
+    // Les tranches d'ancienneté du fichier entier (voir tranchesAnciennete dans calculs.js), sans celles où le filtre ne
+    // laisse personne : une tranche vide n'est plus dessinée (demande du 09/11/2026).
+    const tranches = C.tranchesAnciennete(C.colonne(df, 'Anciennete')).libelles.filter(t => lignes.some(l => l.Tranche_Anciennete === t));
     // Par tranche : la médiane et le nombre de salariés qui ont un Compa-Ratio (ceux sans grille ne comptent pas).
-    const medianes = C.TRANCHES.map(t => { const v = lignes.filter(l => l.Tranche_Anciennete === t).map(l => l.Compa_Ratio).filter(Number.isFinite); return [v.length ? C.mediane(v) : null, v.length]; });
+    const medianes = tranches.map(t => { const v = lignes.filter(l => l.Tranche_Anciennete === t).map(l => l.Compa_Ratio).filter(Number.isFinite); return [v.length ? C.mediane(v) : null, v.length]; });
     const y = lignes.map(l => l.Compa_Ratio), x = lignes.map(l => l.Age_Embauche), courbe = C.lowess(x, y);
     const traces = [
       boite(K.ARDOISE, { x: lignes.map(l => l.Tranche_Anciennete), y, text: surv, name: 'Salariés' }),
-      { type: 'scatter', mode: 'lines+markers', x: C.TRANCHES, y: medianes.map(m => m[0]), customdata: medianes.map(m => m[1]),
+      { type: 'scatter', mode: 'lines+markers', x: tranches, y: medianes.map(m => m[0]), customdata: medianes.map(m => m[1]),
         line: { color: K.BRUN, width: 3 }, marker: { size: 8 }, name: 'Médiane par tranche',
         hovertemplate: 'Ancienneté %{x} ans<br><b>Compa-Ratio médian : %{y:.3f}</b><br>%{customdata:,} salariés<extra></extra>' },
       // Points gris clair : la courbe de tendance, en brun, se lit par-dessus.
@@ -153,8 +156,7 @@
       { type: 'scatter', mode: 'lines', x: courbe.x, y: courbe.y, line: { color: K.BRUN, width: 3 }, name: 'Tendance non linéaire (Lowess)',
         hovertemplate: "Âge à l'embauche %{x}<br>tendance : %{y:.3f}<extra></extra>", xaxis: 'x2', yaxis: 'y2' },
     ];
-    Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: C.TRANCHES, title: titreAxe("Ancienneté (tranches de 2 ans)") });
-    // Pourquoi « tranches de 2 ans » : les tranches suivent la présentation des départs (voir TRANCHES dans calculs.js).
+    Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: tranches, title: titreAxe("Ancienneté (tranches d'années)") });
     L.xaxis2.title = titreAxe("Âge à l'embauche (années)");
     for (const s of ['', '2']) { L['yaxis' + s].title = titreAxe('Compa-Ratio (Salaire / Mid)'); L.shapes.push(ligneH(s, 1, K.PALE)); }
     // Clic, dans l'ordre des courbes : boîte (la tranche, ou le salarié d'un point isolé), médianes (la tranche),
@@ -171,7 +173,7 @@
     const corr = [C.correlation(lignes.map(l => l.Age), lignes.map(l => l.Anciennete)), C.correlation(x, lignes.map(l => l.Anciennete))];
     // Une tranche sans médiane dit pourquoi : personne dans la tranche, ou personne avec une grille.
     const vide = t => lignes.some(l => l.Tranche_Anciennete === t) ? 'pas de Compa-Ratio' : 'aucun salarié';
-    const lecture = C.TRANCHES.map((t, i) => `${t} ans : ${medianes[i][1] ? fr(medianes[i][0], 2) : vide(t)}`).join(' · ');
+    const lecture = tranches.map((t, i) => `${t} ans : ${medianes[i][1] ? fr(medianes[i][0], 2) : vide(t)}`).join(' · ');
     constat('s-anciennete', `${F.libelle(sel)} (${salaries(lignes.length)}). Compa-Ratio médian par tranche : ${lecture}.
       Corrélation Age / Anciennete : ${ouNon(corr[0], 2)} ; Age_Embauche / Anciennete : ${ouNon(corr[1], 2)}.`);
   }
