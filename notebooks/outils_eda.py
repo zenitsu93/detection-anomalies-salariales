@@ -249,7 +249,8 @@ def graphe_repartition(df, limites):
     trop_bas, trop_haut = (avec_grille['Compa_Ratio'] < limites[0]).sum(), (avec_grille['Compa_Ratio'] > limites[1]).sum()
     constat(f"Sur {len(avec_grille)} salariés avec une grille : {int(sous_min)} sous le Min de leur grille ({part(sous_min, len(avec_grille))}), "
             f"{int(sur_max)} au-dessus du Max ({part(sur_max, len(avec_grille))}).",
-            f"Valeurs extrêmes : {int(trop_bas)} sous la limite basse ({fr(limites[0])}), {int(trop_haut)} au-dessus de la limite haute ({fr(limites[1])}).")
+            f"Outliers de la boîte à moustaches : {int(trop_bas)} sous la limite basse ({fr(limites[0])}), "
+            f"{int(trop_haut)} au-dessus de la limite haute ({fr(limites[1])}).")
 
 
 def tableau_extremes(df, colonnes=('Fixe_Annuel_MAD', 'Age', 'Anciennete', 'Age_Embauche', 'Competence_N1', 'Range_Penetration', 'Market_Ratio')):
