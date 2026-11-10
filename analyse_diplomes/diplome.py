@@ -38,10 +38,14 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import RepeatedKFold
 
 from commun import INCONNU, TRANCHES, charger, detection, ecrire_page, pour_cent, virgule
-from anomaly_signal_regression import COLONNES, tableau_x
+from anomaly_signal_regression import COLONNES as COLONNES_MODELE, tableau_x
 from anomaly_signal_iforest import FEATS
 from anomaly_signal_fort import CATEGORIE
 
+# Le modèle de référence, « sans le diplôme » : celui de l'aide à la décision, moins ses colonnes du
+# diplôme. Pourquoi : depuis le 09/11/2026, ce modèle lit aussi le diplôme ; pour mesurer ce que le
+# diplôme apporte, il faut le comparer à lui-même sans le diplôme.
+COLONNES = [c for c in COLONNES_MODELE if c not in ("Rang_Etude_Max", "Cat_Ecole_Max")]
 AVEC_TRANCHE = COLONNES + ["Tranche_Etude"]
 AVEC_TOUT = COLONNES + ["Tranche_Etude", "Cat_Ecole_Max"]
 # Les couleurs des tranches : du plus clair (moins diplômé) au plus foncé, dans l'or de la charte Repères.
@@ -191,7 +195,9 @@ def partie_regression(df):
     """Le tableau des erreurs (partie 3) et les graphes de l'effet du diplôme (partie 4) : le HTML des
     deux parties et leurs graphes."""
     # Un salarié sans salaire utilisable ne peut pas servir à apprendre un salaire.
-    df = df[df["Fixe_Annuel_MAD"] > 0].reset_index(drop=True)
+    # Ni un salarié sans grille, sans marché ou avec une case vide parmi les nombres du modèle (âge...) : le
+    # modèle ne sait pas les lire.
+    df = df[(df["Fixe_Annuel_MAD"] > 0) & tableau_x(df, AVEC_TOUT).notna().all(axis=1)].reset_index(drop=True)
 
     print("Régression : essais des quatre modèles (50 essais chacun)...")
     resultats = {"Sans le diplôme": essais(df, COLONNES),
@@ -253,7 +259,8 @@ def partie_regression(df):
     html = f"""
 <h2>3. Les erreurs du modèle, sans et avec le diplôme</h2>
 <p class="lire">Le modèle est la régression qui devine le salaire d'un salarié à partir de son métier, son niveau,
-son ancienneté, son âge, ses notes et le Hot job. Chaque modèle est essayé 50 fois : il apprend sur 80 % des
+le milieu de sa grille, l'écart entre la grille et le marché, son ancienneté, son âge, sa compétence, sa performance,
+son 9-Box et le Hot job. Chaque modèle est essayé 50 fois : il apprend sur 80 % des
 salariés, puis on mesure son erreur sur les 20 % qu'il n'a pas vus. Le <b>témoin</b> a des diplômes mélangés au
 hasard : il montre ce qu'on gagne avec des colonnes qui ne veulent rien dire. Le diplôme n'aide que s'il fait
 nettement mieux que lui.</p>

@@ -186,7 +186,8 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     5. Calculer les ratios :
        - CompaRatio = salaire / Mid : 1 veut dire « payé au milieu de la fourchette » ;
        - RangePenetration = (salaire - Min) / (Max - Min) : 0 veut dire « au Min », 1 « au Max » ;
-       - MarketRatio = salaire / médiane du marché : 1 veut dire « payé comme le marché ».
+       - MarketRatio = salaire / médiane du marché : 1 veut dire « payé comme le marché » ;
+       - Ratio_Grille_Marche = Mid / médiane du marché : 1 veut dire « la grille paie comme le marché ».
     6. Lire le niveau d'études de chaque salarié dans ses colonnes du diplôme, s'il y en a
        (ajouter_diplomes).
     """
@@ -222,6 +223,10 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     df["CompaRatio"] = df["Fixe_Annuel_MAD"] / df["Mid"].replace(0, np.nan)
     df["RangePenetration"] = (df["Fixe_Annuel_MAD"] - df["Min"]) / (df["Max"] - df["Min"]).replace(0, np.nan)
     df["MarketRatio"] = df["Fixe_Annuel_MAD"] / df["Market_Median"].replace(0, np.nan)
+    # Ratio grille / marché = Mid / médiane du marché : 1,10 veut dire que la grille du métier + niveau
+    # paie 10 % de plus que le marché. Il ne dépend pas du salaire : c'est la régression qui le lit
+    # (anomaly_signal_regression.py).
+    df["Ratio_Grille_Marche"] = df["Mid"] / df["Market_Median"].replace(0, np.nan)
 
     # 6. Niveau d'études, lu dans le fichier des salariés lui-même. Pourquoi seulement maintenant, et pas
     # à la lecture : le rang et la tranche se calculent sur le tableau final, et le nom du fichier sert
