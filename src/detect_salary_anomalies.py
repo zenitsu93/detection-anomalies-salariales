@@ -14,7 +14,8 @@ Ce fichier enchaîne les étapes du dossier src/, dans l'ordre, et enregistre le
 6. anomaly_score_general.py        : score général (règles + IA) et priorité de chaque salarié ;
 7. anomaly_recommandations.py      : recommandation et coût d'ajustement ;
 8. anomaly_ecarts_hommes_femmes.py : médianes femmes / hommes par métier + niveau ;
-9. generate_dashboard_html.py      : tableau de bord HTML.
+9. generate_dashboard_html.py      : tableau de bord HTML ;
+10. generate_accueil.py            : écran d'accueil (accueil.html), qui ouvre les trois outils.
 
 Utilisation, depuis le dossier du projet :
       python src/detect_salary_anomalies.py
@@ -38,6 +39,7 @@ from anomaly_score_general import aggregate_risk
 from anomaly_recommandations import recommendations
 from anomaly_ecarts_hommes_femmes import gender_gap_analysis
 from generate_dashboard_html import generate_dashboard
+from generate_accueil import generate_accueil
 
 
 def secondes(debut):
@@ -48,7 +50,7 @@ def secondes(debut):
 def lancer(numero, texte, fonction, *arguments):
     """Lance une étape en affichant dans le terminal où on en est, puis le temps qu'elle a pris."""
     # flush=True : la ligne s'affiche tout de suite, avant que l'étape (parfois longue) ne commence.
-    print(f"[{numero}/9] {texte}...", end=" ", flush=True)
+    print(f"[{numero}/10] {texte}...", end=" ", flush=True)
     debut = time.perf_counter()
     resultat = fonction(*arguments)
     print(f"fait en {secondes(debut)}")
@@ -102,6 +104,9 @@ if __name__ == "__main__":
     tableau_de_bord = lancer(9, "Tableau de bord", generate_dashboard, df, gg, rule_params,
                              projet / "output" / "dashboard")
 
+    # L'écran d'accueil, à la racine du projet : ses chiffres et son lien suivent ce tableau de bord.
+    accueil = lancer(10, "Écran d'accueil", generate_accueil, df, tableau_de_bord, projet)
+
     # En fichiers Excel (.xlsx) : ils s'ouvrent directement, sans souci de séparateur, de virgule
     # décimale ou d'accents.
     df.to_excel(dossier / "anomalies.xlsx", index=False)
@@ -110,3 +115,4 @@ if __name__ == "__main__":
     print(f"\nTerminé en {secondes(debut)} : {len(df)} salariés analysés.")
     print(f"- Excel (anomalies.xlsx, gender_gap.xlsx) : {dossier}")
     print(f"- Tableau de bord : {tableau_de_bord}")
+    print(f"- Écran d'accueil, à ouvrir en premier : {accueil}")
