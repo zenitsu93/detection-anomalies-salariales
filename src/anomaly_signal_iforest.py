@@ -32,10 +32,21 @@ from anomaly_pretraitement import preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 
-# Les colonnes que le modèle regarde, dont les trois champs RH (niveau de compétences N-1, case
-# 9Box, hot job).
-FEATS = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio", "Age", "Anciennete",
-         "Competence_N1", "Positionnement_9BOX", "Hot_job"]
+# Les colonnes que le modèle regarde : le salaire et ses ratios, l'âge, l'ancienneté et les champs RH
+# (compétence et performance N-1, Hot job).
+# Changements du 10/11/2026, et pourquoi :
+# - RangePenetration retirée : elle se calcule avec le Min et le Max de la grille et dit presque la
+#   même chose que le CompaRatio (où est le salaire dans sa grille). La règle « sous la grille » la
+#   regarde toujours.
+# - Positionnement_9BOX retiré : c'est maintenant une catégorie (« Talents »...), que l'IA ne sait pas
+#   lire comme un nombre ; et il se déduit de la performance et de la compétence, déjà regardées.
+# - Ajouté : le rang de la performance N-1 (1 = Très en dessous ... 5 = Très au-delà).
+# - Ni le Mid ni le ratio grille / marché, que la régression lit pourtant : ils décrivent la grille du
+#   métier + niveau, pas la personne. Essayés, ils faisaient remonter surtout les salariés des grilles
+#   rares (les plus hauts niveaux), parce qu'elles sont rares, et non parce que leur salaire pose
+#   question.
+FEATS = ["Fixe_Annuel_MAD", "CompaRatio", "MarketRatio", "Age", "Anciennete", "Competence_N1", "Rang_Performance",
+         "Hot_job"]
 
 
 def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feats=None):
@@ -50,6 +61,9 @@ def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, fe
     rien changer à la détection.
     """
     feats = FEATS if feats is None else list(feats)
+    # Une colonne vide pour tout le monde (un fichier sans performance N-1, par exemple) ne dit rien au
+    # modèle, et il ne saurait pas la lire : elle est laissée de côté.
+    feats = [f for f in feats if f in df and df[f].notna().any()]
     # Le modèle ne sait pas traiter une case vide : on la remplace par la valeur du milieu de sa
     # colonne (la médiane).
     X = df[feats].fillna(df[feats].median())
@@ -70,7 +84,7 @@ def ml_anomaly(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feat
     (celui reçu n'est pas modifié), avec la colonne ML_AnomalyScore en plus.
 
     Ce que fait le modèle, en clair : il regarde le profil de chaque salarié (salaire, ratios, âge,
-    ancienneté et les trois champs RH) et cherche ceux qui ne ressemblent pas aux
+    ancienneté et champs RH) et cherche ceux qui ne ressemblent pas aux
     autres. Il découpe les salariés au hasard, encore et encore : un profil très inhabituel se
     retrouve isolé en peu de découpes, un profil banal en demande beaucoup. « Non supervisé » veut
     dire qu'on ne lui a jamais montré d'exemples d'anomalies : il les repère tout seul.

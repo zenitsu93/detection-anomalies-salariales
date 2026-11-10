@@ -36,22 +36,23 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from anomaly_pretraitement import RANG_NIVEAU_ETUDE, preparer_employes
+from anomaly_pretraitement import ORDRE_PERFORMANCE, RANG_NIVEAU_ETUDE, preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import entrainer_ia, ml_anomaly
 
 # Les informations que regarde l'IA, telles qu'on les écrit dans l'explication : nom, facteur,
-# décimales, unité. La position dans la grille s'écrit en % (0 % = au Min, 100 % = au Max).
+# décimales, unité. Depuis le 10/11/2026, l'IA ne regarde plus la position dans la grille ni la case
+# 9-Box (voir FEATS dans anomaly_signal_iforest.py) : leurs lignes sont retirées, celle de la
+# performance N-1 ajoutée.
 NOMS = {
     "Fixe_Annuel_MAD": ("le salaire", 1, 0, " kMAD"),
     "CompaRatio": ("le CompaRatio", 1, 2, ""),
-    "RangePenetration": ("la position dans la grille", 100, 0, " %"),
     "MarketRatio": ("le ratio marché", 1, 2, ""),
     "Age": ("l'âge", 1, 0, " ans"),
     "Anciennete": ("l'ancienneté", 1, 1, " ans"),
     "Competence_N1": ("la note de compétences N-1", 1, 2, ""),
-    "Positionnement_9BOX": ("la case 9-Box", 1, 0, ""),
+    "Rang_Performance": ("la performance N-1", 1, 0, ""),
     "Hot_job": ("le Hot job", 1, 0, ""),
     # Pas regardé par la détection : seulement quand analyse_diplomes/diplome.py essaie l'IA avec le diplôme.
     "Rang_Etude_Max": ("le niveau d'études", 1, 0, ""),
@@ -74,7 +75,7 @@ def nom(info):
         return f"la catégorie de diplôme « {info[len(CATEGORIE):]} »"
     return NOMS[info][0]
 # Les informations qui disent combien le salarié est payé (voir le choix B dans apply_ml_strong_signal).
-PAYE = ["Fixe_Annuel_MAD", "CompaRatio", "RangePenetration", "MarketRatio"]
+PAYE = ["Fixe_Annuel_MAD", "CompaRatio", "MarketRatio"]
 
 
 def texte(valeur, info):
@@ -85,6 +86,11 @@ def texte(valeur, info):
     if info == "Rang_Etude_Max":
         bas, haut = NIVEAU_DU_RANG[math.floor(valeur)], NIVEAU_DU_RANG[math.ceil(valeur)]
         return bas if bas == haut else f"entre {bas} et {haut}"
+    # La performance N-1 aussi, en libellé (« A l'objectif ») plutôt qu'avec son rang (3), entre
+    # guillemets ; la performance habituelle peut tomber entre deux rangs, comme le niveau d'études.
+    if info == "Rang_Performance":
+        bas, haut = ORDRE_PERFORMANCE[math.floor(valeur) - 1], ORDRE_PERFORMANCE[math.ceil(valeur) - 1]
+        return f"« {bas} »" if bas == haut else f"entre « {bas} » et « {haut} »"
     # Une catégorie de diplôme s'écrit « oui » ou « non » plutôt que 1 ou 0. La valeur habituelle peut
     # tomber entre les deux (0,5) quand il y a autant de oui que de non : on écrit alors « un sur deux ».
     if info.startswith(CATEGORIE):
@@ -96,9 +102,6 @@ def texte(valeur, info):
     # « 1 an », « 0,5 an », mais « 2 ans ».
     if unite == " ans" and valeur * facteur < 2:
         unite = " an"
-    # Une position hors de la grille (sous 0 % ou au-dessus de 100 %) se lit mal seule : on le dit.
-    if info == "RangePenetration" and not 0 <= valeur <= 1:
-        unite += ", sous le Min" if valeur < 0 else ", au-dessus du Max"
     return nombre + unite
 
 
