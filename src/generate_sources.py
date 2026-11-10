@@ -14,7 +14,9 @@ Vue d'ensemble de ce que fait le script :
                 age, anciennete, sexe, etc.) dont le salaire tombe dans la
                 bande. Les postes sont de simples numeros (JT0001, JT0002...)
                 et chacun porte un Hot_job de 0 a 2. Chaque employe recoit
-                une case 9-Box de 0 a 6.
+                une case 9-Box de 0 a 6, un diplome (niveau d'etudes et categorie
+                d'ecole) et une performance N-1 (5 libelles, de « Tres en
+                dessous » a « Tres au-dela »).
   4. EXPORT   : ecrit les 3 tables en Excel (.xlsx) dans le dossier input/ et affiche
                 quelques controles de coherence.
 """
@@ -152,6 +154,52 @@ ECART_AGE_ANC_MIN = 18
 PART_FEMMES = 0.46
 # Note de competence : loi normale de moyenne 3.35 et ecart-type 0.60 (sur 5).
 COMP_MU, COMP_SD = 3.35, 0.60
+
+# Diplome : (Niveau_Etude_Max, Cat_Ecole_Max) et nombre de salaries sur 10 000.
+# Pourquoi ces nombres : ce sont ceux du fichier des diplomes deja utilise pour les tests
+# (input/diplomes.xlsx), pour que le fichier regenere garde les memes proportions.
+# Le diplome est tire au hasard, sans lien avec le metier, le niveau ni le salaire.
+# « NON DETERMINE » n'a pas de categorie d'ecole (case vide, comme dans le vrai fichier).
+PARTS_DIPLOME = {
+    ("SECONDAIRE", "AUTRES"): 47,
+    ("BAC", "AUTRES"): 203,
+    ("BAC+2", "AUTRES"): 1266,
+    ("BAC+2", "DIPLOME DE COMMERCE"): 2,
+    ("BAC+2", "DIPLOME UNIVERSITAIRE"): 334,
+    ("BAC+3", "AUTRES"): 16,
+    ("BAC+3", "DIPLOME D'INGENIEUR"): 34,
+    ("BAC+3", "DIPLOME DE COMMERCE"): 131,
+    ("BAC+3", "DIPLOME UNIVERSITAIRE"): 2365,
+    ("BAC+4", "AUTRES"): 171,
+    ("BAC+4", "DIPLOME D'INGENIEUR"): 17,
+    ("BAC+4", "DIPLOME DE COMMERCE"): 409,
+    ("BAC+4", "DIPLOME UNIVERSITAIRE"): 263,
+    ("BAC+5", "DIPLOME D'INGENIEUR"): 775,
+    ("BAC+5", "DIPLOME DE COMMERCE"): 2242,
+    ("BAC+5", "DIPLOME UNIVERSITAIRE"): 1408,
+    ("BAC+6", "DIPLOME DE COMMERCE"): 1,
+    ("BAC+6", "DIPLOME UNIVERSITAIRE"): 2,
+    ("BAC+7", "DIPLOME D'INGENIEUR"): 2,
+    ("BAC+7", "DIPLOME DE COMMERCE"): 2,
+    ("BAC+7", "DIPLOME UNIVERSITAIRE"): 21,
+    ("EXPERTISE COMPTABLE", "DIPLOME DE COMMERCE"): 2,
+    ("EXPERTISE COMPTABLE", "DIPLOME UNIVERSITAIRE"): 1,
+    ("NON DETERMINE", None): 286,
+}
+
+# Performance N-1 : les 5 libelles de la matrice Performance x Competence, du plus bas au
+# plus haut, avec la part des salaries pour chacun (total = 100 %).
+PARTS_PERFORMANCE = {
+    "Très en dessous": 0.05,
+    "Proche de l'objectif": 0.15,
+    "A l'objectif": 0.45,
+    "Supérieur à l'objectif": 0.25,
+    "Très au-delà": 0.10,
+}
+# Lien entre performance et competence, de 0 (aucun) a 1 (la performance suit exactement
+# la competence). Pourquoi 0.5 : un salarie bien note en competence a plus souvent une bonne
+# performance, sans que ce soit automatique, comme dans la realite.
+LIEN_PERF_COMP = 0.5
 
 # ----------------------------------------------------------------------------
 # 1. BANDS
@@ -492,6 +540,40 @@ def main():
     # Reattribue les matricules dans le nouvel ordre : Mat00001, Mat00002, ...
     employes["Matricule"] = [f"Mat{i:05d}" for i in range(1, len(employes) + 1)]
 
+    # 3e. Diplome et performance N-1
+    # Pourquoi un tirage au sort a part (graine SEED + 2) : le tirage principal (rng) reste
+    # exactement le meme qu'avant, donc toutes les autres colonnes ne changent pas.
+    rng_ajouts = np.random.default_rng(SEED + 2)
+    n = len(employes)
+
+    # Diplome : repartir donne le nombre exact de salaries par couple (niveau d'etudes,
+    # categorie), puis la liste est melangee pour que chacun tombe sur un diplome au hasard.
+    n_diplome = repartir(n, PARTS_DIPLOME)
+    diplomes = [d for d, k in n_diplome.items() for _ in range(k)]
+    ordre = rng_ajouts.permutation(n)
+    employes["Niveau_Etude_Max"] = [diplomes[i][0] for i in ordre]
+    employes["Cat_Ecole_Max"] = [diplomes[i][1] for i in ordre]
+
+    # Performance : un score = une part de la competence (centree, ramenee a l'ecart-type 1)
+    # + une part de hasard. Les salaries sont ensuite ranges par score : les 5 % les plus bas
+    # recoivent « Tres en dessous », les 15 % suivants « Proche de l'objectif », etc.
+    # Pourquoi ranger plutot que couper a des seuils fixes : on obtient exactement les parts
+    # de PARTS_PERFORMANCE.
+    comp = (employes["Competence_N1"].to_numpy() - COMP_MU) / COMP_SD
+    score = LIEN_PERF_COMP * comp + np.sqrt(1 - LIEN_PERF_COMP ** 2) * rng_ajouts.normal(size=n)
+    n_perf = repartir(n, PARTS_PERFORMANCE)
+    libelles = np.repeat(list(n_perf), list(n_perf.values()))
+    performance = np.empty(n, dtype=object)
+    performance[np.argsort(score, kind="stable")] = libelles
+    employes["Performance_N1"] = performance
+
+    # Ordre des colonnes : le diplome juste apres le niveau, la performance juste apres
+    # la competence (meme ordre que le fichier des salaries utilise jusqu'ici).
+    colonnes = [c for c in employes.columns if c not in ("Niveau_Etude_Max", "Cat_Ecole_Max", "Performance_N1")]
+    colonnes[colonnes.index("Niveau") + 1:colonnes.index("Niveau") + 1] = ["Niveau_Etude_Max", "Cat_Ecole_Max"]
+    colonnes.insert(colonnes.index("Competence_N1") + 1, "Performance_N1")
+    employes = employes[colonnes]
+
     # ------------------------------------------------------------------
     # EXPORT
     # ------------------------------------------------------------------
@@ -555,6 +637,15 @@ def main():
     total = sum(HOT_JOB_PARTS.values())
     for h, p in HOT_JOB_PARTS.items():
         print(f"  {h} : {pct_emp.get(h, 0):7.1%} | {pct_postes.get(h, 0):7.1%} | {p / total:7.1%}")
+
+    # Part de chaque niveau d'etudes et de chaque performance N-1.
+    print("\nNiveau d'etudes : % employes")
+    print(employes.Niveau_Etude_Max.value_counts(normalize=True).map("{:7.1%}".format).to_string())
+    print("\nPerformance N-1 : % employes | cible | competence moyenne")
+    pct_perf = employes.Performance_N1.value_counts(normalize=True)
+    comp_perf = employes.groupby("Performance_N1").Competence_N1.mean()
+    for lib, p in PARTS_PERFORMANCE.items():
+        print(f"  {lib:24} : {pct_perf.get(lib, 0):7.1%} | {p:7.1%} | {comp_perf.get(lib, float('nan')):.2f}")
 
     # Meme comparaison pour la case 9-Box, cote employes seulement (elle n'est pas donnee au poste).
     print("\n9-Box : % employes | cible")
