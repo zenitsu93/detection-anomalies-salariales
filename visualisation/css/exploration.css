@@ -68,6 +68,10 @@ button.lien { height: auto; padding: 0; border: 0; background: none; font: inher
 button.lien:hover { background: none; text-decoration-color: currentColor; }
 .liste { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 5vh 16px;
   background: rgba(31, 35, 40, .45); }
+/* Liste ouverte : la page derrière ne défile plus. overscroll-behavior : arrivé en haut ou en bas du tableau, la molette
+   s'arrête là au lieu de passer à la page (le « scroll » qui continuait derrière la liste). */
+.liste-ouverte, .liste-ouverte body { overflow: hidden; }
+.liste, .tv-defile, .tv-valeurs, .tv-menu { overscroll-behavior: contain; }
 .liste-carte { width: 100%; max-width: 1240px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 16px 40px rgba(31, 35, 40, .22); }
 .liste-carte > .panel-head { flex: none; }
 .liste-titre { font-size: 15px; font-weight: 600; }

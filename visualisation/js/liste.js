@@ -15,7 +15,7 @@
     ['Niveau', 'Niveau'], ['Sexe', 'Sexe'], ['Age', 'Âge'], ['Anciennete', 'Ancienneté'], ['Fixe_Annuel_MAD', 'Salaire fixe (kMAD)'],
     ['Min', 'Min'], ['Mid', 'Mid'], ['Max', 'Max'], ['Compa_Ratio', 'Compa-Ratio'], ['Range_Penetration', 'Position dans la bande'],
     ['Median', 'Médiane marché'], ['Position_Marche', 'Face au marché'], ['Competence_N1', 'Competence_N1'],
-    ['Positionnement_9BOX', '9-Box'], ['Hot_job', 'Hot_job'],
+    ['Positionnement_9BOX', '9-Box'], ['Hot_job', 'Hot_job'], ['Niveau_Etude_Max', "Niveau d'études"], ['Cat_Ecole_Max', 'Catégorie du diplôme'],
   ];
   const vide = v => v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v));
 
@@ -192,6 +192,9 @@
     (document.fullscreenElement || document.body).appendChild(fenetre);
     avant = document.activeElement;
     fenetre.hidden = false;
+    // Pourquoi bloquer la page derrière : sans ça, la molette faisait défiler la page sous la liste dès que le tableau
+    // arrivait en bas (ou quand la souris était à côté du tableau), et on avait l'impression de « toujours scroller ».
+    document.documentElement.classList.add('liste-ouverte');
     const recherche = fenetre.querySelector('.tv-outils input');
     (recherche || $('liste-fermer')).focus();
   }
@@ -199,6 +202,7 @@
   function fermer() {
     fermerMenu(false);
     fenetre.hidden = true;
+    document.documentElement.classList.remove('liste-ouverte');   // la page défile de nouveau
     if (avant && avant.focus) avant.focus();
   }
 
