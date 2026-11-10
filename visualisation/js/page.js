@@ -75,8 +75,9 @@
     filtrer('f-tranches-salaire', df, { niveau: true, pole: true }, sel => S.salaireEnTranches(df, sel));
     filtrer('f-ecart-mid', df, { niveau: true, pole: true }, sel => S.ecartAuMid(df, sel));
     filtrer('f-sous-min', df, { niveau: true, metier: true }, sel => S.sousMin(df, sel));
-    filtrer('f-evaluations', df, { niveau: true, pole: true }, sel => S.evaluations(df, sel));
-    filtrer('f-matrice', df, { vues: [['Positionnement_9BOX', 'Par case 9-Box'], ['Competence_N1', 'Par note de compétences']], niveau: true, pole: true },
+    filtrer('f-evaluations', df, { vues: [['repartition', 'Répartition'], ['matrice', 'Performance × compétence']], niveau: true, pole: true },
+      sel => S.evaluations(df, sel));
+    filtrer('f-matrice', df, { vues: [['Positionnement_9BOX', 'Par positionnement 9-Box'], ['Competence_N1', 'Par note de compétences']], niveau: true, pole: true },
       sel => S.matrice(df, sel));
     // Analyses détaillées, reprises du notebook du comité.
     filtrer('f-masse', df, { niveau: true }, sel => P.masseSalariale(df, sel));
