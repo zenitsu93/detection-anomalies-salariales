@@ -33,6 +33,7 @@ Utilisation :
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -40,6 +41,8 @@ from anomaly_pretraitement import ORDRE_PERFORMANCE, RANG_NIVEAU_ETUDE, preparer
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import entrainer_ia, ml_anomaly
+from anomaly_signal_regression import COLONNES as COLONNES_REGRESSION, NOMS as NOMS_REGRESSION, POSTE, \
+    _donnees, _robuste, contributions
 
 # Les informations que regarde l'IA, telles qu'on les écrit dans l'explication : nom, facteur,
 # décimales, unité. Depuis le 10/11/2026, l'IA ne regarde plus la position dans la grille ni la case
@@ -137,6 +140,9 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict, feats=None) -> p
     atypiques surtout parce qu'ils sont payés plus haut que d'habitude sont ensuite retirés : le
     signal touche donc un peu moins de 5 % des salariés.
     """
+    if feats is None and rule_params.get("ml_methode", "isolation_forest") == "ecart_attendu":
+        return signal_ecart_attendu(df, rule_params)
+
     percentile = rule_params.get("ml_strong_signal_percentile")
 
     df = df.copy()
@@ -183,6 +189,74 @@ def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict, feats=None) -> p
     df["Reason_Principale"] = df["Reason_Principale"].str.removeprefix(" & ")
 
     return df
+
+
+def pour_cent(x):
+    """-0.173 -> « 17 % » (sans signe : la phrase dit « de moins » ou « de plus »)."""
+    return f"{abs(x) * 100:.0f} %"
+
+
+def kmad(x):
+    """245.3 -> « 245 kMAD »."""
+    return f"{x:,.0f}".replace(",", " ") + " kMAD"
+
+
+def signal_ecart_attendu(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
+    """Le signal ML_STRONG_SIGNAL quand l'IA regarde l'écart au salaire attendu (ml_methode:
+    ecart_attendu). Le reçoivent les salariés payés au moins ml_signal_z écarts habituels sous le salaire
+    attendu pour leur poste ET leur profil (Z_Attendu <= -2 par défaut : sous une loi normale, 2 salariés
+    sur 100 seulement). Pourquoi un seuil fixe plutôt que « les 5 % du haut » : sans anomalie, personne ne
+    devrait recevoir le signal ; avec beaucoup d'anomalies, toutes doivent le recevoir.
+
+    Explication_IA dit de combien et pourquoi, en termes métier, par exemple : « payé 17 % de moins que
+    le salaire attendu pour son profil (245 kMAD, 9 fois sur 10 entre 215 et 280 kMAD) ; ce qui relève
+    l'attendu : l'ancienneté (15 ans, +6 %) et la performance N-1 (« Très au-delà », +5 %) ». Les
+    effets cités sont ceux du profil, comparé au salarié moyen ; le poste (métier, niveau, grille) n'est
+    pas cité, puisque la grille dit déjà ce qu'il paie.
+    Pas de tri « payé au-dessus » à faire ici (choix B de apply_ml_strong_signal) : seul un salaire SOUS
+    l'attendu peut recevoir le signal."""
+    seuil = float(rule_params.get("ml_signal_z", 2.0))
+    df = df.copy()
+    df["Explication_IA"] = ""
+    fort = df.index[df["Z_Attendu"] <= -seuil]
+    if len(fort):
+        colonnes = [c for c in COLONNES_REGRESSION if c in df and df[c].notna().any()]
+        # Le même modèle que le salaire attendu (appris sur tous, en robuste) sert à dire ce qui pèse :
+        # il est une somme d'effets, si bien que chaque effet se lit exactement.
+        X, Y = _donnees(df, colonnes)
+        modele, garde = _robuste(X, Y)
+        reg = {"modele": modele, "colonnes": colonnes, "colonnes_X": list(X.columns), "moyenne_X": X[garde].mean()}
+        effets = contributions(X.loc[X.index.intersection(fort)], reg)
+        effets = effets[[c for c in effets.columns if c not in POSTE]]
+        for i in fort:
+            ligne = df.loc[i]
+            phrase = (f"payé {pour_cent(ligne.Ecart_Attendu)} de moins que le salaire attendu pour son profil "
+                      f"({kmad(ligne.Salaire_Attendu)}, 9 fois sur 10 entre {kmad(ligne.Attendu_Bas)} "
+                      f"et {kmad(ligne.Attendu_Haut)})")
+            if i in effets.index:
+                hausses = effets.loc[i][effets.loc[i] > 0.01].nlargest(2)
+                if len(hausses):
+                    phrase += " ; ce qui relève l'attendu : " + " et ".join(
+                        f"{NOMS_REGRESSION.get(c, c)} ({valeur_profil(ligne, c)}, +{pour_cent(np.expm1(v))})"
+                        for c, v in hausses.items())
+            df.at[i, "Explication_IA"] = phrase
+
+    # Mêmes séparateurs que dans anomaly_regles.py (« ; » et « & »), comme pour l'Isolation Forest.
+    df.loc[fort, "Rule_Flags"] += ";ML_STRONG_SIGNAL"
+    df["Rule_Flags"] = df["Rule_Flags"].str.lstrip(";")
+    df.loc[fort, "Reason_Principale"] += " & IA : " + df.loc[fort, "Explication_IA"]
+    df["Reason_Principale"] = df["Reason_Principale"].str.removeprefix(" & ")
+    return df
+
+
+def valeur_profil(ligne, colonne):
+    """La valeur d'une colonne du profil, écrite pour l'explication : « 15 ans », « « Très au-delà » »."""
+    valeur = ligne[colonne]
+    if colonne == "Rang_Etude_Max":
+        return NIVEAU_DU_RANG.get(valeur, "inconnu") if pd.notna(valeur) else "inconnu"
+    if colonne in NOMS:
+        return texte(valeur, colonne)
+    return f"« {valeur} »" if pd.notna(valeur) else "inconnu"
 
 
 # Ce bloc ne s'exécute que si l'on lance CE fichier directement (python src/anomaly_signal_fort.py),

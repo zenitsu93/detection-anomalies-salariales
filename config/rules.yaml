@@ -12,6 +12,26 @@ rules:
     peer_outlier: 15       # PeerZ <= -peer_z_threshold_major (payé nettement moins que ses collègues)
     min_salary: 20         # salaire sous le plancher de son niveau (min_salary_by_niveau)
 
+  # Ce que regarde l'IA (depuis le 10/11/2026) :
+  # - ecart_attendu : l'écart entre le salaire et le salaire ATTENDU pour le poste et le profil (métier,
+  #   niveau, grille, ancienneté, performance, compétence, diplôme...), prédit par la régression
+  #   (src/anomaly_signal_regression.py) avec un modèle qui n'a pas vu le salarié. Elle repère les salariés
+  #   payés nettement moins que des collègues de même profil, même dans leur grille ;
+  # - isolation_forest : l'ancienne IA, qui repère les profils RARES (un âge, une ancienneté, un salaire
+  #   de haut niveau), qu'ils soient mal payés ou non.
+  # Pourquoi ecart_attendu : sur le banc d'essai (python analyse_modeles/banc_essai_ia.py), elle trouve
+  # bien plus de vrais cas, et aucun salaire au-dessus de la grille.
+  ml_methode: ecart_attendu
+  # Score IA (ecart_attendu) : 0 pour un salaire au niveau attendu ou au-dessus, puis il monte jusqu'à 100
+  # quand le salaire est ml_z_plein écarts habituels sous l'attendu (Z_Attendu = -3). Un écart habituel
+  # est l'erreur typique du modèle pour un salaire normal (environ 8 % sur des données réalistes).
+  ml_z_plein: 3.0
+  # Signal fort (ecart_attendu) : ML_STRONG_SIGNAL et son explication pour un salaire à ml_signal_z écarts
+  # habituels ou plus sous l'attendu (Z_Attendu <= -2). Sans anomalie, cela ne touche qu'environ 2 % des
+  # salariés ; ml_strong_signal_percentile, plus bas, ne sert alors plus.
+  ml_signal_z: 2.0
+
+  # Isolation Forest seulement (ml_methode: isolation_forest) :
   # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
   # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
   # point : le score de l'IA compte déjà dans le score général (ml_weight, plus bas).
