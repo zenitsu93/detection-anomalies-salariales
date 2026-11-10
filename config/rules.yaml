@@ -94,6 +94,13 @@ rules:
     - "Niveau|Job_Family"
     - "Niveau"
 
+  # Sur quoi se mesure l'écart aux collègues (depuis le 10/11/2026) :
+  # - log : en proportion (le logarithme du salaire). « 20 % de moins » pèse autant que « 20 % de plus »,
+  #   et quand le groupe mélange plusieurs métiers (étape « Niveau »), on compare la position dans la
+  #   grille (CompaRatio) plutôt que le salaire, car les grilles changent d'un métier à l'autre ;
+  # - brut : en kMAD, comme avant.
+  peer_z_echelle: log
+
   # Écart aux collègues (PeerZ) : mesure à quel point un salaire s'éloigne de ceux de son groupe
   # (0 = dans la moyenne ; 2 = nettement à part ; 3 = très à part). Négatif = payé moins que ses
   # collègues. Seul ce côté compte : PeerZ = -3 déclenche l'alerte, PeerZ = +3 non.
