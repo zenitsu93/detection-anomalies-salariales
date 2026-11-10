@@ -133,6 +133,30 @@ NOMS_LISIBLES = {"Niveau": "niveau", "Job_Family": "métier", "Anciennete_Bucket
                  "Tranche_Etude": "tranche de diplôme"}
 
 
+def mesure_ecart(df: pd.DataFrame, colonnes, echelle: str = "log") -> pd.Series:
+    """Ce sur quoi on mesure l'écart d'un salarié à son groupe (changement du 10/11/2026).
+
+    - echelle « brut » : le salaire en kMAD, comme avant.
+    - echelle « log » (par défaut) : le logarithme du salaire. Pourquoi : un salaire s'écarte des autres
+      en PROPORTION (-20 %, +20 %), pas en kMAD. En kMAD, les hauts salaires d'un groupe gonflent l'écart
+      habituel, et un salaire 25 % sous le milieu n'atteint presque jamais -3 ; en log, « 20 % de moins »
+      pèse autant que « 20 % de plus ». Sur le banc d'essai, à groupes identiques, la règle des collègues
+      (PeerZ <= -3) trouve 70 des 250 salaires sous le Min au lieu de 12, sans changer les seuils.
+    - Quand le groupe mélange plusieurs métiers (étape sans Job_Family, par exemple « même niveau ») : le
+      log du CompaRatio (salaire / milieu de sa propre grille) au lieu du log du salaire. Pourquoi : à
+      niveau égal, le milieu de grille change jusqu'à 60 % d'un métier à l'autre ; comparer les salaires
+      ferait passer pour sous-payé quelqu'un dont le métier a simplement une grille plus basse. Un
+      salarié sans grille n'a alors pas d'écart (case vide)."""
+    salaire = pd.to_numeric(df["Fixe_Annuel_MAD"], errors="coerce")
+    if echelle != "log":
+        return salaire
+    if "Job_Family" not in colonnes and "CompaRatio" in df:
+        valeur = pd.to_numeric(df["CompaRatio"], errors="coerce")
+    else:
+        valeur = salaire
+    return np.log(valeur.where(valeur > 0))
+
+
 def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Recette : donner à chaque salarié son groupe de collègues, et mesurer son écart par rapport à ce
     groupe (la règle est expliquée en haut de ce fichier).
@@ -151,7 +175,7 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     - Cohort_STD : l'écart habituel des salaires du groupe autour de la moyenne (l'écart-type) ;
     - Cohort_P25 et Cohort_P75 : les salaires en dessous desquels se trouvent 25 % et 75 % des
       personnes du groupe ;
-    - PeerZ : l'écart du salarié par rapport à son groupe (recette robust_zscore, juste au-dessus)."""
+    - PeerZ : l'écart du salarié par rapport à son groupe (recettes robust_zscore et mesure_ecart)."""
     # Les étapes, du groupe le plus précis au plus large, lues dans le fichier de règles
     # (cohort_widening_steps). Si elles n'y sont pas, on prend celles-ci. Chaque étape est une liste de
     # noms de colonnes séparés par « | » : « Niveau|Job_Family » veut dire « même niveau et même métier ».
@@ -164,6 +188,8 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     # La taille minimale d'un groupe, lue dans le fichier de règles (15 si elle n'y est pas).
     # « int » veut dire « nombre entier ».
     min_size = int(rule_params.get("cohort_min_size", 15))
+    # Sur quoi se mesure l'écart aux collègues : « log » (par défaut) ou « brut » (voir mesure_ecart).
+    echelle = rule_params.get("peer_z_echelle", "log")
 
     # Le DataFrame rendu est une copie du DataFrame des salariés, avec toutes ses colonnes (« .copy() » :
     # df ne sera pas modifié). Au départ, personne n'a encore de groupe : on ajoute les colonnes des
@@ -217,6 +243,7 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         # calculées sur le groupe ENTIER à cette étape, même si certains de ses membres ont reçu, eux, un
         # groupe plus précis : c'est ce qui fait que chacun est comparé à tous ses collègues du groupe.
         salaires = groupes["Fixe_Annuel_MAD"]
+        mesure = mesure_ecart(df, colonnes, echelle).groupby(cle)
         # Les critères du groupe retenu, écrits en clair (par exemple « niveau + métier »).
         cohortes.loc[choisis, "Criteres_Cohorte"] = " + ".join(NOMS_LISIBLES.get(c, c) for c in colonnes)
         # Le nom et la taille du groupe retenu.
@@ -231,7 +258,9 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         cohortes.loc[choisis, "Cohort_P25"] = salaires.transform(lambda x: np.nanpercentile(x, 25))[choisis]
         cohortes.loc[choisis, "Cohort_P75"] = salaires.transform(lambda x: np.nanpercentile(x, 75))[choisis]
         # L'écart de chaque salarié par rapport à son groupe entier (recette robust_zscore, plus haut).
-        cohortes.loc[choisis, "PeerZ"] = salaires.transform(robust_zscore)[choisis]
+        # Il se mesure sur « mesure » (voir mesure_ecart) : le salaire en log, ou la position dans la grille
+        # quand le groupe mélange plusieurs métiers.
+        cohortes.loc[choisis, "PeerZ"] = mesure.transform(robust_zscore)[choisis]
 
     # À ce stade, tout le monde a un groupe : la taille redevient un nombre entier (15 et non 15,0).
     cohortes["Cohort_Size"] = cohortes["Cohort_Size"].astype(int)

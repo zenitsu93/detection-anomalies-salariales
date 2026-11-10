@@ -102,10 +102,13 @@ COL_FR = {
     "Cat_Ecole_Max": "Catégorie du diplôme",
     "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
-    "Rule_Score": "Score de règles", "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
+    "Rule_Score": "Score de règles",
+    # Le salaire attendu pour le poste et le profil (ml_methode: ecart_attendu) ; vide avec l'Isolation Forest.
+    "Salaire_Attendu": f"Salaire attendu ({UNITE})",
+    "ML_AnomalyScore": "Score IA", "Reco": "Recommandation",
     "Cout_Ajustement": f"Coût d'ajustement ({UNITE})",
     # En dernier : une phrase, plus longue que les autres colonnes (vide sans signal fort de l'IA).
-    "Explication_IA": "Pourquoi l'IA le trouve atypique",
+    "Explication_IA": "Ce que l'IA a vu",
 }
 
 
@@ -234,7 +237,8 @@ def build_data(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
         vues[diplome] = compter(partie, ecarts_sexes(partie), rule_params)
 
     # La liste des salariés : cases vides en None, sinon le JSON serait invalide.
-    rec = df[list(COL_FR)].round(2)
+    # reindex : une colonne absente (le salaire attendu, avec l'Isolation Forest) reste vide.
+    rec = df.reindex(columns=list(COL_FR)).round(2)
     rec = rec.astype(object).where(rec.notna(), None)
 
     return {
