@@ -423,24 +423,82 @@
     return { libelles, tranche: x => Number.isFinite(x) ? libelles[Math.min(k - 1, Math.max(0, Math.floor((x - debut) / pas + 1e-9)))] : null };
   }
 
+  // Deux vues (10/11/2026). « Répartition » : trois graphes côte à côte, la note de compétences, la performance N-1 et le
+  // positionnement 9-Box (chaque catégorie dans sa couleur). « Performance × compétence » : la matrice du tableau de bord
+  // RH (voir matricePerformance).
   function evaluations(df, sel) {
-    const lignes = df.filter(l => F.garder(l, sel)), t = tranchesCompetence(df), cases = C.modalites(df, 'Positionnement_9BOX');
-    const gc = t ? grouper(lignes, t.libelles, l => t.tranche(l.Competence_N1)) : [], g9 = grouper(lignes, cases, l => l.Positionnement_9BOX);
-    const vc = nonVides(gc, t ? t.libelles : []), v9 = nonVides(g9, cases.map(String));
-    const L = grille({ colonnes: 2, titres: ['Note de compétences (Competence_N1), par tranche', 'Case 9-Box (Positionnement_9BOX)'] });
+    if (sel.vue === 'matrice') return matricePerformance(df, sel);
+    const lignes = df.filter(l => F.garder(l, sel)), t = tranchesCompetence(df), perfs = C.performances(df), cases = C.cases9Box(df);
+    const gc = t ? grouper(lignes, t.libelles, l => t.tranche(l.Competence_N1)) : [];
+    const gp = grouper(lignes, perfs, l => l.Performance_N1), g9 = grouper(lignes, cases, l => l.Positionnement_9BOX);
+    const vc = nonVides(gc, t ? t.libelles : []), vp = nonVides(gp, perfs), v9 = nonVides(g9, cases);
+    const L = grille({ colonnes: 3, titres: ['Note de compétences, par tranche', 'Performance N-1', 'Positionnement 9-Box'] });
     axesVerticaux(L, '', vc.map(x => x.g), 'Competence_N1');
-    axesVerticaux(L, '2', v9.map(x => x.g), 'Case 9-Box');
+    axesVerticaux(L, '2', vp.map(x => x.g), 'Performance_N1');
+    axesVerticaux(L, '3', v9.map(x => x.g), 'Positionnement_9BOX');
     const traces = [barresEffectif(vc.map(x => x.g), vc.map(x => x.lib), { horizontal: false }),
-      barresEffectif(v9.map(x => x.g), v9.map(x => x.lib), { horizontal: false, axes: { xaxis: 'x2', yaxis: 'y2' } })];
-    const clic = p => p.curveNumber ? { titre: '9-Box ' + p.x, lignes: v9[p.pointNumber].g } : { titre: 'Competence_N1 ' + p.x, lignes: vc[p.pointNumber].g };
-    montrer('g-evaluations', traces, L, 440, clic, F.libelle(sel));
+      barresEffectif(vp.map(x => x.g), vp.map(x => x.lib), { horizontal: false, axes: { xaxis: 'x2', yaxis: 'y2' } }),
+      barresEffectif(v9.map(x => x.g), v9.map(x => x.lib), { horizontal: false, couleurs: v9.map(x => C.COULEURS_9BOX[x.lib] || K.PALE),
+        axes: { xaxis: 'x3', yaxis: 'y3' } })];
+    const vues = [[vc, 'Competence_N1 '], [vp, 'Performance N-1 : '], [v9, '9-Box : ']];
+    const clic = p => { const [v, nom] = vues[p.curveNumber]; return { titre: nom + p.x, lignes: v[p.pointNumber].g }; };
+    montrer('g-evaluations', traces, L, 460, clic, F.libelle(sel));
     const lib = F.libelle(sel);
     if (!lignes.length) return constat('s-evaluations', 'Aucun salarié pour ce filtre.');
-    const notes = gc.flat().map(l => l.Competence_N1), n9 = compte(g9);
+    const notes = gc.flat().map(l => l.Competence_N1), np = compte(gp), n9 = compte(g9);
     const comp = notes.length ? `Note de compétences médiane : ${fr(C.mediane(notes), 2)} ; tranche la plus nombreuse, ${plusNombreuse(gc, i => t.libelles[i], notes.length)}.`
       : 'Aucune note de compétences.';
-    const box = n9 ? ` Case 9-Box la plus fréquente : ${plusNombreuse(g9, i => fr(cases[i]), n9)}.` : ' Aucune case 9-Box.';
-    constat('s-evaluations', `${lib} (${salaries(lignes.length)}). ${comp}${box}`);
+    const perf = np ? ` Performance N-1 la plus fréquente : ${plusNombreuse(gp, i => `« ${echapper(perfs[i])} »`, np)}.` : ' Aucune performance N-1.';
+    const box = n9 ? ` Positionnement 9-Box le plus fréquent : ${plusNombreuse(g9, i => `« ${echapper(cases[i])} »`, n9, true)}.` : ' Aucun positionnement 9-Box.';
+    constat('s-evaluations', `${lib} (${salaries(lignes.length)}). ${comp}${perf}${box}`);
+  }
+
+  // ---------- Vue « Performance × compétence » : la matrice du tableau de bord RH ----------
+  // Demande du 09/11/2026 : comme la capture du tableau de bord RH, la performance N-1 en colonnes (de la plus basse à la
+  // plus haute) et la compétence en lignes (la meilleure en haut) ; dans chaque case, le nombre de salariés et leur
+  // positionnement 9-Box, dans la couleur de la catégorie.
+  // - La compétence est une note : les lignes sont les tranches de notes de la vue « Répartition » (tranchesCompetence).
+  // - Le positionnement est LU dans le fichier, pas recalculé (décision du 10/11/2026) : une case peut donc réunir des
+  //   salariés de plusieurs catégories. Elle prend la couleur de la plus nombreuse ; le survol les donne toutes.
+  function matricePerformance(df, sel) {
+    const lignes = df.filter(l => F.garder(l, sel)), t = tranchesCompetence(df), perfs = C.performances(df), cats = C.cases9Box(df);
+    const rangs = t ? [...t.libelles].reverse() : [];
+    const avec = lignes.filter(l => perfs.includes(l.Performance_N1) && rangs.includes(t.tranche(l.Competence_N1))), n = avec.length;
+    const cases = rangs.map(r => perfs.map(p => avec.filter(l => t.tranche(l.Competence_N1) === r && l.Performance_N1 === p)));
+    // Le nombre de salariés de chaque catégorie 9-Box dans une case, de la plus nombreuse à la moins nombreuse (à égalité,
+    // dans l'ordre des catégories).
+    const parCategorie = g => cats.map(c => [c, g.filter(l => l.Positionnement_9BOX === c).length]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
+    // Comme dans les autres matrices : une ligne ou une colonne sans personne n'est pas dessinée.
+    const li = rangs.map((_, i) => i).filter(i => compte(cases[i])), co = perfs.map((_, j) => j).filter(j => li.some(i => cases[i][j].length));
+    // La couleur d'une case : un numéro de catégorie (z), et une échelle de couleurs « en marches » qui donne à chaque
+    // numéro la couleur de sa catégorie. Une case vide (z vide) reste blanche.
+    const k = Math.max(1, cats.length), couleur = c => C.COULEURS_9BOX[c] || K.PALE;
+    const echelle = cats.flatMap((c, i) => [[i / k, couleur(c)], [(i + 1) / k, couleur(c)]]);
+    const z = li.map(i => co.map(j => { const p = parCategorie(cases[i][j]); return p.length ? cats.indexOf(p[0][0]) : null; }));
+    const trace = { type: 'heatmap', x: co.map(j => perfs[j]), y: li.map(i => rangs[i]), z, zmin: -0.5, zmax: k - 0.5,
+      colorscale: echelle.length ? echelle : [[0, K.PALE], [1, K.PALE]], showscale: false, xgap: 3, ygap: 3,
+      text: li.map(i => co.map(j => { const g = cases[i][j], p = parCategorie(g);
+        // Comme dans la matrice de positionnement : quelques salariés sur des milliers s'écrivent « < 0,1 % », pas « 0,0 % ».
+        return g.length ? `${p.length ? echapper(p[0][0]) + '<br>' : ''}${fr(g.length)} (${g.length / n < 0.0005 ? '< 0,1 %' : pct(g.length, n)})` : ''; })),
+      texttemplate: '%{text}', textfont: { size: 12, color: K.ENCRE },
+      customdata: li.map(i => co.map(j => parCategorie(cases[i][j]).map(([c, m]) => `${echapper(c)} : ${fr(m)}`).join('<br>') || 'Positionnement 9-Box non renseigné')),
+      hovertemplate: 'Compétence %{y} · performance « %{x} »<br>%{customdata}<extra></extra>' };
+    const L = sansTitre();
+    Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Performance N-1 (de la plus basse à la plus haute)') });
+    Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed', title: titreAxe('Note de compétences (la meilleure en haut)') });
+    const clic = p => { const [a, b] = p.pointNumber, i = li[a], j = co[b];
+      return { titre: `Compétence ${rangs[i]} · performance « ${perfs[j]} »`, lignes: cases[i][j] }; };
+    montrer('g-evaluations', n ? [trace] : [], L, 140 + 64 * Math.max(4, li.length), clic, F.libelle(sel));
+    const lib = F.libelle(sel);
+    if (!lignes.length) return constat('s-evaluations', 'Aucun salarié pour ce filtre.');
+    if (!perfs.length) return constat('s-evaluations', "Le fichier des salariés n'a pas de performance N-1 (colonne Performance_N1) : la matrice ne peut pas être dessinée.");
+    if (!n) return constat('s-evaluations', `${lib} (${salaries(lignes.length)}) : aucun n'a à la fois une note de compétences et une performance N-1.`);
+    // Les chiffres clés du tableau de bord RH (effectif, âge et ancienneté moyens), puis la part de chaque catégorie.
+    const age = C.moyenne(avec.map(l => l.Age)), anc = C.moyenne(avec.map(l => l.Anciennete));
+    const parts = parCategorie(avec).map(([c, m]) => `${echapper(c)} ${pct(m, n)}`);
+    const sans = lignes.length - n;
+    constat('s-evaluations', `${lib} : ${salaries(n)} avec une note et une performance${sans ? ` (${fr(sans)} sans)` : ''}, `
+      + `âge moyen ${fr(age, 1)} ans, ancienneté moyenne ${fr(anc, 1)} ans.${parts.length ? ` Positionnement 9-Box : ${parts.join(', ')}.` : ''}`);
   }
 
   // ---------- matrice : matrice de positionnement, position dans la grille × évaluation, en % ----------
@@ -456,12 +514,12 @@
 
   function matrice(df, sel) {
     const parBox = sel.vue === 'Positionnement_9BOX', t = parBox ? null : tranchesCompetence(df);
-    // Les lignes vont de la meilleure évaluation (en haut) à la moins bonne. Elles sont lues dans le fichier entier, jamais
-    // supposées : toutes les cases 9-Box, ou les tranches de notes du graphe « Notes de compétences et cases 9-Box ».
-    const rangs = parBox ? C.modalites(df, 'Positionnement_9BOX').reverse() : (t ? [...t.libelles].reverse() : []);
+    // Les lignes vont de la meilleure évaluation (en haut) à la moins bonne. Elles sont lues dans le fichier entier : les
+    // catégories 9-Box dans leur ordre (ORDRE_9BOX, depuis le 10/11/2026), ou les tranches de notes du graphe 13.
+    const rangs = parBox ? C.cases9Box(df) : (t ? [...t.libelles].reverse() : []);
     const rang = parBox ? (l => l.Positionnement_9BOX) : (l => t.tranche(l.Competence_N1));
-    const quoi = parBox ? 'une case 9-Box' : 'une note de compétences';
-    const nomRang = r => parBox ? 'case 9-Box ' + fr(r) : 'note ' + r;
+    const quoi = parBox ? 'un positionnement 9-Box' : 'une note de compétences';
+    const nomRang = r => parBox ? `« ${echapper(r)} »` : 'note ' + r;
     const lignes = df.filter(l => F.garder(l, sel));
     // Seuls les salariés qui ont une grille (Min et Max) et une évaluation ont une case : les autres sont comptés à part.
     const avec = lignes.filter(l => quart(l.Range_Penetration) !== null && rangs.includes(rang(l))), n = avec.length;
@@ -477,11 +535,11 @@
       colorscale: [[0, '#ffffff'], [1, K.ARDOISE]], showscale: false, xgap: 2, ygap: 2,
       text: li.map(i => co.map(j => !cases[i][j].length ? '' : z[i][j] < 0.05 ? '< 0,1 %' : fr(z[i][j], 1) + ' %')), texttemplate: '%{text}', textfont: { size: 12 },
       customdata: li.map(i => { const tot = compte(cases[i]); return co.map(j => [cases[i][j].length, tot ? fr(100 * cases[i][j].length / tot, 1) : '–']); }),
-      hovertemplate: `${parBox ? 'Case 9-Box' : 'Note'} %{y} · %{x}<br><b>%{z:.1f} % des salariés</b> (%{customdata[0]:,})<br>%{customdata[1]} % de cette ligne<extra></extra>` };
+      hovertemplate: `${parBox ? '9-Box' : 'Note'} %{y} · %{x}<br><b>%{z:.1f} % des salariés</b> (%{customdata[0]:,})<br>%{customdata[1]} % de cette ligne<extra></extra>` };
     const L = sansTitre();
     Object.assign(L.xaxis, { type: 'category', showgrid: false, title: titreAxe('Position du salaire dans sa grille, du Min au Max (le Mid sépare le 2e et le 3e quart)') });
     Object.assign(L.yaxis, { type: 'category', showgrid: false, autorange: 'reversed',
-      title: titreAxe(parBox ? 'Case 9-Box (la plus haute en haut)' : 'Note de compétences (Competence_N1)') });
+      title: titreAxe(parBox ? 'Positionnement 9-Box (le meilleur en haut)' : 'Note de compétences (Competence_N1)') });
     // Un trait marque le Mid, entre le 2e et le 3e quart : à gauche, les salariés payés sous le milieu de leur grille.
     // Sa place se compte en colonnes dessinées : celles avant le 3e quart (le 3e quart est la colonne 3 de QUARTS).
     const mid = co.filter(j => j < 3).length - 0.5;
@@ -501,8 +559,11 @@
     const pleine = ` Case la plus remplie : ${enumerer(ex.haut.map(c => echapper(c.nom)))} (${pct(ex.haut[0].n, n)}${ex.haut.length > 1 ? ' chacune' : ''}).`;
     // Les mieux évalués payés sous le milieu de leur grille : ceux qu'une campagne d'augmentations regarde en premier.
     const nh = compte(cases[0]), sousMid = compte(cases[0].slice(0, 3));
-    const meilleurs = rangs.length < 2 ? '' : !nh ? ` Personne dans la meilleure évaluation (${nomRang(rangs[0])}).`
-      : ` Parmi les mieux évalués (${nomRang(rangs[0])}${parBox ? ', la case la plus haute, supposée la meilleure' : ''}), ${pct(sousMid, nh)} sont payés `
+    // Pourquoi la condition sur ORDRE_9BOX : une catégorie écrite autrement n'a pas de rang connu ; la première ligne ne
+    // serait alors pas forcément la meilleure évaluation, et la phrase serait fausse.
+    const meilleurs = rangs.length < 2 || (parBox && !C.ORDRE_9BOX.includes(rangs[0])) ? ''
+      : !nh ? ` Personne dans la meilleure évaluation (${nomRang(rangs[0])}).`
+      : ` Parmi les mieux évalués (${nomRang(rangs[0])}), ${pct(sousMid, nh)} sont payés `
         + `sous le milieu de leur grille (sous le Min, 1er ou 2e quart), soit ${salaries(sousMid)} sur ${fr(nh)}.`;
     constat('s-matrice', `${lib} (${salaries(n)} avec une grille et ${quoi}${sans ? `, ${fr(sans)} sans` : ''}) : chaque case donne la part de ces salariés.${pleine}${meilleurs}`);
   }

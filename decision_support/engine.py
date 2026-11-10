@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # import ... ») ; Python doit donc aussi chercher dans ce dossier.
 sys.path.insert(0, str(ROOT / "src"))
 
-from anomaly_pretraitement import ajouter_diplomes, bucket_anciennete, rang_etude
+from anomaly_pretraitement import ORDRE_9BOX, ORDRE_PERFORMANCE, ajouter_diplomes, bucket_anciennete, rang_etude
 from anomaly_regles import apply_rulebook
 from anomaly_signal_regression import COLONNES, entrainer, predire
 
@@ -34,8 +34,6 @@ DEJA_CONNUES = {"Job_Family", "Niveau", "Anciennete", "Mid", "Ratio_Grille_March
 LABELS = {"Age": "Âge", "Competence_N1": "Compétence N-1", "Performance_N1": "Performance N-1",
           "Positionnement_9BOX": "Positionnement 9-Box", "Hot_job": "Hot job",
           "Niveau_Etude_Max": "Niveau d'études", "Cat_Ecole_Max": "Catégorie d'école"}
-# La performance N-1, de la plus basse à la plus haute (les libellés de la matrice Performance x Compétence).
-ORDRE_PERFORMANCE = ["Très en dessous", "Proche de l'objectif", "A l'objectif", "Supérieur à l'objectif", "Très au-delà"]
 
 
 def number(value, name, *, optional=False, minimum=0, strict=False):
@@ -125,6 +123,8 @@ class DecisionEngine:
                     uniques.sort(key=lambda v: (pd.isna(rangs[v]), 0 if pd.isna(rangs[v]) else rangs[v], str(v)))
                 elif column == "Performance_N1" and set(map(str, uniques)) <= set(ORDRE_PERFORMANCE):
                     uniques.sort(key=lambda v: ORDRE_PERFORMANCE.index(str(v)))
+                elif column == "Positionnement_9BOX" and set(map(str, uniques)) <= set(ORDRE_9BOX):
+                    uniques.sort(key=lambda v: ORDRE_9BOX.index(str(v)))
                 else:
                     uniques.sort(key=lambda v: (not isinstance(v, (int, float)), v if isinstance(v, (int, float)) else str(v)))
                 # key : « 2 » et 2.0 désignent la même case, comme pour le métier et le niveau.

@@ -87,7 +87,7 @@
         <li class="groupe">Où ils se situent</li>
         <li><a href="#ecart-mid"><span class="n">11</span>Écart au milieu de la grille</a></li>
         <li><a href="#sous-min"><span class="n">12</span>Sous le Min et sous le marché</a></li>
-        <li><a href="#evaluations"><span class="n">13</span>Compétences et 9-Box</a></li>
+        <li><a href="#evaluations"><span class="n">13</span>Compétences, performance et 9-Box</a></li>
         <li><a href="#matrice"><span class="n">14</span>Matrice de positionnement</a></li>
         <li class="etage">Analyses détaillées</li>
         <li class="groupe">Population et SAR</li>
@@ -266,9 +266,9 @@
       </section>
 
       <section class="panel" id="evaluations">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">13</span>Notes de compétences et cases 9-Box</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">13</span>Compétences, performance et positionnement 9-Box</h2><span class="panel-unit">en répartition ou en matrice, filtrable par niveau, pôle et diplôme</span></div>
         <div class="panel-body">
-          <p class="question">Comment se répartissent les notes de compétences et les cases 9-Box ?</p>
+          <p class="question">Comment se répartissent les notes de compétences, les performances N-1 et le positionnement 9-Box ? Et, comme dans le tableau de bord RH, quel positionnement pour chaque couple performance × compétence ?</p>
           <div class="filtres" id="f-evaluations"></div>
           <div class="graphe" id="g-evaluations"></div>
           <p class="constat" id="s-evaluations"></p>
@@ -277,7 +277,7 @@
 
       <!-- Matrice de positionnement (point du 29/10/2026) : sur le modèle des campagnes d'augmentations individuelles -->
       <section class="panel" id="matrice">
-        <div class="panel-head"><h2 class="panel-title"><span class="num">14</span>Matrice de positionnement, en %</h2><span class="panel-unit">par case 9-Box ou par note de compétences, filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-head"><h2 class="panel-title"><span class="num">14</span>Matrice de positionnement, en %</h2><span class="panel-unit">par positionnement 9-Box ou par note de compétences, filtrable par niveau, pôle et diplôme</span></div>
         <div class="panel-body">
           <p class="question">Comme dans une campagne d'augmentations individuelles : où se placent les salariés dans leur grille, selon leur évaluation ? Chaque case donne la part des salariés.</p>
           <div class="filtres" id="f-matrice"></div>
@@ -440,7 +440,7 @@
           </dl>
           <h3>Lire les graphes</h3>
           <dl>
-            <div><dt>Matrice de positionnement</dt><dd>Un tableau comme celui des campagnes d'augmentations individuelles. En colonnes, la position du salaire dans sa grille : sous le Min, puis les quatre quarts de la grille (du Min au Max, le Mid entre le 2e et le 3e quart), puis au-dessus du Max. En lignes, l'évaluation : case 9-Box ou note de compétences. Chaque case donne la part des salariés : 12 % = 12 salariés sur 100.</dd></div>
+            <div><dt>Matrice de positionnement</dt><dd>Un tableau comme celui des campagnes d'augmentations individuelles. En colonnes, la position du salaire dans sa grille : sous le Min, puis les quatre quarts de la grille (du Min au Max, le Mid entre le 2e et le 3e quart), puis au-dessus du Max. En lignes, l'évaluation : positionnement 9-Box ou note de compétences. Chaque case donne la part des salariés : 12 % = 12 salariés sur 100.</dd></div>
             <div><dt>Boîte à moustaches</dt><dd>La boîte contient la moitié centrale des salariés et le trait dans la boîte est la médiane. Les « moustaches » vont jusqu'aux valeurs habituelles ; les points isolés sont les valeurs éloignées.</dd></div>
             <div><dt>Corrélation</dt><dd>De −1 à 1. Proche de 1 : les deux grandeurs montent ensemble ; proche de −1 : quand l'une monte, l'autre baisse ; proche de 0 : pas de lien en ligne droite.</dd></div>
             <div><dt>Pente (droite de tendance)</dt><dd>De combien une valeur change en moyenne quand l'autre augmente de 1. Exemple : une pente de 0,02 veut dire +0,02 de Compa-Ratio par point de note de compétences.</dd></div>
@@ -456,7 +456,9 @@
             <div><dt>Diplôme (Niveau_Etude_Max)</dt><dd>Le niveau d'études le plus élevé du salarié (BAC+5, BAC+3…), lu dans le fichier des salariés. Le filtre « Diplôme » de chaque graphe garde les salariés d'un seul niveau d'études.</dd></div>
             <div><dt>Âge à l'embauche</dt><dd>Âge − ancienneté : l'âge qu'avait le salarié en arrivant.</dd></div>
             <div><dt>Competence_N1</dt><dd>La note de compétences de l'année précédente.</dd></div>
-            <div><dt>Case 9-Box (Positionnement_9BOX)</dt><dd>La case de l'évaluation qui croise performance et potentiel. La page suppose que plus le chiffre est haut, meilleure est l'évaluation : à confirmer sur vos données.</dd></div>
+            <div><dt>Performance N-1 (Performance_N1)</dt><dd>La performance de l'année précédente, en cinq libellés : Très en dessous, Proche de l'objectif, A l'objectif, Supérieur à l'objectif, Très au-delà.</dd></div>
+            <div><dt>Positionnement 9-Box (Positionnement_9BOX)</dt><dd>La catégorie du salarié quand on croise sa performance et sa compétence, lue telle quelle dans le fichier des salariés. Six catégories, de la meilleure à celle qui demande une décision : Hauts Potentiels, Talents, Performers, A repositionner, A développer, Décisions requises. Chacune garde la même couleur dans toute la page.</dd></div>
+            <div><dt>Matrice performance × compétence</dt><dd>La vue « Performance × compétence » du graphe 13, comme dans le tableau de bord RH : la performance N-1 en colonnes, la note de compétences en lignes (la meilleure en haut). Chaque case donne le nombre de salariés et prend la couleur de leur positionnement 9-Box ; si une case réunit plusieurs catégories, elle prend celle de la plus nombreuse, et le survol les donne toutes.</dd></div>
             <div><dt>Hot job (tension du métier)</dt><dd>À quel point le métier est recherché sur le marché : plus la valeur est haute, plus la tension est forte.</dd></div>
             <div><dt>Écart H / F</dt><dd>« Non corrigé » : salaire moyen des hommes comparé à celui des femmes, tous métiers et niveaux mélangés. « À grille égale » : même comparaison sur le Compa-Ratio, où chacun est comparé au milieu de sa propre grille.</dd></div>
           </dl>

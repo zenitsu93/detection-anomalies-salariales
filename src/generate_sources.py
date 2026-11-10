@@ -14,9 +14,10 @@ Vue d'ensemble de ce que fait le script :
                 age, anciennete, sexe, etc.) dont le salaire tombe dans la
                 bande. Les postes sont de simples numeros (JT0001, JT0002...)
                 et chacun porte un Hot_job de 0 a 2. Chaque employe recoit
-                une case 9-Box de 0 a 6, un diplome (niveau d'etudes et categorie
-                d'ecole) et une performance N-1 (5 libelles, de « Tres en
-                dessous » a « Tres au-dela »).
+                un diplome (niveau d'etudes et categorie d'ecole), une
+                performance N-1 (5 libelles, de « Tres en dessous » a « Tres
+                au-dela ») et un positionnement 9-Box (6 categories, de
+                « Hauts Potentiels » a « Decisions requises »).
   4. EXPORT   : ecrit les 3 tables en Excel (.xlsx) dans le dossier input/ et affiche
                 quelques controles de coherence.
 """
@@ -135,9 +136,6 @@ N_POSTES = 2000
 # Part des employes visee pour chaque valeur (total = 100%) : un tiers chacune.
 # Tous les employes d'un meme poste ont le meme Hot_job.
 HOT_JOB_PARTS = {0: 1 / 3, 1: 1 / 3, 2: 1 / 3}
-# Positionnement 9-Box : case de 0 a 6, donnee a chaque employe (pas au poste :
-# le 9-Box evalue une personne). Part des employes pour chaque case (total = 100%).
-PARTS_9BOX = {0: 0.14, 1: 0.06, 2: 0.35, 3: 0.03, 4: 0.21, 5: 0.14, 6: 0.07}
 
 # Distribution des niveaux : identique pour toutes les familles (pyramide)
 # Probabilite d'avoir le niveau 1, 2, ..., 7 (peu de directeurs, beaucoup de juniors).
@@ -200,6 +198,17 @@ PARTS_PERFORMANCE = {
 # la competence). Pourquoi 0.5 : un salarie bien note en competence a plus souvent une bonne
 # performance, sans que ce soit automatique, comme dans la realite.
 LIEN_PERF_COMP = 0.5
+
+# Positionnement 9-Box : une des six categories du tableau de bord RH, donnee par la formule
+# Excel des RH a partir de la performance N-1 et de la competence (voir positionnement_9box).
+# Pourquoi des seuils pour la competence : la formule lit la competence en libelles
+# (Exceptionnel... Tres insuffisant), alors que le fichier la donne en note. Ces seuils ne
+# servent qu'a fabriquer des donnees fictives coherentes : la detection et la page LISENT
+# le positionnement dans le fichier, elles ne le recalculent jamais.
+# (note minimale, libelle), de la plus haute a la plus basse.
+SEUILS_COMPETENCE = [(4.25, "Exceptionnel"), (3.75, "Supérieur aux attentes"),
+                     (2.75, "Conforme aux attentes"), (2.0, "Proche des attentes"),
+                     (-np.inf, "Très insuffisant")]
 
 # ----------------------------------------------------------------------------
 # 1. BANDS
@@ -298,6 +307,28 @@ def attribuer_postes(fam_emp, niveau_emp, commun_emp, rng):
         for k in idx[n_cell:]:
             poste_emp[k] = int(rng.choice(numeros))
     return poste_emp
+
+
+def positionnement_9box(performance, note):
+    """La categorie 9-Box d'un salarie, avec la formule Excel des RH (09/11/2026). La note de
+    competence est d'abord ecrite en libelle avec SEUILS_COMPETENCE."""
+    competence = next(libelle for seuil, libelle in SEUILS_COMPETENCE if note >= seuil)
+    haute_perf = performance in ("Très au-delà", "Supérieur à l'objectif")
+    haute_comp = competence in ("Supérieur aux attentes", "Exceptionnel")
+    # Les conditions sont testees dans l'ordre de la formule : la premiere qui est vraie l'emporte.
+    if haute_perf and competence == "Supérieur aux attentes":
+        return "Talents"
+    if haute_comp and performance == "Supérieur à l'objectif":
+        return "Talents"
+    if performance == "Très au-delà" and competence == "Exceptionnel":
+        return "Hauts Potentiels"
+    if haute_comp and performance == "A l'objectif":
+        return "A repositionner"
+    if performance == "A l'objectif" and competence == "Conforme aux attentes":
+        return "A développer"
+    if haute_perf and competence == "Conforme aux attentes":
+        return "Performers"
+    return "Décisions requises"
 
 
 # attribuer_hot_job : donne a chaque poste un Hot_job de 0 a 2 ; tous les
@@ -456,21 +487,13 @@ def main():
     # Hot_job de chaque poste, ex. {1: 0, 2: 2, 3: 1, ...}.
     hot_poste = attribuer_hot_job(taille_poste, rng)
 
-    # 3c. Case 9-Box de chaque employe
-    # Nombre d'employes par case, ex. {0: 1400, 1: 600, 2: 3500, ...} pour 10000 :
-    # repartir donne exactement les parts de PARTS_9BOX, sans employe perdu.
-    n_9box = repartir(len(fam_emp), PARTS_9BOX)
-    # Liste des cases (1400 fois 0, puis 600 fois 1, ...), melangee pour que
-    # chaque employe tombe sur une case au hasard.
-    box_emp = rng.permutation(np.repeat(list(n_9box), list(n_9box.values())))
-
-    # 3d. Autres attributs, employe par employe
+    # 3c. Autres attributs, employe par employe
     # Liste qui va recevoir une ligne par employe.
     emp_rows = []
     # Compteur servant a numeroter les matricules (Mat00001, Mat00002, ...).
     matricule = 1
-    # Boucle sur chaque employe : sa famille, son niveau, son numero de poste et sa case 9-Box.
-    for fam, g, poste, box in zip(fam_emp, niveau_emp, poste_emp, box_emp):
+    # Boucle sur chaque employe : sa famille, son niveau et son numero de poste.
+    for fam, g, poste in zip(fam_emp, niveau_emp, poste_emp):
         # Pole / entite
         # Pole de la famille ; si None (TRANSVERSE), on tire un pole entre 1 et 5.
         # (rng.integers(1, 6) renvoie un entier de 1 a 5, 6 exclu.)
@@ -523,8 +546,6 @@ def main():
             "Date_Effet_Paie": DATE_EFFET,
             # Note de competence : loi normale bornee entre 0 et 5, arrondie a 2 decimales.
             "Competence_N1": round(float(np.clip(rng.normal(COMP_MU, COMP_SD), 0, 5)), 2),
-            # Case de la matrice 9-Box (performance x potentiel), de 0 a 6, tiree en 3c.
-            "Positionnement_9BOX": int(box),
             # Hot_job herite du poste : de 0 (metier peu tendu) a 2 (tres tendu).
             "Hot_job": hot_poste[poste],
         })
@@ -540,7 +561,7 @@ def main():
     # Reattribue les matricules dans le nouvel ordre : Mat00001, Mat00002, ...
     employes["Matricule"] = [f"Mat{i:05d}" for i in range(1, len(employes) + 1)]
 
-    # 3e. Diplome et performance N-1
+    # 3d. Diplome, performance N-1 et positionnement 9-Box
     # Pourquoi un tirage au sort a part (graine SEED + 2) : le tirage principal (rng) reste
     # exactement le meme qu'avant, donc toutes les autres colonnes ne changent pas.
     rng_ajouts = np.random.default_rng(SEED + 2)
@@ -566,12 +587,16 @@ def main():
     performance = np.empty(n, dtype=object)
     performance[np.argsort(score, kind="stable")] = libelles
     employes["Performance_N1"] = performance
+    # Le positionnement 9-Box, avec la formule des RH (voir positionnement_9box).
+    employes["Positionnement_9BOX"] = [positionnement_9box(p, c) for p, c in
+                                       zip(employes["Performance_N1"], employes["Competence_N1"])]
 
     # Ordre des colonnes : le diplome juste apres le niveau, la performance juste apres
     # la competence (meme ordre que le fichier des salaries utilise jusqu'ici).
-    colonnes = [c for c in employes.columns if c not in ("Niveau_Etude_Max", "Cat_Ecole_Max", "Performance_N1")]
+    colonnes = [c for c in employes.columns
+                if c not in ("Niveau_Etude_Max", "Cat_Ecole_Max", "Performance_N1", "Positionnement_9BOX")]
     colonnes[colonnes.index("Niveau") + 1:colonnes.index("Niveau") + 1] = ["Niveau_Etude_Max", "Cat_Ecole_Max"]
-    colonnes.insert(colonnes.index("Competence_N1") + 1, "Performance_N1")
+    colonnes[colonnes.index("Competence_N1") + 1:colonnes.index("Competence_N1") + 1] = ["Performance_N1", "Positionnement_9BOX"]
     employes = employes[colonnes]
 
     # ------------------------------------------------------------------
@@ -647,12 +672,9 @@ def main():
     for lib, p in PARTS_PERFORMANCE.items():
         print(f"  {lib:24} : {pct_perf.get(lib, 0):7.1%} | {p:7.1%} | {comp_perf.get(lib, float('nan')):.2f}")
 
-    # Meme comparaison pour la case 9-Box, cote employes seulement (elle n'est pas donnee au poste).
-    print("\n9-Box : % employes | cible")
-    pct_9box = employes.Positionnement_9BOX.value_counts(normalize=True)
-    total = sum(PARTS_9BOX.values())
-    for b, p in PARTS_9BOX.items():
-        print(f"  {b} : {pct_9box.get(b, 0):7.1%} | {p / total:7.1%}")
+    # Part de chaque categorie 9-Box : elle n'a pas de cible, elle decoule de la formule.
+    print("\n9-Box : % employes")
+    print(employes.Positionnement_9BOX.value_counts(normalize=True).map("{:7.1%}".format).to_string())
 
 
 # Ce bloc ne s'execute que si on lance directement le fichier

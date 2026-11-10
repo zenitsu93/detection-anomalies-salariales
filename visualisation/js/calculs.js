@@ -226,7 +226,9 @@
         Matricule: e.Matricule, Nom: e.Nom, Job_Title: e.Job_Title, Job_Family: e.Job_Family, Entite_N1: e.Entite_N1,
         Sexe: e.Sexe, Niveau: nombre(e.Niveau), Fixe_Annuel_MAD: nombre(e.Fixe_Annuel_MAD), Age: nombre(e.Age),
         Anciennete: nombre(e.Anciennete), Competence_N1: nombre(e.Competence_N1),
-        Positionnement_9BOX: nombre(e.Positionnement_9BOX), Hot_job: nombre(e.Hot_job),
+        // Pourquoi en texte (10/11/2026) : le fichier donne le positionnement 9-Box en six catégories (« Talents »…) et la
+        // performance N-1 en cinq libellés ; la page les lit tels quels (voir ORDRE_9BOX). Case vide → null.
+        Positionnement_9BOX: texte(e.Positionnement_9BOX), Performance_N1: texte(e.Performance_N1), Hot_job: nombre(e.Hot_job),
         Min: nombre(b.Min), Mid: nombre(b.Mid), Max: nombre(b.Max), Median: nombre(m.Median),
         // P25 et P75 du marché : facultatifs, ils servent seulement au graphe de positionnement face au marché.
         Market_P25: nombre(m.P25), Market_P75: nombre(m.P75),
@@ -276,6 +278,23 @@
       .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b), 'fr'));
   }
 
+  // ---------- Positionnement 9-Box et performance N-1 ----------
+  // Les six catégories du positionnement 9-Box, de la meilleure à celle qui demande une décision, avec les couleurs du
+  // tableau de bord RH (capture du 09/11/2026). Le positionnement est LU dans le fichier des salariés, jamais recalculé.
+  const ORDRE_9BOX = ['Hauts Potentiels', 'Talents', 'Performers', 'A repositionner', 'A développer', 'Décisions requises'];
+  const COULEURS_9BOX = { 'Hauts Potentiels': '#2a9d8f', 'Talents': '#7b5ea7', 'Performers': '#e9c46a',
+    'A repositionner': '#f4a261', 'A développer': '#8ab17d', 'Décisions requises': '#aab2bb' };
+  // Les cinq libellés de la performance N-1, du plus bas au plus haut.
+  const ORDRE_PERFORMANCE = ['Très en dessous', "Proche de l'objectif", "A l'objectif", "Supérieur à l'objectif", 'Très au-delà'];
+  // Les valeurs d'une colonne dans l'ordre donné, puis celles que l'ordre ne connaît pas (écrites autrement dans un autre
+  // fichier), par ordre alphabétique : aucune n'est perdue.
+  function dansOrdre(df, c, ordre) {
+    const v = modalites(df, c);
+    return [...ordre.filter(x => v.includes(x)), ...v.filter(x => !ordre.includes(x))];
+  }
+  const cases9Box = df => dansOrdre(df, 'Positionnement_9BOX', ORDRE_9BOX);
+  const performances = df => dansOrdre(df, 'Performance_N1', ORDRE_PERFORMANCE);
+
   // Les modalités triées par médiane décroissante d'une colonne (ordre des boîtes du notebook). Un groupe sans
   // aucune valeur (pas de médiane) va à la fin, comme dans pandas : sinon il dérègle le tri de tous les autres.
   function ordreParMediane(df, groupe, valeur) {
@@ -287,6 +306,7 @@
   const api = {
     nombre, somme, moyenne, mediane, quantile, ecartType, asymetrie, correlation, histogramme, courbeLissee, droite, lowess,
     libellesTranches, trancheDe, tranchesAnciennete, niveauxEtude, TRANCHES_AGE, trancheAge, POSITIONS_MARCHE, positionMarche, COLONNES_REQUISES, colonnesManquantes, preparer, colonne, modalites, ordreParMediane,
+    ORDRE_9BOX, COULEURS_9BOX, ORDRE_PERFORMANCE, cases9Box, performances,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else (racine.Exploration = racine.Exploration || {}).calculs = api;

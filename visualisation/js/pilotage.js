@@ -168,8 +168,8 @@
   const ZONES = [['Compa-Ratio sous 0,85', K.ROUGE], ['Entre 0,85 et 1,15', K.ARDOISE], ['Au-dessus de 1,15', K.OR]];
 
   function talents(df, sel) {
-    const lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Compa_Ratio) && Number.isFinite(l.Positionnement_9BOX));
-    // Une bulle par case 9-Box et tranche de Compa-Ratio ; sa taille dit combien de salariés elle regroupe.
+    const lignes = df.filter(l => F.garder(l, sel) && Number.isFinite(l.Compa_Ratio) && l.Positionnement_9BOX !== null);
+    // Une bulle par catégorie 9-Box et tranche de Compa-Ratio ; sa taille dit combien de salariés elle regroupe.
     const bulles = new Map();
     for (const l of lignes) {
       const t = Math.floor(l.Compa_Ratio / PAS), cle = l.Positionnement_9BOX + '|' + t;
@@ -197,24 +197,27 @@
     L.annotations.push(
       { text: 'Sous-positionnés', x: COMPA_BAS, xref: 'x', xanchor: 'right', xshift: -6, y: 1, yref: 'y domain', yanchor: 'top', showarrow: false, font: { size: 11, color: K.GRIS } },
       { text: 'Sur-positionnés', x: COMPA_HAUT, xref: 'x', xanchor: 'left', xshift: 6, y: 1, yref: 'y domain', yanchor: 'top', showarrow: false, font: { size: 11, color: K.GRIS } });
-    // L'échelle 9-Box est lue dans le fichier entier (et non supposée de 0 à 6) : l'axe reste le même quel que soit le filtre,
-    // et « la case la plus haute » du constat est bien le haut de l'échelle, même si le filtre n'y a personne.
-    const echelle = C.modalites(df, 'Positionnement_9BOX'), bas = echelle[0], haut = echelle[echelle.length - 1];
+    // Les catégories 9-Box sont lues dans le fichier entier, dans leur ordre (ORDRE_9BOX, la meilleure en haut) : l'axe reste
+    // le même quel que soit le filtre, et « la meilleure catégorie » du constat est bien celle du haut, même si le filtre
+    // n'y a personne. Pourquoi plus une échelle de nombres : depuis le 10/11/2026, le 9-Box est un libellé (« Talents »…).
+    const echelle = C.cases9Box(df), haut = echelle[0], bas = echelle[echelle.length - 1];
     Object.assign(L.xaxis, { range: [0.55, 1.45], dtick: 0.1, title: titreAxe('Compa-Ratio (Salaire / Mid)') });
-    Object.assign(L.yaxis, { dtick: 1, title: titreAxe('Positionnement 9-Box'),
-      ...(echelle.length && { range: [bas - 0.7, haut + 0.7], title: titreAxe(`Positionnement 9-Box (${fr(bas)} à ${fr(haut)})`) }) });
+    Object.assign(L.yaxis, { type: 'category', categoryorder: 'array', categoryarray: echelle, autorange: 'reversed',
+      title: titreAxe('Positionnement 9-Box (le meilleur en haut)') });
     // Clic sur une bulle : ses salariés.
     const clic = p => {
       const b = parZone[p.curveNumber][p.pointNumber];
       return { titre: `9-Box ${b.y} · Compa-Ratio de ${fr(b.de, 2)} à ${fr(b.de + PAS, 2)}`, lignes: b.lignes };
     };
     montrer('g-talents', traces, L, 580, clic, F.libelle(sel));
-    if (!lignes.length) return constat('s-talents', 'Aucun salarié avec un Compa-Ratio et une note 9-Box pour ce filtre.');
+    if (!lignes.length) return constat('s-talents', 'Aucun salarié avec un Compa-Ratio et un positionnement 9-Box pour ce filtre.');
     const sous = lignes.filter(l => l.Compa_Ratio < COMPA_BAS), sur = lignes.filter(l => l.Compa_Ratio > COMPA_HAUT);
     const s = [fr(COMPA_BAS, 2), fr(COMPA_HAUT, 2)];
-    // Une échelle d'une seule case n'a ni haut ni bas : la seconde phrase n'a alors pas de sens.
-    const extremites = echelle.length > 1 ? ` Dans la case 9-Box la plus haute (${fr(haut)}), ${salaries(sous.filter(l => l.Positionnement_9BOX === haut).length)} sous ${s[0]} ; `
-      + `dans la plus basse (${fr(bas)}), ${salaries(sur.filter(l => l.Positionnement_9BOX === bas).length)} au-dessus de ${s[1]}.` : '';
+    // Une seule catégorie n'a ni meilleure ni dernière ; une catégorie écrite autrement n'a pas de rang connu : dans ces deux
+    // cas, la seconde phrase n'aurait pas de sens.
+    const extremites = echelle.length > 1 && echelle.every(c => C.ORDRE_9BOX.includes(c))
+      ? ` Parmi les « ${echapper(haut)} », ${salaries(sous.filter(l => l.Positionnement_9BOX === haut).length)} sous ${s[0]} ; `
+      + `parmi les « ${echapper(bas)} », ${salaries(sur.filter(l => l.Positionnement_9BOX === bas).length)} au-dessus de ${s[1]}.` : '';
     constat('s-talents', `${F.libelle(sel)} (${salaries(lignes.length)}) : ${fr(sous.length)} avec un Compa-Ratio sous ${s[0]} et ${fr(sur.length)} au-dessus de ${s[1]}.${extremites}`);
   }
 

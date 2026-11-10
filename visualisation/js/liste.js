@@ -15,7 +15,7 @@
     ['Niveau', 'Niveau'], ['Sexe', 'Sexe'], ['Age', 'Âge'], ['Anciennete', 'Ancienneté'], ['Fixe_Annuel_MAD', 'Salaire fixe (kMAD)'],
     ['Min', 'Min'], ['Mid', 'Mid'], ['Max', 'Max'], ['Compa_Ratio', 'Compa-Ratio'], ['Range_Penetration', 'Position dans la bande'],
     ['Median', 'Médiane marché'], ['Position_Marche', 'Face au marché'], ['Competence_N1', 'Competence_N1'],
-    ['Positionnement_9BOX', '9-Box'], ['Hot_job', 'Hot_job'], ['Niveau_Etude_Max', "Niveau d'études"], ['Cat_Ecole_Max', 'Catégorie du diplôme'],
+    ['Performance_N1', 'Performance N-1'], ['Positionnement_9BOX', '9-Box'], ['Hot_job', 'Hot_job'], ['Niveau_Etude_Max', "Niveau d'études"], ['Cat_Ecole_Max', 'Catégorie du diplôme'],
   ];
   const vide = v => v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v));
 

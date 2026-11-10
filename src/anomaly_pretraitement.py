@@ -49,6 +49,13 @@ RANG_NIVEAU_ETUDE = {
     "EXPERTISE COMPTABLE": 7,
 }
 
+# Les cinq libellés de la performance N-1 (colonne Performance_N1), du plus bas au plus haut.
+ORDRE_PERFORMANCE = ["Très en dessous", "Proche de l'objectif", "A l'objectif", "Supérieur à l'objectif", "Très au-delà"]
+# Les six catégories du positionnement 9-Box (colonne Positionnement_9BOX), de la meilleure à celle qui
+# demande une décision. Le positionnement est lu tel quel dans le fichier, jamais recalculé ; cet ordre
+# sert seulement à le présenter (listes de choix de l'aide à la décision).
+ORDRE_9BOX = ["Hauts Potentiels", "Talents", "Performers", "A repositionner", "A développer", "Décisions requises"]
+
 # Les deux colonnes du diplôme dans employes.xlsx, et les autres noms acceptés pour chacune. Pourquoi
 # plusieurs noms : le notebook des diplômes les appelle niveau_max et categorie_diplome_max dans ses
 # calculs, puis Niveau_Etude_Max et Cat_Ecole_Max à l'export ; ses colonnes sont reconnues sous l'un ou
@@ -190,6 +197,7 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
        - Ratio_Grille_Marche = Mid / médiane du marché : 1 veut dire « la grille paie comme le marché ».
     6. Lire le niveau d'études de chaque salarié dans ses colonnes du diplôme, s'il y en a
        (ajouter_diplomes).
+    7. Donner un rang à la performance N-1 (Rang_Performance), de 1 à 5, pour l'IA.
     """
     # 1. Lecture des trois fichiers. Ce sont des fichiers Excel : pas de séparateur ni d'encodage à
     # préciser, les nombres arrivent déjà comme des nombres.
@@ -232,6 +240,12 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     # à la lecture : le rang et la tranche se calculent sur le tableau final, et le nom du fichier sert
     # aux messages du terminal.
     df = ajouter_diplomes(df, Path(chemin_employes).name)
+
+    # 7. Rang de la performance N-1 : 1 = « Très en dessous » ... 5 = « Très au-delà ». Pourquoi un
+    # rang : l'IA (anomaly_signal_iforest.py) ne lit que des nombres. Un libellé absent de
+    # ORDRE_PERFORMANCE, une case vide ou une colonne absente donnent un rang vide.
+    rangs = {libelle: i + 1 for i, libelle in enumerate(ORDRE_PERFORMANCE)}
+    df["Rang_Performance"] = df["Performance_N1"].map(rangs) if "Performance_N1" in df else np.nan
 
     return df
 
