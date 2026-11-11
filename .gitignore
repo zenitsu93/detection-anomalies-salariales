@@ -10,3 +10,5 @@ visualisation/donnees/
 accueil.html
 # Les fichiers Excel posés à côté des notebooks pour les lancer (souvent de vraies données) ne sont jamais envoyés sur GitHub.
 notebooks/*.xlsx
+# Les résultats exportés par un notebook (matricules et Compa-Ratio) non plus.
+notebooks/*.csv
