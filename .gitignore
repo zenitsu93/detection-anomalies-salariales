@@ -8,3 +8,5 @@ models/*.joblib
 visualisation/donnees/
 # L'écran d'accueil est refait à chaque détection (src/generate_accueil.py).
 accueil.html
+# Les fichiers Excel posés à côté des notebooks pour les lancer (souvent de vraies données) ne sont jamais envoyés sur GitHub.
+notebooks/*.xlsx
