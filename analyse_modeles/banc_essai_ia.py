@@ -96,8 +96,8 @@ def mesurer(df: pd.DataFrame, rule_params: dict, methode: str) -> dict:
     signal = d.Rule_Flags.str.contains("ML_STRONG_SIGNAL", na=False).to_numpy()
     haut = d.Severity.isin(["Critical", "Major"]).to_numpy()
     return {
-        "Précision moyenne IA": round(average_precision_score(vrai, score), 3),
-        "Précision moyenne score général": round(average_precision_score(vrai, d.RiskScore), 3),
+        "Précision moyenne IA": round(average_precision_score(vrai, score), 2),
+        "Précision moyenne score général": round(average_precision_score(vrai, d.RiskScore), 2),
         "Top 5 % IA : vraies anomalies": int((top & vrai).sum()),
         "Top 5 % IA : dont subtiles": int((top & (d.Label == "subtil").to_numpy()).sum()),
         "Top 5 % IA : au-dessus du Max": int((top & (d.Label == "au_dessus").to_numpy()).sum()),

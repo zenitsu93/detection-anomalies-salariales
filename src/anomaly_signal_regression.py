@@ -445,7 +445,7 @@ if __name__ == "__main__":
     reg, metriques = entrainer(df)
     joblib.dump(reg, dossier / "regression.joblib")
     print("Colonnes lues :", ", ".join(reg["colonnes"]))
-    print(f"Qualité sur des salariés non vus : R2 = {metriques['R2']:.3f}, erreur moyenne = "
+    print(f"Qualité sur des salariés non vus : R2 = {metriques['R2']:.2f}, erreur moyenne = "
           f"{metriques['MAE']:.1f} kMAD ({metriques['MAPE']:.1%}), fourchette juste "
           f"{metriques['Couverture']:.0%} du temps (visé : 90 %)")
 
@@ -456,10 +456,12 @@ if __name__ == "__main__":
                            + [{"Mesure": f"Erreur moyenne % - {k}", "Valeur": v} for k, v in boosting.items()])
     sortie = projet / "output" / "regression" / "diagnostic_regression.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
+    # Ici 4 chiffres après la virgule, et non 2 : presque toutes ces mesures sont des parts (0,1057 = 10,57 %),
+    # donc 4 chiffres en donnent 2 une fois lues en pourcentage. Avec 2, un écart de 0,3 % s'écrirait 0.
     with pd.ExcelWriter(sortie) as excel:
-        qualite.to_excel(excel, sheet_name="Qualite", index=False)
-        couverture_par_niveau(df).to_excel(excel, sheet_name="Fourchette_par_niveau", index=False)
-        effets(df).to_excel(excel, sheet_name="Effets", index=False)
-        utilite_variables(df).to_excel(excel, sheet_name="Utilite_variables", index=False)
-        ecart_femmes_hommes(df).to_excel(excel, sheet_name="Femmes_Hommes_profil_egal", index=False)
+        qualite.round(4).to_excel(excel, sheet_name="Qualite", index=False)
+        couverture_par_niveau(df).round(4).to_excel(excel, sheet_name="Fourchette_par_niveau", index=False)
+        effets(df).round(4).to_excel(excel, sheet_name="Effets", index=False)
+        utilite_variables(df).round(4).to_excel(excel, sheet_name="Utilite_variables", index=False)
+        ecart_femmes_hommes(df).round(4).to_excel(excel, sheet_name="Femmes_Hommes_profil_egal", index=False)
     print(f"Diagnostic enregistré dans : {sortie}")

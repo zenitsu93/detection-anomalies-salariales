@@ -109,8 +109,10 @@ if __name__ == "__main__":
 
     # En fichiers Excel (.xlsx) : ils s'ouvrent directement, sans souci de séparateur, de virgule
     # décimale ou d'accents.
-    df.to_excel(dossier / "anomalies.xlsx", index=False)
-    gg.to_excel(dossier / "gender_gap.xlsx", index=False)
+    # Les nombres calculés y sont écrits avec 2 chiffres après la virgule. L'arrondi se fait ici, tout à la fin :
+    # les calculs des étapes, eux, gardent toute leur précision.
+    df.round(2).to_excel(dossier / "anomalies.xlsx", index=False)
+    gg.round(2).to_excel(dossier / "gender_gap.xlsx", index=False)
 
     print(f"\nTerminé en {secondes(debut)} : {len(df)} salariés analysés.")
     print(f"- Excel (anomalies.xlsx, gender_gap.xlsx) : {dossier}")
