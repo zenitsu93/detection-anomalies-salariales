@@ -52,5 +52,6 @@ if __name__ == "__main__":
 
     sortie = projet / "output" / "ecarts_hommes_femmes" / "gender_gap.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
-    gg.to_excel(sortie, index=False)
+    # Dans le fichier, les nombres calculés ont 2 chiffres après la virgule. Les calculs gardent toute leur précision.
+    gg.round(2).to_excel(sortie, index=False)
     print(f"\n{len(gg)} métiers + niveaux - tableau enregistré dans : {sortie}")

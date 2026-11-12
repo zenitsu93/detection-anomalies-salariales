@@ -241,7 +241,7 @@
       textfont: { size: 11, color: K.ENCRE }, customdata: cases.map((r, i) => r.map((g, j) => [g.length, fr(salaire[i][j], 1)])), xgap: 2, ygap: 2,
       colorbar: { thickness: 12, tickvals: [0.85, 0.95, 1.05], ticktext: ['sous 0,90', '0,90 à 1,00', 'au-dessus de 1,00'], tickfont: { size: 11 },
         title: { text: 'Compa-Ratio<br>moyen', font: { size: 11 } } },
-      hovertemplate: '%{y} · %{x}<br><b>Compa-Ratio moyen : %{z:.3f}</b><br>Salaire moyen : %{customdata[1]} kMAD<br>%{customdata[0]:,} salariés<extra></extra>',
+      hovertemplate: '%{y} · %{x}<br><b>Compa-Ratio moyen : %{z:.2f}</b><br>Salaire moyen : %{customdata[1]} kMAD<br>%{customdata[0]:,} salariés<extra></extra>',
     }];
     const L = grille({ titres: ['Compa-Ratio moyen et salaire moyen (kMAD) par métier et tension du métier'] });
     // Les valeurs de Hot_job sont lues dans le fichier entier (et non supposées de 0 à 2) : la plus haute est la tension la plus forte.

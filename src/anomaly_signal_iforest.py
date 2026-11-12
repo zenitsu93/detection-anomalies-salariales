@@ -156,5 +156,6 @@ if __name__ == "__main__":
     # séparateur, de virgule décimale ou d'accents.
     sortie = projet / "output" / "signal_iforest" / "employes_signal_iforest.xlsx"
     sortie.parent.mkdir(parents=True, exist_ok=True)
-    df.to_excel(sortie, index=False)
+    # Dans le fichier, les nombres calculés ont 2 chiffres après la virgule. Les calculs gardent toute leur précision.
+    df.round(2).to_excel(sortie, index=False)
     print(f"\n{len(df)} salariés - DataFrame enregistré dans : {sortie}")

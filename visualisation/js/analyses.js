@@ -149,12 +149,12 @@
       boite(K.ARDOISE, { x: lignes.map(l => l.Tranche_Anciennete), y, text: surv, name: 'Salariés' }),
       { type: 'scatter', mode: 'lines+markers', x: tranches, y: medianes.map(m => m[0]), customdata: medianes.map(m => m[1]),
         line: { color: K.BRUN, width: 3 }, marker: { size: 8 }, name: 'Médiane par tranche',
-        hovertemplate: 'Ancienneté %{x} ans<br><b>Compa-Ratio médian : %{y:.3f}</b><br>%{customdata:,} salariés<extra></extra>' },
+        hovertemplate: 'Ancienneté %{x} ans<br><b>Compa-Ratio médian : %{y:.2f}</b><br>%{customdata:,} salariés<extra></extra>' },
       // Points gris clair : la courbe de tendance, en brun, se lit par-dessus.
       { type: 'scattergl', mode: 'markers', x, y, text: surv, name: 'Salariés', showlegend: false,
         marker: { color: K.PALE, size: 5, opacity: 0.2 }, xaxis: 'x2', yaxis: 'y2' },
       { type: 'scatter', mode: 'lines', x: courbe.x, y: courbe.y, line: { color: K.BRUN, width: 3 }, name: 'Tendance non linéaire (Lowess)',
-        hovertemplate: "Âge à l'embauche %{x}<br>tendance : %{y:.3f}<extra></extra>", xaxis: 'x2', yaxis: 'y2' },
+        hovertemplate: "Âge à l'embauche %{x}<br>tendance : %{y:.2f}<extra></extra>", xaxis: 'x2', yaxis: 'y2' },
     ];
     Object.assign(L.xaxis, { type: 'category', categoryorder: 'array', categoryarray: tranches, title: titreAxe("Ancienneté (tranches d'années)") });
     L.xaxis2.title = titreAxe("Âge à l'embauche (années)");
