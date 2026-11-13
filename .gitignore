@@ -12,3 +12,5 @@ accueil.html
 notebooks/*.xlsx
 # Les résultats exportés par un notebook (matricules et Compa-Ratio) non plus.
 notebooks/*.csv
+# Ce que le notebook regression_sans_anomalies/ enregistre à côté de lui (matricules et salaires) non plus.
+regression_sans_anomalies/*.xlsx
