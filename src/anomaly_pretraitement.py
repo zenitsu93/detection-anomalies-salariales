@@ -185,8 +185,9 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
 
     Étapes :
     1. Lire les trois fichiers Excel (.xlsx).
-    2. Retirer les doublons : matricule en double chez les salariés, métier + niveau en double dans la
-       grille et le marché (le premier est gardé).
+    2. Retirer les espaces autour du nom du métier (Job_Family) dans les trois fichiers, puis les
+       doublons : matricule en double chez les salariés, métier + niveau en double dans la grille et le
+       marché (le premier est gardé).
     3. Ajouter la tranche d'ancienneté de chaque salarié (Anciennete_Bucket).
     4. Ajouter à chaque salarié la fourchette de sa grille (Min, Mid, Max) et la médiane du marché
        (Market_Median), retrouvées grâce à son métier (Job_Family) et son niveau (Niveau).
@@ -205,7 +206,15 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     bands = pd.read_excel(chemin_bands)
     market = pd.read_excel(chemin_market)
 
-    # 2. Doublons, dans les trois fichiers : on garde toujours le premier.
+    # 2. Le nom du métier, sans espaces autour, dans les trois fichiers. Pourquoi : la grille et le marché
+    # d'un salarié se retrouvent par son métier. Si un fichier écrit « RETAIL BANKING » et un autre le
+    # même nom suivi d'un espace (invisible dans Excel), les deux ne se reconnaissent pas : tous les
+    # salariés de ce métier restent sans grille. Pourquoi avant les doublons : une grille écrite deux
+    # fois, dont une avec un espace, doit être vue comme un doublon. Une case vide reste vide.
+    for table in (emp, bands, market):
+        table["Job_Family"] = table["Job_Family"].map(lambda nom: nom.strip() if isinstance(nom, str) else nom)
+
+    # Doublons, dans les trois fichiers : on garde toujours le premier.
     cles = ["Job_Family", "Niveau"]
     # Salariés : un même matricule présent deux fois.
     emp = emp.drop_duplicates(subset="Matricule")
