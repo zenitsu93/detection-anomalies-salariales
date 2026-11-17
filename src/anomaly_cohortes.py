@@ -209,7 +209,11 @@ def former_cohortes(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         # Le nom du groupe de chaque salarié à cette étape : ses valeurs dans ces colonnes, collées avec
         # des « | », par exemple « 3|FINANCE|6-12 ». (astype(str) écrit chaque valeur en texte ; une
         # case vide devient le texte « nan », et les personnes concernées forment leur propre groupe.)
-        cle = df[colonnes].astype(str).agg("|".join, axis=1)
+        # Pourquoi .fillna("nan") : avec les versions récentes de pandas (3 et plus), astype(str) ne
+        # transforme plus une case vide en texte « nan », il la laisse vide. Coller les valeurs avec des
+        # « | » plantait alors dès qu'une case était vide (« expected str instance, float found »). On
+        # écrit donc « nan » nous-mêmes : le résultat est le même avec toutes les versions de pandas.
+        cle = df[colonnes].astype(str).fillna("nan").agg("|".join, axis=1)
         # Les salariés rangés par groupe COMPLET à cette étape (tous ceux qui ont le même nom de groupe).
         groupes = df.groupby(cle)
         # Pour chaque salarié, le nombre de personnes de son groupe à cette étape. « transform » recopie
