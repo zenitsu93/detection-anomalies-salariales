@@ -190,7 +190,7 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
        marché (le premier est gardé).
     3. Ajouter la tranche d'ancienneté de chaque salarié (Anciennete_Bucket).
     4. Ajouter à chaque salarié la fourchette de sa grille (Min, Mid, Max) et la médiane du marché
-       (Market_Median), retrouvées grâce à son métier (Job_Family) et son niveau (Niveau).
+       (Median), retrouvées grâce à son métier (Job_Family) et son niveau (Niveau).
     5. Calculer les ratios :
        - CompaRatio = salaire / Mid : 1 veut dire « payé au milieu de la fourchette » ;
        - RangePenetration = (salaire - Min) / (Max - Min) : 0 veut dire « au Min », 1 « au Max » ;
@@ -229,9 +229,12 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
 
     # 4. Grille et marché, retrouvés par métier + niveau.
     grille = bands[cles + ["Min", "Mid", "Max"]]
-    marche = market[cles + ["Median"]].rename(columns={"Median": "Market_Median"})
+    # La médiane du marché garde le nom qu'elle a dans le fichier du marché : Median. Pourquoi ne pas la
+    # renommer : on retrouve ainsi la même colonne, sous le même nom, dans le fichier, dans ce tableau
+    # et dans les notebooks.
+    marche = market[cles + ["Median"]]
     # how="left" : on garde tous les salariés, même ceux dont le métier + niveau n'existe pas dans la
-    # grille ou le marché (leurs colonnes Min, Mid, Max ou Market_Median restent alors vides).
+    # grille ou le marché (leurs colonnes Min, Mid, Max ou Median restent alors vides).
     df = emp.merge(grille, on=cles, how="left").merge(marche, on=cles, how="left")
 
     # 5. Ratios.
@@ -239,11 +242,11 @@ def preparer_employes(chemin_employes, chemin_bands, chemin_market) -> pd.DataFr
     # ferait une division par zéro (un ratio « infini »). Le ratio reste vide à la place.
     df["CompaRatio"] = df["Fixe_Annuel_MAD"] / df["Mid"].replace(0, np.nan)
     df["RangePenetration"] = (df["Fixe_Annuel_MAD"] - df["Min"]) / (df["Max"] - df["Min"]).replace(0, np.nan)
-    df["MarketRatio"] = df["Fixe_Annuel_MAD"] / df["Market_Median"].replace(0, np.nan)
+    df["MarketRatio"] = df["Fixe_Annuel_MAD"] / df["Median"].replace(0, np.nan)
     # Ratio grille / marché = Mid / médiane du marché : 1,10 veut dire que la grille du métier + niveau
     # paie 10 % de plus que le marché. Il ne dépend pas du salaire : c'est la régression qui le lit
     # (anomaly_signal_regression.py).
-    df["Ratio_Grille_Marche"] = df["Mid"] / df["Market_Median"].replace(0, np.nan)
+    df["Ratio_Grille_Marche"] = df["Mid"] / df["Median"].replace(0, np.nan)
 
     # 6. Niveau d'études, lu dans le fichier des salariés lui-même. Pourquoi seulement maintenant, et pas
     # à la lecture : le rang et la tranche se calculent sur le tableau final, et le nom du fichier sert

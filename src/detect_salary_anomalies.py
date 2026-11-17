@@ -92,7 +92,7 @@ if __name__ == "__main__":
     front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Niveau",
                   "Niveau_Etude_Max", "Rang_Etude_Max", "Tranche_Etude", "Cat_Ecole_Max",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",
-                  "Market_Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
+                  "Median", "MarketRatio", "PeerZ", "Rule_Flags", "Rule_Score",
                   "Salaire_Attendu", "Attendu_Bas", "Attendu_Haut", "Ecart_Attendu", "Z_Attendu",
                   "ML_AnomalyScore", "RiskScore", "Severity", "Cohort_Key", "Reason_Principale", "Explication_IA", "Reco",
                   "Cout_Ajustement"]

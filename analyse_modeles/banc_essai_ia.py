@@ -79,7 +79,7 @@ def donnees_realistes(df: pd.DataFrame, graine: int = 0) -> pd.DataFrame:
     # Les ratios, recalculés comme dans anomaly_pretraitement.py.
     df["CompaRatio"] = df.Fixe_Annuel_MAD / df.Mid
     df["RangePenetration"] = (df.Fixe_Annuel_MAD - df.Min) / (df.Max - df.Min)
-    df["MarketRatio"] = df.Fixe_Annuel_MAD / df.Market_Median
+    df["MarketRatio"] = df.Fixe_Annuel_MAD / df.Median
     return df
 
 
