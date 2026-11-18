@@ -63,7 +63,6 @@ h1 { font-size: 22px; font-weight: 600; }
 .field-name { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
 
 .field { display: block; margin: 16px 0 4px; }
-.optional { font-weight: 400; color: var(--faint); }
 .field input, .field select {
   display: block; width: 100%; min-width: 0; height: 36px; padding: 0 10px;
   font: 14px var(--font); color: var(--ink); background: var(--panel);
@@ -76,7 +75,7 @@ h1 { font-size: 22px; font-weight: 600; }
 .input-unit input { padding-right: 88px; }
 .input-unit > span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--faint); pointer-events: none; }
 .hint, .footnote { font-size: 12px; color: var(--muted); }
-/* Les champs du salaire prédit, regroupés sous leur titre et séparés du haut du formulaire par un trait. */
+/* Les champs du profil, regroupés sous leur titre et séparés du haut du formulaire par un trait. */
 .model-fields { border: 0; border-top: 1px solid var(--line-soft); margin: 16px 0 0; padding: 12px 0 0; }
 .model-fields legend { padding: 0 6px 0 0; font-size: 13px; font-weight: 600; color: var(--ink); }
 .model-fields .hint { margin: 4px 0 0; }
@@ -92,76 +91,50 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 /* ---------- État vide ---------- */
 .empty-state { min-height: 460px; padding: 48px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .empty-state h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-/* Règle animée de l'état vide : le curseur balaie les repères pour annoncer ce que fait l'outil. */
-.ghost-ruler {
-  width: min(360px, 90%); height: 70px; margin-bottom: 28px; position: relative;
-  background: repeating-linear-gradient(90deg, #b7bdc4 0 1px, transparent 1px 12px) bottom/100% 6px no-repeat,
-              repeating-linear-gradient(90deg, var(--muted) 0 1px, transparent 1px 60px) bottom/100% 12px no-repeat;
-  border-bottom: 1px solid var(--muted);
-}
-.ghost-ruler i { position: absolute; height: 8px; }
-.ghost-ruler i:nth-child(1) { left: 8%; width: 60%; top: 6px; background: var(--neutral-soft); border: 1px solid #b7bdc4; }
-.ghost-ruler i:nth-child(2) { left: 30%; width: 34%; top: 22px; background: #9aa3ad; }
-.ghost-ruler i:nth-child(3) { left: 40%; width: 20%; top: 38px; background: var(--brand-soft); border: 1.5px solid var(--brand); }
-.ghost-ruler b { position: absolute; left: 52%; top: -6px; bottom: 0; width: 2px; background: var(--brand-dark); animation: sweep 5s ease-in-out infinite alternate; }
+/* Figure animée de l'état vide : la grille, la fourchette, et le curseur du salaire prédit qui se
+   promène dedans, pour annoncer ce que fait l'outil. */
+.ghost-ruler { width: min(360px, 90%); height: 44px; margin-bottom: 28px; position: relative; }
+.ghost-ruler i { position: absolute; }
+.ghost-ruler i:nth-child(1) { left: 0; width: 100%; top: 14px; height: 20px; background: var(--neutral-soft); border: 1px solid #b7bdc4; }
+.ghost-ruler i:nth-child(2) { left: 30%; width: 34%; top: 18px; height: 12px; background: var(--brand-soft); border: 1.5px solid var(--brand); }
+.ghost-ruler b { position: absolute; left: 52%; top: 6px; bottom: 2px; width: 2px; background: var(--brand-dark); animation: sweep 5s ease-in-out infinite alternate; }
 .ghost-ruler b::before { content: ""; position: absolute; top: -6px; left: -5px; border: 6px solid transparent; border-top-color: var(--brand-dark); }
-@keyframes sweep { from { left: 30%; } to { left: 62%; } }
+@keyframes sweep { from { left: 34%; } to { left: 60%; } }
 @media (prefers-reduced-motion: reduce) { .ghost-ruler b { animation: none; } }
 .empty-state p { max-width: 440px; margin: 0 auto; color: var(--muted); }
-.steps { display: inline-flex; gap: 24px; margin: 20px 0 0; padding: 0; list-style: none; font-size: 13px; }
-.steps li { display: flex; align-items: center; gap: 8px; margin: 0; }
-.steps b { padding: 1px 6px; background: var(--brand-soft); color: var(--brand-dark); border-radius: 2px; font-size: 12px; }
 
-/* ---------- Synthèse ---------- */
-/* Les chiffres clés passent sous le verdict, sur toute la largeur : à côté de lui, quatre chiffres
-   écrasaient le texte du verdict. */
-.verdict { display: grid; grid-template-columns: minmax(0, 1fr); border-left: 4px solid var(--ok); }
-.verdict.review { border-left-color: var(--warn); }
+/* ---------- Résultat ---------- */
+/* Un seul grand chiffre : le salaire prédit. Sa fourchette s'écrit dessous, en une phrase. */
+.verdict { padding: 16px 20px; border-left: 4px solid var(--ok); }
 .verdict.insufficient { border-left-color: var(--faint); }
-.verdict-main { padding: 16px 20px; }
-.verdict h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
-.verdict-profile { margin: 0; color: var(--muted); font-size: 13px; }
-/* Avertissement sous le verdict (salaire au-dessus du Max) : dans la couleur des points à examiner,
-   avec un trait à gauche, pour qu'on le voie sans le confondre avec le verdict lui-même. */
-.figures { display: flex; flex-wrap: wrap; margin: 0; border-top: 1px solid var(--line); }
-.figures div { flex: 1; padding: 16px 20px; min-width: 130px; display: flex; flex-direction: column; justify-content: center; }
-.figures div + div { border-left: 1px solid var(--line-soft); }
-.figures dt { font-size: 12px; color: var(--muted); }
-.figures dd { margin: 2px 0 0; font-size: 22px; font-weight: 600; white-space: nowrap; }
-.figures dd small { font-size: 12px; font-weight: 400; color: var(--faint); margin-left: 4px; }
-/* La fourchette de la régression passe sous le salaire prédit. */
-.figures dd small.range { display: block; margin: 2px 0 0; }
+.verdict-profile { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.verdict h2 { font-size: 13px; font-weight: 600; color: var(--muted); }
+.predicted { margin: 0; font-size: 34px; font-weight: 600; line-height: 1.2; }
+.predicted small { font-size: 13px; font-weight: 400; color: var(--faint); }
+.predicted-note { margin: 2px 0 0; color: var(--muted); }
 
-/* ---------- Positionnement ---------- */
-.ruler { position: relative; }
-.lane { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; align-items: center; min-height: 64px; border-bottom: 1px solid var(--line-soft); }
-.lane-label { font-size: 13px; font-weight: 600; line-height: 1.25; }
-.lane-label small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
-.track { position: relative; height: 64px; }
-/* Montants sur la règle : fond du panneau pour rester lisibles quand le trait du salaire les croise. */
-.val { position: absolute; left: var(--x); z-index: 2; padding: 0 3px; font-size: 11px; line-height: 15px; white-space: nowrap; color: var(--muted); background: var(--panel); }
-.val.above { top: 2px; transform: translateX(-50%); font-weight: 600; color: var(--ink); }
-.val.above.target { color: var(--brand-dark); }
-.val.below { bottom: 4px; }
-.val.start { transform: translateX(calc(-100% + 1px)); }
-.val.end { transform: translateX(-1px); }
-.val.inside-start { transform: translateX(-1px); }
-.val.inside-end { transform: translateX(calc(-100% + 1px)); }
-.bar { position: absolute; top: 50%; height: 12px; margin-top: -6px; left: var(--a); width: calc(var(--b) - var(--a)); min-width: 2px; }
-.bar.band { background: var(--neutral-soft); border: 1px solid #b7bdc4; }
-.bar.peers { background: #9aa3ad; }
-.bar.proposal { background: var(--brand-soft); border: 1.5px solid var(--brand); }
-.pip { position: absolute; top: 50%; left: var(--x); }
-.pip.mid, .pip.median { width: 2px; height: 20px; margin: -10px 0 0 -1px; background: var(--ink); }
-.pip.market { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--ink); transform: rotate(45deg); }
-.pip.target { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--brand-dark); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel); }
-.lane-empty { font-size: 12px; line-height: 64px; color: var(--faint); }
-.overlay { position: absolute; top: 0; bottom: 26px; left: 186px; right: 0; pointer-events: none; z-index: 1; }
-.overlay:first-child { z-index: 0; }
-.gridline { position: absolute; top: 0; bottom: 0; left: var(--x); width: 0; border-left: 1px dashed var(--line); }
-.axis { position: relative; height: 26px; margin-left: 186px; }
-.tick { position: absolute; top: 6px; left: var(--x); transform: translateX(-50%); font-size: 11px; color: var(--muted); }
-.ruler-note { margin: 10px 0 0; }
+/* ---------- La figure ---------- */
+/* Une seule ligne, sur trois étages : le salaire prédit, les deux bouts de sa fourchette, puis la
+   grille avec son Min et son Max dessous. */
+.track { position: relative; height: 88px; }
+.val { position: absolute; left: var(--x); padding: 0 4px; font-size: 12px; line-height: 16px; white-space: nowrap; color: var(--muted); }
+.val.top { top: 0; transform: translateX(-50%); font-size: 14px; font-weight: 600; color: var(--brand-dark); }
+.val.ends { top: 22px; }
+.val.below { top: 68px; padding: 0; }
+/* from : le montant s'écrit à partir du repère, vers la droite. upto : il s'arrête au repère. */
+.val.upto { transform: translateX(-100%); }
+.bar { position: absolute; left: var(--a); width: calc(var(--b) - var(--a)); min-width: 2px; }
+.bar.band { top: 42px; height: 20px; background: var(--neutral-soft); border: 1px solid #b7bdc4; }
+.bar.range { top: 46px; height: 12px; background: var(--brand-soft); border: 1.5px solid var(--brand); }
+.pip.target { position: absolute; top: 46px; left: var(--x); width: 12px; height: 12px; margin-left: -6px; background: var(--brand-dark); border-radius: 50%; box-shadow: 0 0 0 2px var(--panel); }
+/* La légende : les trois seules choses dessinées. */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line-soft); list-style: none; font-size: 12px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.key { display: block; width: 22px; height: 10px; }
+.key.target { width: 10px; background: var(--brand-dark); border-radius: 50%; }
+.key.range { background: var(--brand-soft); border: 1.5px solid var(--brand); }
+.key.band { background: var(--neutral-soft); border: 1px solid #b7bdc4; }
+.ruler-note { margin: 0; }
 
 footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
 
@@ -174,13 +147,5 @@ footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line);
   .page-head { flex-direction: column; align-items: flex-start; }
   .workspace { grid-template-columns: 1fr; }
   .form-panel { position: static; }
-  /* Pourquoi garder deux colonnes : empilé, le trait du salaire traverserait les libellés. */
-  .lane { grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
-  .lane-label { font-size: 12px; }
-  .axis { margin-left: 104px; }
-  .overlay { left: 104px; }
-  .figures div { min-width: 50%; padding: 12px 16px; }
-  .figures div + div { border-left: 0; }
-  .figures dd { font-size: 18px; }
-  .steps { flex-direction: column; gap: 8px; }
+  .predicted { font-size: 28px; }
 }

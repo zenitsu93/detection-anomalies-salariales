@@ -1,8 +1,9 @@
-"""Proposition salariale explicable, sur des références fixes, sans modifier les sources.
+"""Le salaire prédit pour un profil, placé dans la grille de son poste, sans modifier les sources.
 
-Pourquoi plus de mode « vérifier un salaire » : depuis le 09/11/2026, l'application ne sert qu'à
-proposer une fourchette et une cible pour un profil. Les cinq règles servent encore, mais seulement à
-vérifier que la cible proposée ne déclencherait elle-même aucune alerte (voir _proposal)."""
+Depuis le 17/11/2026, l'application ne donne plus qu'un résultat : le salaire que le modèle prédit
+pour le profil saisi, et la fourchette où le vrai salaire tombe 9 fois sur 10. La grille, le marché
+et les collègues ne sont plus que des repères à côté. Pourquoi : la fourchette et la cible tirées des
+règles faisaient un deuxième résultat, à côté du salaire prédit ; la page montrait trop de chiffres."""
 
 import math
 from pathlib import Path
@@ -11,6 +12,8 @@ import sys
 import numpy as np
 import pandas as pd
 import yaml
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import KFold
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,25 +21,46 @@ ROOT = Path(__file__).resolve().parent.parent
 # import ... ») ; Python doit donc aussi chercher dans ce dossier.
 sys.path.insert(0, str(ROOT / "src"))
 
-from anomaly_pretraitement import ORDRE_9BOX, ORDRE_PERFORMANCE, ajouter_diplomes, bucket_anciennete, rang_etude
-from anomaly_regles import apply_rulebook
-from anomaly_signal_regression import COLONNES, entrainer, predire
+from anomaly_pretraitement import ORDRE_PERFORMANCE, ajouter_diplomes, bucket_anciennete, rang_etude
+# De la régression du projet, on ne garde que la recette de la fourchette (voir _train_regression).
+from anomaly_signal_regression import PAQUETS, SEUIL_ROBUSTE, ecart_robuste
 
 # Même unité que les CSV : aucune conversion.
 UNIT = "kMAD / an"
 # Le périmètre d'un groupe de collègues, écrit en clair colonne par colonne.
 SCOPE = {"Niveau": "même niveau", "Job_Family": "même métier", "Anciennete_Bucket": "ancienneté {} ans"}
-# Les colonnes du modèle de régression que la page ne demande pas dans « Pour le salaire prédit » : le
-# métier, le niveau et l'ancienneté sont déjà en haut du formulaire ; le Mid et le ratio grille / marché
-# viennent de la grille et du marché du métier + niveau.
-DEJA_CONNUES = {"Job_Family", "Niveau", "Anciennete", "Mid", "Ratio_Grille_Marche"}
-# Le nom affiché de chaque champ du salaire prédit.
+# Les colonnes que lit le modèle du salaire prédit : la liste COLONNES du notebook
+# notebooks/Prediction_Compa_Ratio.ipynb. Pour en retirer une, effacer sa ligne. Pour en ajouter une,
+# ajouter une ligne : une colonne en chiffres du fichier des salariés.
+COLONNES = [
+    "Niveau",               # le niveau du poste
+    "Rang_Etude_Max",       # le niveau d'études, en rang : 0 = secondaire, 1 = BAC... 7 = BAC+7
+    "Age_Embauche",         # âge − ancienneté
+    "Anciennete",           # l'ancienneté, en années
+    "Competence_N1",        # la note de compétence de l'an dernier
+    "Rang_Performance",     # la performance de l'an dernier, en rang : 1 = « Très en dessous »... 5 = « Très au-delà »
+    "Hot_job",              # la tension du métier sur le marché
+    "Ratio_Grille_Marche",  # Mid / médiane du marché
+]
+# Le modèle apprend le salaire : il reçoit en plus le Mid de la grille, en logarithme comme le salaire.
+# Pourquoi : sans lui, il ne connaît pas la grille du poste (EN_PLUS_POUR_LE_SALAIRE dans le notebook).
+LOG_MID = "Log_Mid"
+# Les colonnes que le modèle calcule, et ce que la page demande à la place : on saisit « BAC+5 », pas
+# son rang ; l'âge, pas l'âge à l'embauche.
+SAISIE = {"Rang_Etude_Max": "Niveau_Etude_Max", "Age_Embauche": "Age", "Rang_Performance": "Performance_N1"}
+# Les deux colonnes en rang. Un libellé inconnu ou une case vide y prend le rang du milieu (la médiane),
+# comme dans le notebook.
+RANGS = ("Rang_Etude_Max", "Rang_Performance")
+# Les colonnes du modèle que la page ne demande pas dans « Profil de la personne » : le niveau et
+# l'ancienneté sont déjà en haut du formulaire ; le ratio grille / marché et le Mid viennent de la
+# grille et du marché du métier + niveau.
+DEJA_CONNUES = {"Niveau", "Anciennete", "Ratio_Grille_Marche", LOG_MID}
+# Le nom affiché de chaque champ du profil.
 LABELS = {"Age": "Âge", "Competence_N1": "Compétence N-1", "Performance_N1": "Performance N-1",
-          "Positionnement_9BOX": "Positionnement 9-Box", "Hot_job": "Hot job",
-          "Niveau_Etude_Max": "Niveau d'études", "Cat_Ecole_Max": "Catégorie d'école"}
+          "Hot_job": "Hot job", "Niveau_Etude_Max": "Niveau d'études"}
 
 
-def number(value, name, *, optional=False, minimum=0, strict=False):
+def number(value, name, *, optional=False):
     if optional and (value is None or value == ""):
         return None
     try:
@@ -45,7 +69,7 @@ def number(value, name, *, optional=False, minimum=0, strict=False):
         result = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"{name} : saisir un nombre valide.") from None
-    if not math.isfinite(result) or result < minimum or (strict and result == minimum):
+    if not math.isfinite(result) or result < 0:
         raise ValueError(f"{name} : valeur hors limites.")
     return result
 
@@ -66,15 +90,6 @@ class DecisionEngine:
             raise ValueError("cohort_min_size doit être au moins égal à 2.")
         self.steps = self.rules.get("cohort_widening_steps",
                                     ["Niveau|Job_Family|Anciennete_Bucket", "Niveau|Job_Family", "Niveau"])
-        for lo, hi, defaults in [("compa_ratio_low", "compa_ratio_high", (.85, 1.15)),
-                                  ("market_low", "market_high", (.9, 1.2))]:
-            low = number(self.rules.get(lo, defaults[0]), lo, strict=True)
-            high = number(self.rules.get(hi, defaults[1]), hi, strict=True)
-            if low >= high:
-                raise ValueError(f"{lo} doit être inférieur à {hi}.")
-            self.rules.update({lo: low, hi: high})
-        self.peer_threshold = number(self.rules.get("peer_z_threshold_minor", 2),
-                                     "peer_z_threshold_minor", strict=True)
         keys = ["Job_Family", "Niveau"]
         self.employees = self._prepare(employees, keys + ["Fixe_Annuel_MAD"], "Employés")
         # Pourquoi drop_duplicates : un métier + niveau en double garde sa première ligne, comme dans
@@ -93,19 +108,19 @@ class DecisionEngine:
         # Pourquoi ce nom de colonne : c'est celui des groupes de collègues (cohort_widening_steps).
         self.employees["Anciennete_Bucket"] = (self.employees.Anciennete.map(bucket_anciennete)
                                                if "Anciennete" in self.employees else "NA")
-        # Le modèle de src/anomaly_signal_regression.py, entraîné au démarrage sur les mêmes salariés
-        # et de la même façon que lui : le repère affiché est celui de la ligne de commande.
+        # Le modèle du salaire prédit, appris au démarrage sur les mêmes salariés : la façon de faire du
+        # modèle M5 de notebooks/Prediction_Compa_Ratio.ipynb (voir _train_regression).
         self.regression, self.regression_base = self._train_regression()
         self.fields = self._model_fields()
 
     def _model_fields(self):
-        """Les champs à saisir pour le salaire prédit : les colonnes que lit le modèle, sauf celles que
-        la page connaît déjà (métier, niveau, ancienneté) ou qu'elle calcule (Mid et ratio grille /
-        marché, tirés de la grille et du marché du métier + niveau). Le diplôme se saisit par son niveau
-        d'études (BAC+5...) : son rang, que lit le modèle, est calculé comme dans
-        src/anomaly_pretraitement.py.
-        Pour chaque champ : une liste de choix (les valeurs du fichier des salariés) pour une catégorie,
-        ou un nombre, borné par le plus petit et le plus grand du fichier. Pourquoi ces bornes : hors de
+        """Les champs du profil à saisir : les colonnes que lit le modèle, sauf celles que
+        la page connaît déjà (niveau, ancienneté) ou qu'elle calcule (le ratio grille / marché et le
+        Mid, tirés de la grille et du marché du métier + niveau). Une colonne calculée se saisit par ce dont elle
+        vient (SAISIE) : le niveau d'études (BAC+5...) pour son rang, la performance pour son rang,
+        l'âge pour l'âge à l'embauche.
+        Pour chaque champ : une liste de choix (les valeurs du fichier des salariés) pour un libellé, ou
+        un nombre, borné par le plus petit et le plus grand du fichier. Pourquoi ces bornes : hors de
         ce que le modèle a vu, sa prédiction ne vaut plus grand-chose."""
         if self.regression is None:
             return []
@@ -113,24 +128,22 @@ class DecisionEngine:
         for column in self.regression["colonnes"]:
             if column in DEJA_CONNUES:
                 continue
-            column = "Niveau_Etude_Max" if column == "Rang_Etude_Max" else column
+            column = SAISIE.get(column, column)
             values = base[column].dropna()
             field = {"name": column, "label": LABELS.get(column, column)}
-            if COLONNES.get(column) == "catégorie" or column == "Niveau_Etude_Max" or not pd.api.types.is_numeric_dtype(values):
+            if column == "Niveau_Etude_Max" or not pd.api.types.is_numeric_dtype(values):
                 uniques = list(dict.fromkeys(values.tolist()))
                 if column == "Niveau_Etude_Max":
                     rangs = dict(zip(uniques, rang_etude(pd.Series(uniques, dtype=object))))
                     uniques.sort(key=lambda v: (pd.isna(rangs[v]), 0 if pd.isna(rangs[v]) else rangs[v], str(v)))
                 elif column == "Performance_N1" and set(map(str, uniques)) <= set(ORDRE_PERFORMANCE):
                     uniques.sort(key=lambda v: ORDRE_PERFORMANCE.index(str(v)))
-                elif column == "Positionnement_9BOX" and set(map(str, uniques)) <= set(ORDRE_9BOX):
-                    uniques.sort(key=lambda v: ORDRE_9BOX.index(str(v)))
                 else:
                     uniques.sort(key=lambda v: (not isinstance(v, (int, float)), v if isinstance(v, (int, float)) else str(v)))
                 # key : « 2 » et 2.0 désignent la même case, comme pour le métier et le niveau.
                 options = {key(v): v for v in uniques}
-                # Une case vide dans le fichier (une catégorie d'école inconnue...) : le modèle a appris un
-                # effet « Inconnu » pour elle ; la page peut donc aussi la choisir.
+                # Une case vide dans le fichier (un niveau d'études inconnu...) : la page peut aussi la
+                # choisir. Elle compte alors pour le rang du milieu, comme à l'apprentissage.
                 if base[column].isna().any():
                     options["Inconnu"] = None
                 field.update(kind="choice", options=options)
@@ -140,11 +153,53 @@ class DecisionEngine:
             fields.append(field)
         return fields
 
+    @staticmethod
+    def _model_columns(table):
+        """Les colonnes de COLONNES, en chiffres, pour un tableau de salariés ou pour le profil saisi,
+        puis le Mid en logarithme (LOG_MID).
+        Mêmes calculs que le notebook : le niveau lu en nombre, l'âge à l'embauche = âge − ancienneté,
+        le niveau d'études et la performance passés en rang. Une colonne dont il manque la source reste
+        vide."""
+        def nombre(colonne):
+            if colonne not in table:
+                return pd.Series(np.nan, index=table.index)
+            return pd.to_numeric(table[colonne], errors="coerce")
+
+        x = pd.DataFrame(index=table.index)
+        for colonne in COLONNES:
+            if colonne == "Age_Embauche":
+                x[colonne] = nombre("Age") - nombre("Anciennete")
+            elif colonne == "Rang_Performance":
+                rangs = {libelle: i + 1 for i, libelle in enumerate(ORDRE_PERFORMANCE)}
+                x[colonne] = (table["Performance_N1"].map(rangs).astype(float) if "Performance_N1" in table
+                              else np.nan)
+            else:
+                x[colonne] = nombre(colonne)
+        # Un Mid absent, nul ou négatif n'a pas de logarithme : la case reste vide.
+        mid = nombre("Mid")
+        x[LOG_MID] = np.log(mid.where(mid > 0))
+        return x
+
     def _train_regression(self):
-        """Le modèle de régression et le tableau sur lequel il a appris. Pourquoi ce tableau : le modèle
-        lit aussi le Mid de la grille, le ratio grille / marché et le rang du diplôme, que le fichier des
-        salariés n'a pas. On les ajoute comme preparer_employes (src/anomaly_pretraitement.py). Si le
-        modèle ne peut pas apprendre (pas de grille...), pas de salaire prédit (None)."""
+        """Le modèle du salaire prédit et le tableau sur lequel il a appris. Si le modèle ne peut pas
+        apprendre (pas de grille...), pas de salaire prédit (None).
+
+        La façon de faire est celle du modèle M5 de notebooks/Prediction_Compa_Ratio.ipynb, retenu le
+        17/11/2026 (jusque-là, c'était M6, qui apprenait le Compa-Ratio) :
+        - il apprend le salaire, en logarithme : un écart se lit alors en pourcentage (10 % de plus), et
+          les très hauts salaires pèsent moins. Salaire prédit = exponentielle du log prédit ;
+        - avec un gradient boosting : des centaines de petits arbres qui se corrigent l'un l'autre. Il
+          suit des effets qui ne sont pas en ligne droite (une ancienneté qui compte plus dans certains
+          niveaux, par exemple) ;
+        - avec les colonnes de COLONNES, et le Mid de la grille en logarithme (LOG_MID) : c'est par lui
+          que le modèle connaît la grille du poste. Une colonne absente du fichier, ou vide, est laissée
+          de côté ; une colonne en rang aussi, si la plupart de ses libellés ne sont pas reconnus.
+
+        La fourchette (« 9 fois sur 10 ») garde la recette de src/anomaly_signal_regression.py : chaque
+        salarié est prédit par un modèle qui ne l'a pas vu (validation croisée en PAQUETS paquets), on
+        range les erreurs, et on retire les 5 % les plus basses et les 5 % les plus hautes. Les salaires
+        très loin de ce qui est attendu (plus de SEUIL_ROBUSTE écarts habituels) ne comptent pas : la
+        fourchette dit où tombe un salaire normal pour ce profil."""
         keys = ["Job_Family", "Niveau"]
         grille = self.bands[keys + ["Mid"]].assign(Mid=lambda t: pd.to_numeric(t.Mid, errors="coerce"))
         base = self.employees.merge(grille, on=keys, how="left")
@@ -153,10 +208,36 @@ class DecisionEngine:
             base = base.merge(marche, on=keys, how="left")
             base["Ratio_Grille_Marche"] = base.Mid / base.pop("Median").replace(0, np.nan)
         base = ajouter_diplomes(base)
-        try:
-            return entrainer(base)[0], base
-        except (ValueError, KeyError):
+
+        X = self._model_columns(base).replace([np.inf, -np.inf], np.nan)
+        colonnes = [c for c in COLONNES if X[c].notna().mean() > (0.5 if c in RANGS else 0)]
+        X = X[colonnes + [LOG_MID]]
+        # Un rang inconnu prend le rang du milieu. La page fera pareil pour le profil saisi.
+        medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS}
+        X = X.fillna(medianes)
+        # Ce que le modèle apprend : le logarithme du salaire.
+        y = np.log(base.Fixe_Annuel_MAD)
+        # Un salarié sans grille, ou avec une case vide dans une des colonnes, n'apprend pas au modèle.
+        complets = X.notna().all(axis=1) & np.isfinite(y)
+        X, y = X[complets], y[complets]
+        if not colonnes or len(X) < 10 * PAQUETS:
             return None, base
+
+        # La fourchette : les erreurs de chaque salarié, prédit par un modèle qui ne l'a pas vu.
+        predit = pd.Series(np.nan, index=X.index)
+        # random_state=42 : le même découpage, donc la même fourchette, à chaque démarrage.
+        for apprend, verifie in KFold(PAQUETS, shuffle=True, random_state=42).split(X):
+            modele = HistGradientBoostingRegressor(random_state=42).fit(X.iloc[apprend], y.iloc[apprend])
+            predit.iloc[verifie] = modele.predict(X.iloc[verifie])
+        residus = y - predit
+        centre, echelle = ecart_robuste(residus)
+        normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
+        bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
+
+        # Le modèle que la page interroge apprend sur tous les salariés.
+        modele = HistGradientBoostingRegressor(random_state=42).fit(X, y)
+        return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
+                "fourchette": (float(bas), float(haut))}, base
 
     @staticmethod
     def _prepare(table, columns, label):
@@ -222,22 +303,8 @@ class DecisionEngine:
                 break
         if len(peers) < self.minimum_peers:
             return {"count": len(peers), "available": False, "scope": scope}
-        salaries = peers.Fixe_Annuel_MAD
-        median = float(salaries.median())
-        # Même calcul que robust_zscore (src/anomaly_cohortes.py), mais sur les collègues seuls : le
-        # salaire envisagé n'en fait pas partie.
-        # Comme là-bas, l'écart se mesure en proportion (le log du salaire) quand peer_z_echelle vaut
-        # « log » : center et scale sont alors en log. Seule différence : pour un groupe « même niveau »,
-        # tous métiers confondus, la détection compare les CompaRatio ; ici, les salaires.
-        log = self.rules.get("peer_z_echelle", "log") == "log"
-        values = np.log(salaries) if log else salaries
-        v_median = float(values.median())
-        mad = float((values - v_median).abs().median())
-        std = float(values.std())
-        center, scale = (v_median, mad / .6745) if mad > 0 else (float(values.mean()), std)
-        return {"count": len(peers), "available": True, "scope": scope, "median": median,
-                "q25": float(salaries.quantile(.25)), "q75": float(salaries.quantile(.75)),
-                "center": center, "scale": scale, "log": log}
+        return {"count": len(peers), "available": True, "scope": scope,
+                "median": round(float(peers.Fixe_Annuel_MAD.median()), 2)}
 
     def analyze(self, payload):
         if not isinstance(payload, dict):
@@ -250,23 +317,13 @@ class DecisionEngine:
         inputs = self._read_inputs(payload)
         band = self._reference(self.bands, profile, ["Min", "Mid", "Max"])
         market = self._reference(self.market, profile, ["Median"])
-        peers = self._peers(profile)
-        # Le plancher du niveau (règle du salaire minimum), ou None si le fichier de règles n'en donne pas.
-        floor = self.rules.get("min_salary_by_niveau", {}).get(int(niveau) if niveau.isdigit() else niveau)
-        proposal = self._proposal(band, market, peers, niveau, floor)
-        status = "review" if proposal["reason"] == "conflict" else (
-            "coherent" if proposal["target"] is not None and market and peers["available"] else "insufficient")
-        titles = {"coherent": "Proposition de référence", "review": "Points à examiner",
-                  "insufficient": "Références incomplètes"}
-        return {"profile": profile, "unit": UNIT, "status": status, "title": titles[status],
-                "band": band, "market": market,
-                "peers": {k: v for k, v in peers.items() if k not in {"center", "scale", "log"}},
-                "proposal": proposal, "regression": self._regression(profile, band, market, inputs)}
+        return {"profile": profile, "unit": UNIT, "band": band, "market": market,
+                "peers": self._peers(profile), "regression": self._regression(profile, band, market, inputs)}
 
     def _read_inputs(self, payload):
-        """Les champs du salaire prédit saisis dans la page, contrôlés : un choix doit être une valeur du
+        """Les champs du profil saisis dans la page, contrôlés : un choix doit être une valeur du
         fichier des salariés, un nombre doit rester entre ses bornes. Un champ vide est simplement
-        absent : la proposition se fait quand même, seul le salaire prédit attend."""
+        absent : le résultat dit alors lesquels manquent pour le salaire prédit."""
         inputs = {}
         for field in self.fields:
             raw = payload.get(field["name"])
@@ -284,8 +341,8 @@ class DecisionEngine:
         return inputs
 
     def _regression(self, profile, band, market, inputs):
-        # Repère en plus, qui ne change ni le verdict ni la fourchette proposée : le salaire que le modèle
-        # prédit pour le profil saisi, avec la grille et le marché du métier + niveau choisis.
+        # Le résultat de la page : le salaire que le modèle prédit pour le profil saisi, avec la grille et
+        # le marché du métier + niveau choisis, et la fourchette où le vrai salaire tombe 9 fois sur 10.
         # missing : les champs encore vides, que la page demande de remplir.
         result = {"predicted": None, "low": None, "high": None, "missing": [], "available": self.regression is not None}
         if self.regression is None:
@@ -294,90 +351,21 @@ class DecisionEngine:
             f["label"] for f in self.fields if f["name"] not in inputs]
         if missing:
             return {**result, "missing": missing}
-        ligne = pd.DataFrame([{"Job_Family": profile["job_family"], "Niveau": profile["niveau"],
-                               "Mid": band["Mid"] if band else np.nan,
+        ligne = pd.DataFrame([{"Niveau": profile["niveau"], "Mid": band["Mid"] if band else np.nan,
                                "Ratio_Grille_Marche": band["Mid"] / market["Median"] if band and market else np.nan,
                                "Anciennete": profile["seniority"], **inputs}])
         if "Niveau_Etude_Max" in ligne:
             ligne["Rang_Etude_Max"] = rang_etude(ligne["Niveau_Etude_Max"])
-        r = predire(ligne, self.regression).iloc[0]
-        # Pas de grille pour ce métier + niveau (ou pas de marché) : pas de prédiction.
-        if not math.isfinite(r.Salaire_Predit):
+        # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre ; un rang inconnu prend le rang du milieu.
+        X = self._model_columns(ligne)[self.regression["colonnes"]].fillna(self.regression["medianes"])
+        # Pas de grille pour ce métier + niveau (ou pas de marché) : une case reste vide, pas de
+        # prédiction. Pourquoi le vérifier ici : le gradient boosting accepte une case vide et
+        # répondrait quand même.
+        if not X.notna().all(axis=1).iloc[0]:
             return result
-        return {**result, "predicted": round(float(r.Salaire_Predit), 2),
-                "low": round(float(r.Fourchette_Basse), 2), "high": round(float(r.Fourchette_Haute), 2)}
-
-    def _proposal(self, band, market, peers, niveau, floor):
-        if not band:
-            return {"low": None, "high": None, "target": None, "reason": "missing_band"}
-        low = max(band["Min"], band["Mid"] * self.rules["compa_ratio_low"])
-        high = min(band["Max"], band["Mid"] * self.rules["compa_ratio_high"])
-        if market:
-            low = max(low, market["Median"] * self.rules["market_low"])
-            high = min(high, market["Median"] * self.rules["market_high"])
-        if peers["available"]:
-            low, high = max(low, peers["q25"]), min(high, peers["q75"])
-            if peers["scale"] > 0:
-                # Le seuil d'alerte est inclusif : la proposition doit rester à l'intérieur.
-                margin = (self.peer_threshold - 1e-9) * peers["scale"]
-                borne = math.exp if peers["log"] else float
-                low = max(low, borne(peers["center"] - margin))
-                high = min(high, borne(peers["center"] + margin))
-            else:
-                low, high = max(low, peers["median"]), min(high, peers["median"])
-        # La fourchette ne descend jamais sous le salaire minimum du niveau.
-        if floor is not None:
-            low = max(low, floor)
-        # Montants saisissables avec deux décimales ; arrondir les bornes vers l'intérieur.
-        low = math.ceil((low - 1e-10) * 100) / 100
-        high = math.floor((high + 1e-10) * 100) / 100
-        # Si les repères se contredisent (ex. la grille impose plus que ce que tolère le marché), la
-        # fourchette est vide : on le signale ("conflict") au lieu d'inventer un montant.
-        if low > high:
-            return {"low": None, "high": None, "target": None, "reason": "conflict"}
-        target = peers["median"] if peers["available"] else band["Mid"]
-        target = min(high, max(low, round(target, 2)))
-        # Dernière vérification : la cible repasse dans les cinq règles du programme principal. Si elle
-        # déclenchait elle-même une alerte, on ne propose rien plutôt qu'un montant contradictoire.
-        if any(c["status"] == "review" for c in self._checks(target, band, market, peers, niveau)):
-            return {"low": None, "high": None, "target": None, "reason": "conflict"}
-        return {"low": low, "high": high, "target": target, "reason": "available"}
-
-    def _checks(self, salary, band, market, peers, niveau):
-        # Pourquoi PeerZ : les cinq règles de src/anomaly_regles.py en ont besoin, dont celle des collègues.
-        # Pourquoi Niveau et Fixe_Annuel_MAD : la règle du salaire minimum les lit. Le niveau est remis en
-        # nombre, comme dans le fichier de règles (min_salary_by_niveau : 5 et non « 5 »).
-        ratios = {"CompaRatio": salary / band["Mid"] if band else np.nan,
-                  "RangePenetration": (salary - band["Min"]) / (band["Max"] - band["Min"])
-                  if band and band["Max"] > band["Min"] else np.nan,
-                  "MarketRatio": salary / market["Median"] if market else np.nan,
-                  "PeerZ": ((math.log(salary) if peers["log"] else salary) - peers["center"]) / peers["scale"]
-                  if peers["available"] and peers["scale"] > 0 else np.nan,
-                  "Niveau": int(niveau) if niveau.isdigit() else niveau, "Fixe_Annuel_MAD": salary}
-        for column, bounds in [("CompaRatio", ("compa_ratio_low", "compa_ratio_high")),
-                               ("MarketRatio", ("market_low", "market_high"))]:
-            for bound in bounds:
-                if math.isclose(ratios[column], self.rules[bound], rel_tol=1e-12, abs_tol=1e-12):
-                    ratios[column] = self.rules[bound]
-        flags = apply_rulebook(pd.DataFrame([ratios]), self.rules).iloc[0].Rule_Flags
-        # Pourquoi OUT_OF_BAND : même règle que le programme principal, avec sa petite marge sous le Min.
-        # Comme là-bas, un salaire au-dessus du Max ne lève plus d'alerte (comité du 15/10/2026). La
-        # fourchette proposée, elle, reste toujours entre Min et Max.
-        results = {"Grille interne": "OUT_OF_BAND" not in flags if band else None,
-                   "Position dans la grille": "COMPA_RATIO" not in flags if band else None,
-                   "Marché": "MARKET_GAP" not in flags if market else None,
-                   # Sans plancher pour ce niveau dans le fichier de règles, le contrôle est indisponible.
-                   "Salaire minimum": "MIN_SALARY" not in flags
-                   if niveau.isdigit() and int(niveau) in self.rules.get("min_salary_by_niveau", {}) else None}
-        if not peers["available"]:
-            results["Collègues comparables"] = None
-        elif peers["scale"] > 0:
-            results["Collègues comparables"] = "PEER_OUTLIER" not in flags
-        else:
-            # Tous les collègues ont le même salaire : être payé moins qu'eux est à examiner. Être payé
-            # plus ne l'est plus, comme dans la règle des collègues (comité du 15/10/2026).
-            results["Collègues comparables"] = salary >= peers["median"] or math.isclose(salary, peers["median"])
-        # Pourquoi seulement un nom et un statut : ces contrôles vérifient la cible proposée, mais ne sont
-        # pas affichés un par un (la règle « Positionnement » montre déjà les repères).
-        return [{"name": name, "status": "unavailable" if ok is None else "ok" if ok else "review"}
-                for name, ok in results.items()]
+        # Le modèle prédit le logarithme du salaire : on revient au salaire par l'exponentielle. La
+        # fourchette se pose autour, en proportion.
+        log_salaire = float(self.regression["modele"].predict(X)[0])
+        bas, haut = self.regression["fourchette"]
+        return {**result, "predicted": round(math.exp(log_salaire), 2),
+                "low": round(math.exp(log_salaire + bas), 2), "high": round(math.exp(log_salaire + haut), 2)}

@@ -3,9 +3,8 @@ const $ = id => document.getElementById(id);
 const form = $('profile-form');
 let meta, revision = 0, controller = null;
 const fmt = value => value == null ? 'Indisponible' : new Intl.NumberFormat('fr-FR', {maximumFractionDigits: 2}).format(value);
-const dash = value => value == null ? '—' : fmt(value);
 const node = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
-const SUBMIT_LABEL = 'Obtenir une proposition';
+const SUBMIT_LABEL = 'Prédire le salaire';
 function resetResult() {
   revision++;
   if (controller) controller.abort();
@@ -16,9 +15,9 @@ function resetResult() {
   $('submit').disabled = !meta;
   $('submit').textContent = SUBMIT_LABEL;
 }
-// Les champs du salaire prédit, décrits par le serveur (les colonnes que lit la régression) : une liste
-// de choix pour une catégorie, un nombre borné pour le reste. Ils sont facultatifs : sans eux, la
-// proposition se fait quand même, et le bandeau dit lesquels manquent pour le salaire prédit.
+// Les champs du profil, décrits par le serveur (ce que lit le modèle du salaire prédit) : une liste de
+// choix pour une catégorie, un nombre borné pour le reste. Ils sont tous obligatoires : sans l'un
+// d'eux, le modèle ne peut pas prédire, et la page n'aurait rien à montrer.
 function renderModelFields(fields) {
   const box = $('model-fields');
   for (const f of fields) {
@@ -33,7 +32,7 @@ function renderModelFields(fields) {
       input = document.createElement('input');
       Object.assign(input, {type: 'number', min: f.min, max: f.max, step: f.step, placeholder: `De ${fmt(f.min)} à ${fmt(f.max)}`});
     }
-    Object.assign(input, {id, name: f.name});
+    Object.assign(input, {id, name: f.name, required: true});
     label.append(input);
     box.append(label);
   }
@@ -47,97 +46,55 @@ function updateNiveaux() {
 form.addEventListener('input', resetResult);
 $('job').addEventListener('change', updateNiveaux);
 const at = (el, name, value) => { el.style.setProperty(name, value + '%'); return el; };
-// Pas « rond » (1, 2 ou 5 × 10^n) pour que les graduations restent lisibles quel que soit l'ordre de grandeur.
-function niceStep(span) {
-  const raw = span / 5, power = 10 ** Math.floor(Math.log10(raw)), n = raw / power;
-  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * power;
-}
-// Place tous les repères sur une même échelle : c'est l'écart entre eux qui aide à décider.
+// La figure : une seule ligne. La grille du poste (du Min au Max), et dessus le salaire prédit avec
+// la fourchette où le vrai salaire tombe 9 fois sur 10. Pourquoi une seule ligne : avec une ligne par
+// repère (grille, marché, collègues, proposition), la figure portait une dizaine de montants.
 // Pourquoi style.setProperty : la CSP interdit les attributs style, pas le CSSOM.
-function renderRuler(data) {
-  const {band, market, peers, proposal: p} = data;
-  const values = [band?.Min, band?.Max, market?.Median, peers.q25, peers.q75, peers.median, p.low, p.high, p.target]
-    .filter(v => v != null && Number.isFinite(v));
+function renderRuler(band, r) {
   const ruler = $('ruler'); ruler.replaceChildren();
-  $('ruler-card').hidden = values.length === 0;
-  if (!values.length) return;
+  $('ruler-card').hidden = !band;
+  if (!band) return;
+  const values = [band.Min, band.Max, r.low, r.high].filter(v => v != null);
   let lo = Math.min(...values), hi = Math.max(...values);
-  const pad = hi > lo ? (hi - lo) * .1 : Math.abs(lo) * .1 || 1;
+  // Un peu de marge de chaque côté, pour que la grille ne colle pas aux bords.
+  const pad = (hi - lo) * .04 || 1;
   lo -= pad; hi += pad;
   const pos = v => (v - lo) / (hi - lo) * 100;
-  const step = niceStep(hi - lo), ticks = [];
-  for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) ticks.push(+t.toPrecision(12));
-  // Lignes de graduation posées avant les lignes de repères pour rester en arrière-plan.
-  const grid = node('div', '', 'overlay');
-  for (const t of ticks) grid.append(at(node('span', '', 'gridline'), '--x', pos(t)));
-  ruler.append(grid);
-  // Barre : [classe, début, fin] ; point : [classe, valeur, null, préfixe du montant affiché au-dessus].
-  const lanes = [
-    ['Grille métier', band ? 'Min – Max' : 'Aucune grille exploitable',
-      band && [['bar band', band.Min, band.Max], ['pip mid', band.Mid, null, 'Milieu']]],
-    ['Marché', market ? 'Médiane' : 'Indisponible', market && [['pip market', market.Median, null, '']]],
-    ['Collègues', peers.available ? 'P25 – P75' : 'Effectif insuffisant',
-      peers.available && [['bar peers', peers.q25, peers.q75], ['pip median', peers.median, null, 'Médiane']]],
-    ['Proposition', p.target == null ? 'Pas de fourchette' : 'Bas – Haut',
-      p.target != null && [['bar proposal', p.low, p.high], ['pip target', p.target, null, 'Cible']]]
-  ];
-  // Montants écrits sur la règle : bornes sous la barre, à l'extérieur pour ne jamais se chevaucher
-  // (ramenées à l'intérieur près des bords) ; points au-dessus.
-  const value = (v, cls) => at(node('span', fmt(v), 'val ' + cls), '--x', pos(v));
-  for (const [name, caption, marks] of lanes) {
-    const lane = node('div', '', 'lane'), label = node('div', name, 'lane-label'), track = node('div', '', 'track');
-    label.append(node('small', caption));
-    if (!marks) track.append(node('span', 'Non disponible', 'lane-empty'));
-    else for (const [cls, a, b, prefix] of marks) {
-      const mark = at(node('span', '', cls), cls.startsWith('bar') ? '--a' : '--x', pos(a));
-      track.append(mark);
-      if (b != null) {
-        at(mark, '--b', pos(b));
-        track.append(value(a, 'below ' + (pos(a) < 12 ? 'inside-start' : 'start')),
-          value(b, 'below ' + (pos(b) > 88 ? 'inside-end' : 'end')));
-      } else {
-        const label = value(a, 'above ' + cls.split(' ')[1]);
-        label.textContent = prefix ? `${prefix} ${fmt(a)}` : fmt(a);
-        track.append(label);
-      }
-    }
-    lane.append(label, track); ruler.append(lane);
+  const value = (v, cls, text) => at(node('span', text || fmt(v), 'val ' + cls), '--x', pos(v));
+  const track = node('div', '', 'track');
+  track.append(at(at(node('span', '', 'bar band'), '--a', pos(band.Min)), '--b', pos(band.Max)),
+    value(band.Min, 'below from', `Min ${fmt(band.Min)}`), value(band.Max, 'below upto', `Max ${fmt(band.Max)}`));
+  if (r.predicted != null) {
+    // Les deux bouts de la fourchette s'écrivent vers l'extérieur, pour laisser la place au salaire
+    // prédit, écrit au-dessus du point. Près d'un bord, ils reviennent vers l'intérieur.
+    track.append(at(at(node('span', '', 'bar range'), '--a', pos(r.low)), '--b', pos(r.high)),
+      at(node('span', '', 'pip target'), '--x', pos(r.predicted)),
+      value(r.low, 'ends ' + (pos(r.low) < 12 ? 'from' : 'upto')), value(r.high, 'ends ' + (pos(r.high) > 88 ? 'upto' : 'from')),
+      value(r.predicted, 'top'));
   }
-  const axis = node('div', '', 'axis');
-  for (const t of ticks) axis.append(at(node('span', fmt(t), 'tick'), '--x', pos(t)));
-  ruler.append(axis);
+  $('legend').hidden = r.predicted == null;
+  ruler.append(track);
 }
-// Chiffres clés du bandeau : la décision à prendre. Le détail (bornes, médianes) est sur la règle
-// « Positionnement » ; on ne le répète pas ici.
-function renderFigures(data) {
-  const p = data.proposal, mid = data.band?.Mid;
-  const items = [['Fourchette proposée', p.target == null ? '—' : `${fmt(p.low)} – ${fmt(p.high)}`], ['Cible', dash(p.target)],
-    ['CompaRatio cible', mid && p.target != null ? fmt(Math.round(p.target / mid * 100) / 100) : '—']];
-  // Repère de la régression, en plus : le salaire prédit et la fourchette où le vrai salaire tombe
-  // 9 fois sur 10. Il ne change ni le verdict ni la fourchette proposée.
-  const r = data.regression;
-  items.push(['Salaire prédit', dash(r.predicted), '',
-    r.predicted != null ? `9 fois sur 10 : ${fmt(r.low)} – ${fmt(r.high)}`
-      : !r.available ? 'Modèle indisponible'
-      : r.missing.length ? `À renseigner : ${r.missing.join(', ')}` : 'Pas de grille ou de marché pour ce niveau']);
-  $('summary-figures').replaceChildren(...items.map(([label, value, cls, note]) => {
-    const cell = node('div', ''), dd = node('dd', value, cls);
-    if (note) dd.append(node('small', note, 'range'));
-    cell.append(node('dt', label), dd); return cell;
-  }));
-}
+// Le résultat : un seul grand chiffre, le salaire prédit, et sa fourchette. Sans salaire prédit, la
+// phrase dit pourquoi.
 function render(data) {
   $('empty').hidden = true;
   $('result').hidden = false;
-  $('verdict').className = 'panel verdict ' + data.status;
-  $('result-title').textContent = data.title;
-  const {profile, proposal: p, peers} = data;
+  const {profile, band, market, peers, regression: r} = data;
+  $('verdict').className = 'panel verdict' + (r.predicted == null ? ' insufficient' : '');
   $('result-profile').textContent = [`${profile.job_family} · Niveau ${profile.niveau}`,
-    profile.seniority == null ? null : `${fmt(profile.seniority)} ans d’ancienneté`].filter(Boolean).join(' · ');
-  renderFigures(data);
-  renderRuler(data);
-  $('ruler-note').textContent = `Collègues comparés : ${peers.count} · ${peers.scope.toLowerCase()}.` +
-    (p.target == null ? '' : ' La cible est ramenée dans la fourchette proposée.');
+    profile.seniority == null ? null : `${fmt(profile.seniority)} ${profile.seniority < 2 ? 'an' : 'ans'} d’ancienneté`].filter(Boolean).join(' · ');
+  $('predicted').textContent = r.predicted == null ? '—' : fmt(r.predicted);
+  $('predicted-note').textContent = r.predicted != null ? `9 fois sur 10, le vrai salaire tombe entre ${fmt(r.low)} et ${fmt(r.high)}.`
+    : !r.available ? 'Le modèle n’a pas pu apprendre sur les fichiers chargés.'
+    : r.missing.length ? `À renseigner : ${r.missing.join(', ')}.`
+    : 'Pas de grille ou de marché exploitable pour ce métier et ce niveau.';
+  renderRuler(band, r);
+  // Les deux autres repères, en une phrase : la médiane du marché et celle des collègues comparables.
+  $('ruler-note').textContent = [
+    market ? `Médiane du marché : ${fmt(market.Median)}` : 'Marché : indisponible',
+    peers.available ? `Médiane des ${fmt(peers.count)} collègues comparables (${peers.scope}) : ${fmt(peers.median)}`
+      : `Collègues : pas assez de collègues comparables (${fmt(peers.count)})`].join(' · ') + '.';
 }
 form.addEventListener('submit', async event => {
   event.preventDefault();
