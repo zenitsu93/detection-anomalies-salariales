@@ -99,8 +99,8 @@ def build_html(c: dict, lien_tableau: str, maintenant: datetime) -> str:
                  (nombre(c["cout"]), "kMAD d'ajustement")],
                 "Ouvrir le tableau de bord")
         + carte(AIDE_DECISION, "accueil/decision.png", "Décision", 3, "Décider d'un salaire",
-                "Pour un métier, un niveau et un profil : la fourchette proposée, la cible et le salaire "
-                "attendu par le modèle.",
+                "Pour un métier, un niveau et un profil : le salaire prédit par le modèle et sa fourchette, "
+                "placés dans la grille du poste.",
                 [(nombre(c["grilles"]), "grilles"), (nombre(c["metiers"]), "métiers"),
                  (nombre(c["niveaux"]), "niveaux")],
                 "Ouvrir l'aide à la décision",
