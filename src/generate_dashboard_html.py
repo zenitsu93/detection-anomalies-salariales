@@ -22,7 +22,8 @@ chiffres clés et les données détaillées comptent toujours tous les salariés
 diplôme sont comptés ici, en Python, comme ceux de tous les salariés. Sans colonne de diplôme dans
 input/employes.xlsx, les menus n'apparaissent pas.
 
-Un salarié est « à traiter » si sa priorité est Critical, Major ou Minor : les « Info » n'ont rien à
+Un salarié est « à traiter » si sa priorité est Critical, Major ou Minor : les « Info » et les
+« Outlier positif » (payés au-dessus du Max de leur grille, sans alerte) n'ont rien à
 faire.
 
 Utilisation :
@@ -65,9 +66,15 @@ BROWN = "#4a2c1d"
 SLATE = "#5b6b7d"
 
 # Priorités : rouge → orange → or selon la gravité, gris clair pour « Info », qui n'a rien à faire.
-SEVERITY_ORDER = ["Critical", "Major", "Minor", "Info"]
-STATUS = {"Critical": "#b3261e", "Major": "#d9731f", "Minor": GOLD, "Info": "#c4c9cf"}
-SEVERITY_FR = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "Info": "Info (sans action)"}
+# « Outlier positif » (payé au-dessus du Max de sa grille, sans alerte) n'est pas une anomalie non plus :
+# il a sa couleur à lui, l'ardoise, pour ne pas le confondre avec une alerte. Les trois premières
+# valeurs de la liste sont les salariés « à traiter » ; l'ordre de la liste ne doit donc pas changer.
+SEVERITY_ORDER = ["Critical", "Major", "Minor", "Info", "Outlier positif"]
+STATUS = {"Critical": "#b3261e", "Major": "#d9731f", "Minor": GOLD, "Info": "#c4c9cf", "Outlier positif": "#5b6b7d"}
+SEVERITY_FR = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "Info": "Info (sans action)",
+               "Outlier positif": "Outlier positif (au-dessus du Max)"}
+# Les valeurs qui ne demandent aucune action : ces salariés ne comptent pas dans « à traiter ».
+SANS_ACTION = ["Info", "Outlier positif"]
 
 # Les trois courbes du score général : brun cuivré pour le score général, or pour les règles, bleu
 # pour l'IA. Trois teintes choisies pour rester distinctes, y compris pour un lecteur daltonien.
@@ -140,7 +147,7 @@ def ecarts_sexes(df: pd.DataFrame) -> pd.DataFrame:
 def compter(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
     """Compte ce que les chiffres clés, les graphiques et les « Données détaillées » affichent, pour
     les salariés de df (tous, ou ceux d'un seul diplôme)."""
-    a_traiter = df["Severity"] != "Info"
+    a_traiter = ~df["Severity"].isin(SANS_ACTION)
     flags = df["Rule_Flags"].str.split(";").explode()
     flags = flags[flags != ""].value_counts()
     # Salariés à traiter par pôle et par priorité, les pôles les plus concernés en premier.
@@ -176,7 +183,8 @@ def compter(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
         "kpis": {
             "effectif": len(df),
             "a_traiter": int(a_traiter.sum()),
-            # Les quatre priorités, « Info » comprise : la rangée de chiffres clés a un compteur pour chacune.
+            # Les cinq valeurs, « Info » et « Outlier positif » comprises : la rangée de chiffres clés a un
+            # compteur pour chacune.
             **{s: int((df["Severity"] == s).sum()) for s in SEVERITY_ORDER},
             "cout_total": float(df["Cout_Ajustement"].sum()),
         },
@@ -313,7 +321,7 @@ h1 {{ font-size: 22px; font-weight: 600; }}
 .panel-body {{ padding: 16px; }}
 .note {{ font-size: 12px; color: var(--muted); margin-top: 10px; }}
 
-.kpis {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0 0 16px; border-left: 4px solid var(--brand); }}
+.kpis {{ display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 0 16px; border-left: 4px solid var(--brand); }}
 .kpis div {{ padding: 16px 20px; }}
 .kpis div + div {{ border-left: 1px solid var(--line-soft); }}
 .kpis dt {{ font-size: 12px; color: var(--muted); }}
@@ -447,6 +455,7 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
     <div><dt><span class="sev" style="background:{STATUS['Major']}"></span>Majeures</dt><dd><button class="kpi-btn" type="button" data-sev="Major">{fmt_int(kpis['Major'])}</button></dd></div>
     <div><dt><span class="sev" style="background:{STATUS['Minor']}"></span>Mineures</dt><dd><button class="kpi-btn" type="button" data-sev="Minor">{fmt_int(kpis['Minor'])}</button></dd></div>
     <div><dt><span class="sev" style="background:{STATUS['Info']}"></span>{SEVERITY_FR['Info']}</dt><dd><button class="kpi-btn" type="button" data-sev="Info">{fmt_int(kpis['Info'])}</button></dd></div>
+    <div><dt><span class="sev" style="background:{STATUS['Outlier positif']}"></span>Outliers positifs</dt><dd><button class="kpi-btn" type="button" data-sev="Outlier positif">{fmt_int(kpis['Outlier positif'])}</button><small>au-dessus du Max</small></dd></div>
     <div><dt>Coût d'ajustement total</dt><dd>{fmt_int(kpis['cout_total'])}<small>{UNITE}</small></dd></div>
   </dl>
 
@@ -516,7 +525,8 @@ const RCOLS = DATA.records.cols, RROWS = DATA.records.rows, RIDX = {{}};
 RCOLS.forEach((c, i) => RIDX[c] = i);
 const MAX_ROWS_SHOWN = 300;
 const NUM = new Intl.NumberFormat('fr-FR', {{ maximumFractionDigits: 2 }});
-const aTraiter = r => r[RIDX.Severity] !== 'Info';
+const SANS_ACTION = {json.dumps(SANS_ACTION)};
+const aTraiter = r => !SANS_ACTION.includes(r[RIDX.Severity]);
 
 // ---- Filtre « Diplôme » de chaque graphe ----
 // Les nombres de tous les salariés (vue « »), puis ceux de chaque diplôme, sont comptés en Python (voir
