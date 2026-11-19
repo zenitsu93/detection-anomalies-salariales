@@ -10,7 +10,9 @@ score général, puis en déduit la priorité de chaque salarié. Il prend en en
 par anomaly_signal_fort.py et rend ce DataFrame complété de deux colonnes :
 - RiskScore = rule_weight × Rule_Score + ml_weight × ML_AnomalyScore (0.7 et 0.3 dans
   config/rules.yaml : les règles comptent pour 70 %, l'IA pour 30 %) ;
-- Severity : la priorité, Critical, Major, Minor ou Info, selon les seuils de prioritization_buckets.
+- Severity : la priorité, Critical, Major, Minor ou Info, selon les seuils de prioritization_buckets ;
+  plus une cinquième valeur, « Outlier positif », pour un salarié sans alerte payé au-dessus du Max de
+  sa grille. Ce n'est pas une anomalie (rien à traiter), c'est une étiquette pour le reconnaître.
 
 Utilisation :
 - depuis Python :
@@ -32,6 +34,10 @@ from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import ml_anomaly
 from anomaly_signal_fort import apply_ml_strong_signal
+
+# Le nom de la cinquième valeur de Severity. Les autres (Info, Minor, Major, Critical) sont dans
+# config/rules.yaml avec leurs seuils ; celle-ci n'a pas de seuil de score, elle se lit sur la grille.
+OUTLIER_POSITIF = "Outlier positif"
 
 
 def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
@@ -63,6 +69,18 @@ def aggregate_risk(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
         borne_basse = bornes[0]
         seuil_atteint = df["RiskScore"] >= borne_basse
         df.loc[seuil_atteint, "Severity"] = priorite
+
+    # La cinquième valeur : « Outlier positif », pour un salarié payé AU-DESSUS du Max de sa grille.
+    # Pourquoi : depuis le comité du 15/10/2026, être payé au-dessus de sa grille n'est pas une anomalie.
+    # Ces salariés tombaient donc en « Info », mélangés aux salaires normaux. Or ils tirent les salaires
+    # vers le haut et gênent la régression : il faut pouvoir les reconnaître, puis les retirer avec la
+    # liste A_RETIRER des notebooks de régression.
+    # Pourquoi seulement ceux qui étaient en « Info » : un salarié au-dessus du Max peut quand même être
+    # signalé (sous le marché, sous ses collègues, sous le minimum de son niveau). Sa priorité Critical,
+    # Major ou Minor reste alors en place : on ne cache jamais une alerte.
+    # Exemple : Max = 300, salaire = 300 -> pas concerné ; salaire = 301 et « Info » -> « Outlier positif ».
+    au_dessus_du_max = df["Fixe_Annuel_MAD"] > df["Max"]
+    df.loc[au_dessus_du_max & (df["Severity"] == "Info"), "Severity"] = OUTLIER_POSITIF
 
     return df
 
