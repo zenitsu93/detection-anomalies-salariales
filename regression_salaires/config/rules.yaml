@@ -1,0 +1,123 @@
+rules:
+  # Points ajoutés au score des règles (Rule_Score) chaque fois qu'une règle se déclenche.
+  # Plus le nombre est grand, plus cette règle pèse dans la priorité finale du dossier.
+  # Le total fait 100 (30 + 20 + 15 + 15 + 20) : un salarié qui déclenche toutes les règles a 100
+  # points, si bien que le score des règles et le score final ne dépassent jamais 100.
+  # Seuls les salaires trop BAS prennent des points : depuis le comité du 15/10/2026, un salaire
+  # au-dessus de la grille, du marché ou de ses collègues n'est pas un cas à traiter.
+  severity_weights:
+    out_of_band: 30        # sous le Min interne (RangePenetration)
+    compa_ratio: 20        # CompaRatio sous compa_ratio_low
+    market_gap: 15         # MarketRatio sous market_low
+    peer_outlier: 15       # PeerZ <= -peer_z_threshold_major (payé nettement moins que ses collègues)
+    min_salary: 20         # salaire sous le plancher de son niveau (min_salary_by_niveau)
+
+  # Ce que regarde l'IA (depuis le 10/11/2026) :
+  # - ecart_attendu : l'écart entre le salaire et le salaire ATTENDU pour le poste et le profil (métier,
+  #   niveau, grille, ancienneté, performance, compétence, diplôme...), prédit par la régression
+  #   (src/anomaly_signal_regression.py) avec un modèle qui n'a pas vu le salarié. Elle repère les salariés
+  #   payés nettement moins que des collègues de même profil, même dans leur grille ;
+  # - isolation_forest : l'ancienne IA, qui repère les profils RARES (un âge, une ancienneté, un salaire
+  #   de haut niveau), qu'ils soient mal payés ou non.
+  # Pourquoi ecart_attendu : sur le banc d'essai (python analyse_modeles/banc_essai_ia.py), elle trouve
+  # bien plus de vrais cas, et aucun salaire au-dessus de la grille.
+  ml_methode: ecart_attendu
+  # Score IA (ecart_attendu) : 0 pour un salaire au niveau attendu ou au-dessus, puis il monte jusqu'à 100
+  # quand le salaire est ml_z_plein écarts habituels sous l'attendu (Z_Attendu = -3). Un écart habituel
+  # est l'erreur typique du modèle pour un salaire normal (environ 8 % sur des données réalistes).
+  ml_z_plein: 3.0
+  # Signal fort (ecart_attendu) : ML_STRONG_SIGNAL et son explication pour un salaire à ml_signal_z écarts
+  # habituels ou plus sous l'attendu (Z_Attendu <= -2). Sans anomalie, cela ne touche qu'environ 2 % des
+  # salariés ; ml_strong_signal_percentile, plus bas, ne sert alors plus.
+  ml_signal_z: 2.0
+
+  # Isolation Forest seulement (ml_methode: isolation_forest) :
+  # Les 5 % de profils les plus atypiques de l'analyse (0.95 = plus atypiques que 95 % des autres)
+  # reçoivent le signal ML_STRONG_SIGNAL, en plus des signaux des règles. Ce signal n'ajoute aucun
+  # point : le score de l'IA compte déjà dans le score général (ml_weight, plus bas).
+  # Sauf ceux qui sont atypiques surtout parce qu'ils sont payés plus haut que d'habitude (comité du
+  # 15/10/2026) : le signal touche donc un peu moins de 5 % des salariés.
+  # Pourquoi « les 5 % les plus atypiques » et pas « score IA supérieur à 80 » ? Le score IA est
+  # recalculé de 0 à 100 à chaque analyse : un même nombre n'a pas le même sens d'un fichier à l'autre.
+  ml_strong_signal_percentile: 0.95
+
+  # Réglages du modèle d'IA (Isolation Forest). Avant, ils étaient écrits en dur dans le programme.
+  # Les valeurs ci-dessous sont les mêmes qu'avant : rien ne change tant qu'on n'y touche pas.
+  # - ml_contamination : part d'anomalies que le modèle s'attend à trouver (0.05 = 5 %).
+  #   Attention, ce n'est PAS le nombre final d'alertes : le programme utilise le score du modèle
+  #   (de 0 à 100), pas son verdict oui/non. La priorité finale dépend des scores, poids et seuils.
+  # - ml_n_estimators : nombre d'arbres du modèle. Plus il y en a, plus le résultat est stable d'une
+  #   exécution à l'autre, mais plus c'est lent. 200 suffit largement.
+  ml_contamination: 0.05
+  ml_n_estimators: 200
+
+  # Règle « hors grille » : RangePenetration vaut 0 quand le salaire est au Min de la grille et 1
+  # quand il est au Max. On tolère une petite marge (0.05 = 5 % de la largeur de la grille) sous le
+  # Min avant de lever l'alerte, pour ne pas signaler un salaire tout juste à la limite.
+  # Il n'y a plus de marge au-dessus du Max : un salaire au-dessus du Max ne lève plus d'alerte.
+  range_penetration_low_buffer: -0.05
+
+  # Règle CompaRatio = salaire ÷ milieu de la grille (Mid). 1.00 = pile au milieu. En dessous de
+  # 0.85, le salaire est jugé trop loin sous le milieu : alerte.
+  # compa_ratio_high (1.15) ne lève plus d'alerte. Il sert encore à l'aide à la décision : la
+  # fourchette qu'elle propose ne monte pas au-dessus de 1.15 × Mid.
+  compa_ratio_low: 0.85
+  compa_ratio_high: 1.15
+
+  # Règle marché = salaire ÷ médiane du marché (même métier, même niveau). En dessous de 0.90 :
+  # alerte. Comme compa_ratio_high, market_high (1.20) ne sert plus qu'à plafonner la fourchette
+  # proposée par l'aide à la décision.
+  market_low: 0.90
+  market_high: 1.20
+
+  # Règle « salaire minimum » : salaire annuel minimum de chaque niveau (1 à 7), en kMAD comme
+  # Fixe_Annuel_MAD. Ce plancher vaut pour tous les métiers d'un même niveau, alors que la grille
+  # interne (bands.xlsx) change d'un métier à l'autre. Un salaire strictement sous le plancher de son
+  # niveau lève l'alerte MIN_SALARY : niveau 5, plancher 140 : un salaire de 135 la lève, 140 non.
+  # Un niveau absent de cette liste n'est pas contrôlé. Valeurs à ajuster selon la politique salariale.
+  min_salary_by_niveau:
+    1: 400
+    2: 300
+    3: 240
+    4: 180
+    5: 140
+    6: 110
+    7: 85
+
+  # Taille minimale du groupe de collègues : un groupe doit compter au moins 15 personnes pour que la comparaison ait du sens.
+  cohort_min_size: 15
+  # Groupes essayés pour chaque salarié, du plus précis au plus large : on prend le premier qui compte
+  # au moins cohort_min_size personnes, toujours en entier (voir former_cohortes dans
+  # src/anomaly_cohortes.py).
+  cohort_widening_steps:
+    - "Niveau|Job_Family|Anciennete_Bucket"
+    - "Niveau|Job_Family"
+    - "Niveau"
+
+  # Sur quoi se mesure l'écart aux collègues (depuis le 10/11/2026) :
+  # - log : en proportion (le logarithme du salaire). « 20 % de moins » pèse autant que « 20 % de plus »,
+  #   et quand le groupe mélange plusieurs métiers (étape « Niveau »), on compare la position dans la
+  #   grille (CompaRatio) plutôt que le salaire, car les grilles changent d'un métier à l'autre ;
+  # - brut : en kMAD, comme avant.
+  peer_z_echelle: log
+
+  # Écart aux collègues (PeerZ) : mesure à quel point un salaire s'éloigne de ceux de son groupe
+  # (0 = dans la moyenne ; 2 = nettement à part ; 3 = très à part). Négatif = payé moins que ses
+  # collègues. Seul ce côté compte : PeerZ = -3 déclenche l'alerte, PeerZ = +3 non.
+  peer_z_threshold_minor: 2.0   # PeerZ à -2 ou moins : simple étiquette PEER_OUTLIER, sans points en plus
+  peer_z_threshold_major: 3.0   # PeerZ à -3 ou moins : points en plus (Rule_Score) et motif affiché
+
+  # Score final : RiskScore = rule_weight × Rule_Score + ml_weight × ML_AnomalyScore.
+  # Les règles comptent pour 70 %, l'IA pour 30 %.
+  rule_weight: 0.7
+  ml_weight: 0.3
+
+  # Priorités (Severity) selon le RiskScore, de 0 à 100.
+  # Seule la première valeur (la borne basse) compte : un score de 69,4 est « Major », car il
+  # atteint 50 sans atteindre 70. La deuxième valeur est gardée à titre indicatif.
+  # Garder les priorités dans cet ordre croissant des bornes basses : le code les parcourt tels quels.
+  prioritization_buckets:
+    Info: [0, 29]
+    Minor: [30, 49]
+    Major: [50, 69]
+    Critical: [70, 100]

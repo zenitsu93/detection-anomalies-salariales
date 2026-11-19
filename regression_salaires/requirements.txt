@@ -1,0 +1,17 @@
+# Les bibliothèques Python dont ce dossier a besoin. lancer_notebooks.bat les installe tout seul.
+# Versions fixées : la même installation donne les mêmes résultats sur tous les ordinateurs.
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.7.2
+# Pour lire les réglages de la détection (config/rules.yaml).
+PyYAML==6.0.3
+joblib==1.6.0
+# Pour lire et écrire les fichiers Excel (.xlsx).
+openpyxl==3.1.5
+# Pour les graphes des notebooks.
+plotly==6.9.0
+# Pour le VIF du notebook 1_Visualisations.
+statsmodels==0.15.0
+# Pour ouvrir les notebooks dans le navigateur, sans avoir besoin de VS Code.
+ipykernel==7.3.0
+notebook==7.6.3

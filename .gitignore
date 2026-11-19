@@ -14,3 +14,5 @@ notebooks/*.xlsx
 notebooks/*.csv
 # Ce que le notebook regression_sans_anomalies/ enregistre à côté de lui (matricules et salaires) non plus.
 regression_sans_anomalies/*.xlsx
+# Ce que les notebooks de regression_salaires/ enregistrent (matricules, salaires et prédictions) non plus.
+regression_salaires/resultats/
