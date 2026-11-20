@@ -18,7 +18,8 @@ dernière détection. Le programme principal (src/detect_salary_anomalies.py) la
 étape. La page s'ouvre d'un double-clic, sans Python ni internet.
 
 Seule l'aide à la décision n'est pas une simple page : il faut d'abord lancer son programme
-(python -m decision_support.app). La carte le rappelle.
+(python -m decision_support.app). La carte le rappelle. Le fichier lancer_interface.bat, à la racine,
+fait tout d'un double-clic : la détection, ce programme, puis l'ouverture de cette page.
 
 Utilisation :
 - depuis Python :
@@ -104,7 +105,8 @@ def build_html(c: dict, lien_tableau: str, maintenant: datetime) -> str:
                 [(nombre(c["grilles"]), "grilles"), (nombre(c["metiers"]), "métiers"),
                  (nombre(c["niveaux"]), "niveaux")],
                 "Ouvrir l'aide à la décision",
-                note="À lancer d'abord : <code>python -m decision_support.app</code>")
+                note="Déjà lancée si vous êtes passé par <code>lancer_interface.bat</code>. "
+                     "Sinon, à lancer d'abord : <code>python -m decision_support.app</code>")
     )
     return f"""<!doctype html>
 <html lang="fr">
@@ -168,7 +170,7 @@ footer {{ margin-top: 24px; font-size: 12px; color: var(--faint); }}
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Rémunération</span></div>
+  <a class="brand" href="accueil.html"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Rémunération</span></a>
   <dl class="context">
     <div><dt>Effectif analysé</dt><dd>{nombre(c["effectif"])} salariés</dd></div>
     <div><dt>Dernière détection</dt><dd>{maintenant:%d/%m/%Y à %H:%M}</dd></div>

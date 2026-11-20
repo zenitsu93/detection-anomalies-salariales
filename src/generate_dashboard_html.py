@@ -293,7 +293,8 @@ h1, h2, h3, p {{ margin: 0; }}
 
 .topbar {{ display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; min-height: 60px;
   background: var(--panel); border-top: 4px solid var(--brand); border-bottom: 1px solid var(--line); }}
-.brand {{ display: flex; align-items: center; gap: 10px; color: var(--brand-dark); font-size: 17px; font-weight: 700; }}
+/* « Repères » est un lien : il ramène à l'écran d'accueil (accueil.html, deux dossiers plus haut). */
+.brand {{ display: flex; align-items: center; gap: 10px; color: var(--brand-dark); font-size: 17px; font-weight: 700; text-decoration: none; }}
 .brand-mark {{ width: 22px; height: 22px; background: var(--brand); position: relative; }}
 .brand-mark::after {{ content: ""; position: absolute; inset: 6px; background: var(--panel); }}
 .brand-sub {{ font-size: 13px; font-weight: 400; color: var(--muted); padding-left: 10px; border-left: 1px solid var(--line); }}
@@ -306,6 +307,13 @@ main {{ max-width: 1320px; margin: auto; padding: 24px 32px 32px; }}
 .crumb {{ font-size: 12px; color: var(--faint); margin-bottom: 2px; }}
 h1 {{ font-size: 22px; font-weight: 600; }}
 .page-hint {{ font-size: 13px; color: var(--muted); text-align: right; }}
+/* Bouton « Refaire la détection », à côté du titre, et son message (en cours, erreur). */
+.refaire-zone {{ display: flex; align-items: center; gap: 12px; margin-top: 8px; }}
+/* flex: none et nowrap : le bouton garde sa largeur et son texte reste sur une ligne, même quand le
+   message à côté est long. C'est le message qui passe à la ligne, pas le bouton. */
+.refaire-zone button {{ flex: none; white-space: nowrap; background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; font-weight: 600; }}
+.refaire-zone button:hover {{ background: #3a2216; border-color: #3a2216; }}
+.refaire-zone span {{ font-size: 12px; line-height: 1.35; color: var(--muted); }}
 /* Filtre « Diplôme », en haut de chaque graphe : il ne vaut que pour ce graphe. */
 .filtre-graphe {{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; }}
 .filtre-graphe label {{ font-size: 12px; font-weight: 600; color: var(--muted); }}
@@ -429,13 +437,13 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 @media print {{
   body {{ background: #fff; }}
   .panel {{ break-inside: avoid; }}
-  .page-hint, .overlay, .agrandir {{ display: none; }}
+  .page-hint, .overlay, .agrandir, .refaire-zone {{ display: none; }}
 }}
 </style>
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Détection des anomalies salariales</span></div>
+  <a class="brand" href="../../accueil.html" title="Revenir à l'écran d'accueil"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Détection des anomalies salariales</span></a>
   <dl class="context">
     <div><dt>Effectif analysé</dt><dd>{fmt_int(kpis['effectif'])} salariés</dd></div>
     <div><dt>Montants</dt><dd>{UNITE} (milliers de MAD)</dd></div>
@@ -444,7 +452,8 @@ footer {{ margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line)
 </header>
 <main>
   <div class="page-head">
-    <div><p class="crumb">Rémunération › Anomalies</p><h1>Tableau de bord des anomalies</h1></div>
+    <div><p class="crumb">Rémunération › Anomalies</p><h1>Tableau de bord des anomalies</h1>
+      <div class="refaire-zone"><button id="refaire" type="button">Refaire la détection</button><span id="refaire-msg" role="status"></span></div></div>
     <p class="page-hint">Cliquez une barre, un point ou un nombre de priorité pour afficher les salariés concernés.<br>
       Molette pour zoomer, double-clic pour revenir, « Agrandir » pour le plein écran.</p>
   </div>
@@ -603,6 +612,38 @@ document.getElementById('panel-export').addEventListener('click', () => {{
 // Les nombres de priorité (Critiques, Majeures, Mineures, Info) ouvrent la liste de leurs salariés.
 document.querySelectorAll('.kpi-btn').forEach(b => b.addEventListener('click', () =>
   showPopulation('Priorité : ' + NAMES.sev[b.dataset.sev], r => r[RIDX.Severity] === b.dataset.sev)));
+
+// ---- Bouton « Refaire la détection » ----
+// Il demande au programme lancé par lancer_interface.bat de relire les fichiers de input/ et de refaire
+// la détection, puis il ouvre le nouveau tableau de bord à la place de celui-ci.
+// Pourquoi il ne marche pas quand la page est ouverte d'un double-clic (adresse en file:///) : une page
+// ne peut pas lancer un programme sur le PC. Il faut que le programme tourne déjà, et que la page ait été
+// ouverte par lui (adresse en http://127.0.0.1...). On le dit alors, au lieu de laisser le bouton muet.
+const refaire = document.getElementById('refaire'), refaireMsg = document.getElementById('refaire-msg');
+refaire.addEventListener('click', async () => {{
+  if (location.protocol === 'file:') {{
+    refaireMsg.textContent = "Pour utiliser ce bouton, ouvrez l'interface avec lancer_interface.bat.";
+    return;
+  }}
+  refaire.disabled = true;
+  refaireMsg.textContent = 'Détection en cours, environ 30 secondes. La page se rechargera toute seule.';
+  let reponse;
+  try {{
+    reponse = await fetch('/api/detection', {{ method: 'POST' }});
+  }} catch (e) {{
+    // Aucune réponse : le programme ne tourne plus.
+    refaire.disabled = false;
+    refaireMsg.textContent = "Pas de réponse : la fenêtre noire est fermée. Relancez lancer_interface.bat.";
+    return;
+  }}
+  const resultat = await reponse.json().catch(() => ({{}}));
+  if (reponse.ok && resultat.tableau_de_bord) {{
+    location.href = resultat.tableau_de_bord;
+  }} else {{
+    refaire.disabled = false;
+    refaireMsg.textContent = resultat.error || 'La détection a échoué.';
+  }}
+}});
 
 // ---- Tableaux comme dans Excel : recherche, tri et filtre par colonne ----
 // Sans accents ni majuscules, pour que « ecart » trouve « Écart ». Les espaces des nombres français
