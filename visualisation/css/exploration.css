@@ -23,7 +23,8 @@ button:focus-visible, summary:focus-visible, a:focus-visible, select:focus-visib
 /* ---------- Barre supérieure ---------- */
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; min-height: 60px;
   background: var(--panel); border-top: 4px solid var(--brand); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--brand-dark); font-size: 17px; font-weight: 700; }
+/* « Repères » est un lien : il ramène à l'écran d'accueil (accueil.html, un dossier plus haut). */
+.brand { display: flex; align-items: center; gap: 10px; color: var(--brand-dark); font-size: 17px; font-weight: 700; text-decoration: none; }
 .brand-mark { width: 22px; height: 22px; background: var(--brand); position: relative; flex: none; }
 .brand-mark::after { content: ""; position: absolute; inset: 6px; background: var(--panel); }
 .brand-sub { font-size: 13px; font-weight: 400; color: var(--muted); padding-left: 10px; border-left: 1px solid var(--line); }

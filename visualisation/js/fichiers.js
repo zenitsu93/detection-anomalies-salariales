@@ -1,5 +1,7 @@
 // Lecture des trois fichiers Excel que l'utilisateur dépose dans la page ou choisit avec le bouton.
-// Rien n'est lu sans lui, et rien n'est gardé d'une ouverture à l'autre : le navigateur n'a aucune autorisation à demander.
+// Rien n'est gardé d'une ouverture à l'autre : le navigateur n'a aucune autorisation à demander.
+// Une seule lecture se fait sans lui : celle des fichiers de input/, quand la page est lancée par lancer_interface.bat
+// (voir parDefaut, plus bas).
 (function (E) {
   'use strict';
   const FICHIERS = ['employes.xlsx', 'bands.xlsx', 'market.xlsx'];
@@ -25,8 +27,33 @@
   // Les trois tables, une fois les trois fichiers reçus.
   async function tables() {
     const [employes, bands, market] = await Promise.all(FICHIERS.map(n => lireExcel(recus[n])));
-    return { tables: { employes, bands, market }, source: 'fichiers déposés' };
+    // La source affichée en haut de la page : « dossier input/ » tant que les trois fichiers sont ceux chargés
+    // par défaut ; dès qu'on en dépose un à la main, « fichiers déposés ».
+    const source = FICHIERS.every(n => recus[n].parDefaut) ? 'dossier input/' : 'fichiers déposés';
+    return { tables: { employes, bands, market }, source };
   }
 
-  E.fichiers = { FICHIERS, recevoir, tables };
+  // Les fichiers de input/, chargés tout seuls à l'ouverture de la page quand elle est lancée par
+  // lancer_interface.bat : ce sont les mêmes que ceux de la détection et de l'aide à la décision.
+  // Pourquoi seulement dans ce cas : le programme lancé par le .bat (decision_support/app.py) donne ces
+  // fichiers à l'adresse /api/donnees/... Une page ouverte d'un double-clic (adresse en file:///) n'a pas
+  // le droit de lire un fichier du PC toute seule : elle attend alors qu'on les dépose, comme avant.
+  // Rend la liste des fichiers trouvés (vide s'il n'y en a pas ou si le programme ne répond pas).
+  async function parDefaut() {
+    if (!location.protocol.startsWith('http')) return [];
+    const lus = await Promise.all(FICHIERS.map(async nom => {
+      try {
+        const reponse = await fetch('/api/donnees/' + nom);
+        if (!reponse.ok) return null;
+        const fichier = new File([await reponse.blob()], nom);
+        fichier.parDefaut = true;
+        return fichier;
+      } catch (e) {
+        return null;
+      }
+    }));
+    return lus.filter(Boolean);
+  }
+
+  E.fichiers = { FICHIERS, recevoir, tables, parDefaut };
 })(window.Exploration = window.Exploration || {});

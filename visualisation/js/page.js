@@ -168,6 +168,10 @@
   $('choisirFichiers').onclick = $('commencer').onclick = () => $('fichiers').click();
   $('fichiers').onchange = e => { const choisis = [...e.target.files]; e.target.value = ''; recevoir(choisis); };
 
+  // À l'ouverture : les fichiers de input/, si la page est lancée par lancer_interface.bat (voir fichiers.js).
+  // Les graphes s'affichent alors sans rien déposer ; déposer un fichier ensuite remplace celui du même nom.
+  Fi.parDefaut().then(recevoir);
+
   // Glisser-déposer n'importe où dans la page. Sans ces lignes, le navigateur ouvrirait le fichier déposé à la place
   // de la page. Pendant le glissement, le cadre d'accueil s'éclaire, ou, si les graphes sont affichés, un cadre recouvre la page.
   const avecFichiers = e => [...(e.dataTransfer?.types || [])].includes('Files');
