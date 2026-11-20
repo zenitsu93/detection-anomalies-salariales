@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Repères — Exploration des données salariales</title>
+  <meta name="description" content="Contrôles des données et analyses de la rémunération, calculés dans le navigateur à partir des fichiers employes, bands et market.">
+  <meta name="theme-color" content="#e9a21b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/exploration.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../accueil.html" title="Revenir à l'écran d'accueil"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Exploration des données salariales</span></a>
+  <dl class="context">
+    <div><dt>Source</dt><dd id="ctx-source">—</dd></div>
+    <div><dt>Lu le</dt><dd id="ctx-date">—</dd></div>
+    <div><dt>Effectif analysé</dt><dd id="ctx-effectif">—</dd></div>
+    <div><dt>Montants</dt><dd>kMAD (milliers de MAD)</dd></div>
+  </dl>
+</header>
+
+<main>
+  <div class="page-head">
+    <div><p class="crumb">Rémunération › Exploration</p><h1>Positionnement salarial : vue d'ensemble</h1></div>
+    <div class="head-actions">
+      <button id="choisirFichiers" type="button">
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 1.5h5.5l3 3v10h-8.5z"/><path d="M9.5 1.5v3h3"/></svg>
+        Choisir les fichiers</button>
+      <input type="file" id="fichiers" accept=".xlsx" multiple hidden>
+    </div>
+  </div>
+
+  <div id="notice" class="notice" role="status" hidden></div>
+
+  <!-- Pendant qu'on glisse des fichiers au-dessus des graphes : où les lâcher -->
+  <div class="depot-plein" id="depot" hidden>
+    <div class="depot-carte">
+      <svg class="depot-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+      <h2>Lâcher les fichiers pour mettre la page à jour</h2>
+      <p class="note">employes.xlsx, bands.xlsx ou market.xlsx : chaque fichier déposé remplace celui du même nom.</p>
+    </div>
+  </div>
+
+  <!-- Accueil : la zone où déposer les trois fichiers, affichée tant qu'ils n'ont pas tous été donnés -->
+  <section class="panel empty-state depot" id="accueil">
+    <div class="sources" aria-hidden="true">
+      <div class="fichier" data-fichier="employes.xlsx">employes</div><div class="fichier" data-fichier="bands.xlsx">bands</div><div class="fichier" data-fichier="market.xlsx">market</div>
+      <span class="fleche">→</span>
+      <div class="mini-graphe"><i style="height:45%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:30%"></i></div>
+    </div>
+    <h2>Déposer les trois fichiers ici</h2>
+    <p>La page lit les trois fichiers RH, contrôle les données, puis montre la rémunération sous tous ses angles : SAR
+      (salaire annuel de référence), position dans la grille et face au marché, ce qui fait varier cette position (ancienneté, compétences,
+      évaluation, tension du métier) et équité.</p>
+    <ol class="steps">
+      <li><b>1</b>Glisser employes.xlsx, bands.xlsx et market.xlsx dans ce cadre</li>
+      <li><b>2</b>Ou les choisir avec le bouton (Ctrl + clic pour en prendre plusieurs)</li>
+      <li><b>3</b>Les graphes s'affichent dès que les trois sont là</li>
+    </ol>
+    <button class="primary" id="commencer" type="button">
+      <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 1.5h5.5l3 3v10h-8.5z"/><path d="M9.5 1.5v3h3"/></svg>
+      Choisir les fichiers</button>
+    <p class="note">Tout se passe sur cet ordinateur : les fichiers ne sont envoyés nulle part, et la page ne garde rien.
+      Ouverte d'un double-clic, elle ne lit aucun fichier toute seule : elle attend qu'on lui donne les trois.
+      Lancée par lancer_interface.bat, elle charge d'elle-même les trois fichiers du dossier input/.</p>
+  </section>
+
+  <div class="layout" id="contenu" hidden>
+    <nav class="panel toc" aria-label="Sommaire">
+      <div class="panel-head"><h2 class="panel-title">Sommaire</h2></div>
+      <ol>
+        <li><a href="#vue"><span class="n"></span>Chiffres clés</a></li>
+        <li><a href="#qualite"><span class="n">0</span>Qualité des données</a></li>
+        <li class="etage">Vue simple</li>
+        <li class="groupe">Qui sont les salariés</li>
+        <li><a href="#effectif-age"><span class="n">1</span>Effectif par tranche d'âge</a></li>
+        <li><a href="#effectif-anciennete"><span class="n">2</span>Effectif par ancienneté</a></li>
+        <li><a href="#effectif-niveau"><span class="n">3</span>Effectif par niveau</a></li>
+        <li><a href="#effectif-metier"><span class="n">4</span>Effectif par métier</a></li>
+        <li><a href="#femmes-hommes"><span class="n">5</span>Femmes et hommes par pôle</a></li>
+        <li><a href="#hot-job"><span class="n">6</span>Métiers en tension (Hot_job)</a></li>
+        <li class="groupe">Combien ils gagnent</li>
+        <li><a href="#salaire-age"><span class="n">7</span>Salaire par tranche d'âge</a></li>
+        <li><a href="#salaire-anciennete"><span class="n">8</span>Salaire par ancienneté</a></li>
+        <li><a href="#salaire-sexe"><span class="n">9</span>Salaire femmes / hommes</a></li>
+        <li><a href="#tranches-salaire"><span class="n">10</span>Tranches de salaire</a></li>
+        <li class="groupe">Où ils se situent</li>
+        <li><a href="#ecart-mid"><span class="n">11</span>Écart au milieu de la grille</a></li>
+        <li><a href="#sous-min"><span class="n">12</span>Sous le Min et sous le marché</a></li>
+        <li><a href="#evaluations"><span class="n">13</span>Compétences, performance et 9-Box</a></li>
+        <li><a href="#matrice"><span class="n">14</span>Matrice de positionnement</a></li>
+        <li class="etage">Analyses détaillées</li>
+        <li class="groupe">Population et SAR</li>
+        <li><a href="#masse"><span class="n">15</span>SAR et effectifs par pôle</a></li>
+        <li><a href="#distribution"><span class="n">16</span>Distribution du salaire</a></li>
+        <li class="groupe">Position dans la grille</li>
+        <li><a href="#grille"><span class="n">17</span>Grille et marché par niveau</a></li>
+        <li><a href="#hors-grille"><span class="n">18</span>Salaires hors grille</a></li>
+        <li><a href="#metiers"><span class="n">19</span>Familles de métier</a></li>
+        <li class="groupe">Position face au marché</li>
+        <li><a href="#marche"><span class="n">20</span>Position face au marché</a></li>
+        <li><a href="#tension"><span class="n">21</span>Métiers en tension</a></li>
+        <li class="groupe">Ce qui fait varier la position</li>
+        <li><a href="#anciennete"><span class="n">22</span>Ancienneté et âge</a></li>
+        <li><a href="#competences"><span class="n">23</span>Compétences et tension</a></li>
+        <li><a href="#talents"><span class="n">24</span>Talents et rémunération</a></li>
+        <li class="groupe">Équité</li>
+        <li><a href="#equite"><span class="n">25</span>Équité et pôles</a></li>
+        <li class="groupe">Aide</li>
+        <li><a href="#glossaire"><span class="n">i</span>Glossaire</a></li>
+        <li><a href="#aide"><span class="n">?</span>Se servir des graphes</a></li>
+      </ol>
+    </nav>
+
+    <div class="sections">
+      <p class="indice">Cliquez sur une barre, une boîte, une case ou un point d'un graphe pour voir la liste des salariés concernés.</p>
+      <dl class="panel kpis" id="vue"></dl>
+
+      <section class="panel" id="qualite">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">0</span>Qualité des données</h2><span class="panel-unit" id="lignes-lues"></span></div>
+        <div class="panel-body">
+          <p class="question">Les trois fichiers sont rapprochés par métier et niveau, les doublons de matricule écartés, et la cohérence des données contrôlée avant toute analyse.</p>
+          <table>
+            <thead><tr><th>Contrôle</th><th>Résultat</th><th style="width:130px">Statut</th></tr></thead>
+            <tbody id="controles"></tbody>
+          </table>
+          <details class="methode">
+            <summary>Méthode</summary>
+            <div class="methode-grille">
+              <div><h3>Doublons</h3><p>Règle de gestion sur les identifiants (<code>Matricule</code>) : seule la première occurrence est conservée en cas de doublon.</p></div>
+              <div><h3>Rapprochement</h3><p>Croisement avec les grilles internes et les médianes de marché par couple (<code>Job_Family</code>, <code>Niveau</code>).</p></div>
+              <div><h3>Cohérence</h3><p>Âge d'embauche (<code>Age - Anciennete</code>) d'au moins 18 ans, et une seule valeur de tension <code>Hot_job</code> par poste <code>Job_Title</code>. Les ratios standards de rémunération sont ensuite calculés.</p></div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Vue simple (point du 29/10/2026 : aller du simple au complexe) : des graphes usuels, inspirés de la présentation
+           « Analyse prédictive des départs » (30/08/2024), avant les analyses détaillées du notebook. Graphes dans js/simples.js. -->
+      <h2 class="etage">Vue simple<span>des graphes usuels, à lire sans calcul</span></h2>
+
+      <h2 class="partie">Qui sont les salariés</h2>
+
+      <section class="panel" id="effectif-age">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">1</span>Effectif par tranche d'âge</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Comment les salariés se répartissent-ils par âge ?</p>
+          <div class="filtres" id="f-effectif-age"></div>
+          <div class="graphe" id="g-effectif-age"></div>
+          <p class="constat" id="s-effectif-age"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="effectif-anciennete">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">2</span>Effectif par tranche d'ancienneté</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Depuis combien de temps les salariés sont-ils dans l'entreprise ?</p>
+          <div class="filtres" id="f-effectif-anciennete"></div>
+          <div class="graphe" id="g-effectif-anciennete"></div>
+          <p class="constat" id="s-effectif-anciennete"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="effectif-niveau">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">3</span>Effectif par niveau</h2><span class="panel-unit">filtrable par pôle, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Combien de salariés à chaque niveau ?</p>
+          <div class="filtres" id="f-effectif-niveau"></div>
+          <div class="graphe" id="g-effectif-niveau"></div>
+          <p class="constat" id="s-effectif-niveau"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="effectif-metier">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">4</span>Effectif par famille de métier</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Quels métiers pèsent le plus dans l'effectif ?</p>
+          <div class="filtres" id="f-effectif-metier"></div>
+          <div class="graphe" id="g-effectif-metier"></div>
+          <p class="constat" id="s-effectif-metier"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="femmes-hommes">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">5</span>Part des femmes et des hommes, par pôle</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Quelle est la part des femmes et des hommes, dans l'ensemble et dans chaque pôle ?</p>
+          <div class="filtres" id="f-femmes-hommes"></div>
+          <div class="graphe" id="g-femmes-hommes"></div>
+          <p class="constat" id="s-femmes-hommes"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="hot-job">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">6</span>Répartition selon la tension du métier (Hot_job)</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Quelle part des salariés occupe un métier plus ou moins recherché sur le marché ?</p>
+          <div class="filtres" id="f-hot-job"></div>
+          <div class="graphe" id="g-hot-job"></div>
+          <p class="constat" id="s-hot-job"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Combien ils gagnent</h2>
+
+      <section class="panel" id="salaire-age">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">7</span>Salaire moyen et médian par tranche d'âge</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Le salaire monte-t-il avec l'âge ?</p>
+          <div class="filtres" id="f-salaire-age"></div>
+          <div class="graphe" id="g-salaire-age"></div>
+          <p class="constat" id="s-salaire-age"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="salaire-anciennete">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">8</span>Salaire moyen et médian par tranche d'ancienneté</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Le salaire monte-t-il avec l'ancienneté ?</p>
+          <div class="filtres" id="f-salaire-anciennete"></div>
+          <div class="graphe" id="g-salaire-anciennete"></div>
+          <p class="constat" id="s-salaire-anciennete"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="salaire-sexe">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">9</span>Salaire moyen des femmes et des hommes, par niveau</h2><span class="panel-unit">filtrable par pôle, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">À niveau égal, les femmes et les hommes ont-ils le même salaire moyen ?</p>
+          <div class="filtres" id="f-salaire-sexe"></div>
+          <div class="graphe" id="g-salaire-sexe"></div>
+          <p class="constat" id="s-salaire-sexe"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="tranches-salaire">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">10</span>Effectif par tranche de salaire</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Combien de salariés dans chaque tranche de salaire ?</p>
+          <div class="filtres" id="f-tranches-salaire"></div>
+          <div class="graphe" id="g-tranches-salaire"></div>
+          <p class="constat" id="s-tranches-salaire"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Où ils se situent</h2>
+
+      <section class="panel" id="ecart-mid">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">11</span>Écart au milieu de la grille (Mid)</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Les salariés sont-ils payés au-dessus ou en dessous du milieu de leur grille, et de combien ?</p>
+          <div class="filtres" id="f-ecart-mid"></div>
+          <div class="graphe" id="g-ecart-mid"></div>
+          <p class="constat" id="s-ecart-mid"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="sous-min">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">12</span>Part des salariés sous le Min de la grille et sous le P25 du marché, par pôle</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Dans chaque pôle, quelle part des salariés est payée sous le Min de sa grille, ou sous le P25 du marché ?</p>
+          <div class="filtres" id="f-sous-min"></div>
+          <div class="graphe" id="g-sous-min"></div>
+          <p class="constat" id="s-sous-min"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="evaluations">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">13</span>Compétences, performance et positionnement 9-Box</h2><span class="panel-unit">en répartition ou en matrice, filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Comment se répartissent les notes de compétences, les performances N-1 et le positionnement 9-Box ? Et, comme dans le tableau de bord RH, quel positionnement pour chaque couple performance × compétence ?</p>
+          <div class="filtres" id="f-evaluations"></div>
+          <div class="graphe" id="g-evaluations"></div>
+          <p class="constat" id="s-evaluations"></p>
+        </div>
+      </section>
+
+      <!-- Matrice de positionnement (point du 29/10/2026) : sur le modèle des campagnes d'augmentations individuelles -->
+      <section class="panel" id="matrice">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">14</span>Matrice de positionnement, en %</h2><span class="panel-unit">par positionnement 9-Box ou par note de compétences, filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Comme dans une campagne d'augmentations individuelles : où se placent les salariés dans leur grille, selon leur évaluation ? Chaque case donne la part des salariés.</p>
+          <div class="filtres" id="f-matrice"></div>
+          <div class="graphe" id="g-matrice"></div>
+          <p class="constat" id="s-matrice"></p>
+        </div>
+      </section>
+
+      <h2 class="etage">Analyses détaillées<span>les analyses du notebook du comité</span></h2>
+
+      <h2 class="partie">Population et SAR</h2>
+
+      <section class="panel" id="masse">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">15</span>SAR et effectifs par pôle</h2><span class="panel-unit">filtrable par niveau et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Comment le SAR (salaire annuel de référence) se répartit-il entre les pôles, et quels sont le salaire moyen et le salaire médian de chaque pôle ?</p>
+          <div class="filtres" id="f-masse"></div>
+          <div class="graphe" id="g-masse"></div>
+          <p class="constat" id="s-masse"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="distribution">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">16</span>Distribution du salaire</h2><span class="panel-unit">Fixe_Annuel_MAD, en kMAD</span></div>
+        <div class="panel-body">
+          <p class="question">La distribution des salaires est-elle symétrique, et le passage au logarithme la rééquilibre-t-il ?</p>
+          <div class="graphe" id="g-distribution"></div>
+          <p class="constat" id="s-distribution"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Position dans la grille</h2>
+
+      <section class="panel" id="grille">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">17</span>Salaires, grille interne et marché</h2><span class="panel-unit">filtrable par métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Les salaires réels suivent-ils la grille interne et le marché, niveau par niveau ? Comment se répartissent-ils dans leur bande ?</p>
+          <div class="filtres" id="f-grille"></div>
+          <div class="graphe" id="g-grille"></div>
+          <p class="constat" id="s-grille"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="hors-grille">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">18</span>Salaires hors grille, par pôle et par niveau</h2><span class="panel-unit">filtrable par métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Où se concentrent les salaires sous le Min ou au-dessus du Max de leur grille ?</p>
+          <div class="filtres" id="f-hors-grille"></div>
+          <div class="graphe" id="g-hors-grille"></div>
+          <p class="constat" id="s-hors-grille"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="metiers">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">19</span>Familles de métier et compétitivité des grilles</h2><span class="panel-unit">filtrable par niveau et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Certaines familles de métier sont-elles mieux placées dans leur grille, et est-ce lié à l'écart entre la grille et le marché ?</p>
+          <div class="filtres" id="f-metiers"></div>
+          <div class="graphe" id="g-metiers"></div>
+          <p class="constat" id="s-metiers"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Position face au marché</h2>
+
+      <section class="panel" id="marche">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">20</span>Position face au marché</h2><span class="panel-unit">par pôle ou par métier, filtrable par niveau et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Chaque pôle ou métier paie-t-il au-dessus ou en dessous du marché, à métier et niveau égaux ?</p>
+          <div class="filtres" id="f-marche"></div>
+          <div class="graphe" id="g-marche"></div>
+          <p class="constat" id="s-marche"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="tension">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">21</span>Métiers en tension</h2><span class="panel-unit">filtrable par niveau, pôle et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Les métiers les plus recherchés sur le marché (Hot_job élevé) sont-ils bien placés dans leur grille ?</p>
+          <div class="filtres" id="f-tension"></div>
+          <div class="graphe" id="g-tension"></div>
+          <p class="constat" id="s-tension"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Ce qui fait varier la position</h2>
+
+      <section class="panel" id="anciennete">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">22</span>Ancienneté, âge à l'embauche et compression</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">À poste égal, est-on mieux placé dans sa grille selon l'ancienneté (à gauche, par tranche) ou selon l'âge à l'embauche (à droite) ?</p>
+          <div class="filtres" id="f-anciennete"></div>
+          <div class="graphe" id="g-anciennete"></div>
+          <p class="constat" id="s-anciennete"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="competences">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">23</span>Compétences et tension métier</h2><span class="panel-unit">filtrable par niveau, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">La note de compétences se traduit-elle dans la position salariale, quelle que soit la tension du métier ?</p>
+          <div class="filtres" id="f-competences"></div>
+          <div class="graphe" id="g-competences"></div>
+          <p class="constat" id="s-competences"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="talents">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">24</span>Talents et rémunération</h2><span class="panel-unit">filtrable par Hot_job, pôle, métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">Les mieux évalués sont-ils bien placés dans leur grille ? Qui est sous-payé malgré une bonne évaluation, ou très bien payé malgré une évaluation basse ?</p>
+          <div class="filtres" id="f-talents"></div>
+          <div class="graphe" id="g-talents"></div>
+          <p class="constat" id="s-talents"></p>
+        </div>
+      </section>
+
+      <h2 class="partie">Équité</h2>
+
+      <section class="panel" id="equite">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">25</span>Équité femmes / hommes et pratiques par pôle</h2><span class="panel-unit">filtrable par métier et diplôme</span></div>
+        <div class="panel-body">
+          <p class="question">À niveau égal, les femmes et les hommes sont-ils placés de la même façon dans leur grille ? Les pôles ont-ils des pratiques différentes ?</p>
+          <div class="filtres" id="f-equite"></div>
+          <div class="graphe" id="g-equite"></div>
+          <p class="constat" id="s-equite"></p>
+        </div>
+      </section>
+
+      <!-- Glossaire (point du 29/10/2026) : chaque mot et chaque indicateur de la page, expliqué simplement -->
+      <section class="panel" id="glossaire">
+        <div class="panel-head"><h2 class="panel-title"><span class="num">i</span>Glossaire</h2><span class="panel-unit">les mots et indicateurs de la page</span></div>
+        <div class="panel-body glossaire">
+          <h3>Montants et effectifs</h3>
+          <dl>
+            <div><dt>SAR (salaire annuel de référence)</dt><dd>Le salaire fixe annuel d'un salarié (colonne <code>Fixe_Annuel_MAD</code>). Le SAR d'un pôle est la somme des SAR de ses salariés.</dd></div>
+            <div><dt>kMAD</dt><dd>Milliers de dirhams : 238 kMAD = 238 000 MAD. Les salaires sont en kMAD ; le SAR des pôles est écrit en millions de MAD.</dd></div>
+            <div><dt>Effectif</dt><dd>Le nombre de salariés.</dd></div>
+            <div><dt>Moyenne</dt><dd>La somme des valeurs divisée par leur nombre. Un seul très haut salaire la tire vers le haut : 200, 200 et 800 kMAD ont une moyenne de 400 kMAD.</dd></div>
+            <div><dt>Médiane</dt><dd>La valeur du milieu : la moitié des salariés est en dessous, l'autre moitié au-dessus. Avec 200, 200 et 800 kMAD, la médiane est 200 kMAD : un salaire extrême ne la déplace pas.</dd></div>
+            <div><dt>Tranches de salaire</dt><dd>Des tranches de 50 kMAD : [150, 200[ = de 150 kMAD compris à 200 kMAD non compris. Les 5 % de salaires les plus bas et les 5 % les plus hauts sont regroupés dans « inf à … » et « sup à … », pour que quelques salaires extrêmes n'étirent pas le graphe.</dd></div>
+            <div><dt>Écart-type</dt><dd>Dit à quel point les valeurs s'éloignent de la moyenne. Petit : les salaires sont proches les uns des autres ; grand : ils sont très étalés.</dd></div>
+            <div><dt>Asymétrie</dt><dd>Dit si les salaires s'étirent plus d'un côté que de l'autre. 0 : autant de chaque côté ; positive : quelques très hauts salaires tirent vers le haut, le cas habituel des salaires.</dd></div>
+            <div><dt>Logarithme du salaire</dt><dd>Une façon de resserrer les grands salaires pour mieux les comparer : passer de 100 à 200 kMAD compte autant que passer de 400 à 800 kMAD.</dd></div>
+          </dl>
+          <h3>Grille interne</h3>
+          <dl>
+            <div><dt>Grille (ou bande salariale)</dt><dd>Pour chaque métier et chaque niveau, la fourchette de salaire prévue par l'entreprise (<code>bands.xlsx</code>), du Min au Max.</dd></div>
+            <div><dt>Min / Mid / Max</dt><dd>Le bas de la grille, son milieu et son haut. Exemple : Min 150, Mid 200, Max 250 kMAD.</dd></div>
+            <div><dt>Hors grille</dt><dd>Un salaire sous le Min ou au-dessus du Max de sa grille.</dd></div>
+            <div><dt>Compa-Ratio</dt><dd>Salaire ÷ Mid. 1 = pile au milieu de la grille ; 0,85 = 15 % sous le milieu ; 1,15 = 15 % au-dessus. Les graphes marquent les zones sous 0,85 et au-dessus de 1,15.</dd></div>
+            <div><dt>Écart au milieu de la grille</dt><dd>De combien le salaire est au-dessus ou en dessous du Mid, en % : un Compa-Ratio de 0,85 donne un écart de −15 %. « [-10 % ; 0 %[ » = de 10 % en dessous du Mid (compris) jusqu'au Mid (non compris).</dd></div>
+            <div><dt>Position dans la grille (Range Penetration)</dt><dd>Où se place le salaire entre le Min et le Max : 0 = au Min, 0,5 = au milieu, 1 = au Max. Sous 0 : sous le Min ; au-dessus de 1 : au-dessus du Max.</dd></div>
+          </dl>
+          <h3>Marché</h3>
+          <dl>
+            <div><dt>Médiane du marché (Median)</dt><dd>Le salaire du milieu observé sur le marché pour le même métier et le même niveau (<code>market.xlsx</code>).</dd></div>
+            <div><dt>P25 / P75</dt><dd>25 % des salaires du marché sont sous le P25, et 75 % sous le P75. Entre les deux : la moitié centrale du marché.</dd></div>
+            <div><dt>Ratio grille / marché (Mid / Median)</dt><dd>Compare la grille interne au marché : au-dessus de 1, le milieu de la grille paie plus que le marché ; en dessous, moins.</dd></div>
+          </dl>
+          <h3>Lire les graphes</h3>
+          <dl>
+            <div><dt>Matrice de positionnement</dt><dd>Un tableau comme celui des campagnes d'augmentations individuelles. En colonnes, la position du salaire dans sa grille : sous le Min, puis les quatre quarts de la grille (du Min au Max, le Mid entre le 2e et le 3e quart), puis au-dessus du Max. En lignes, l'évaluation : positionnement 9-Box ou note de compétences. Chaque case donne la part des salariés : 12 % = 12 salariés sur 100.</dd></div>
+            <div><dt>Boîte à moustaches</dt><dd>La boîte contient la moitié centrale des salariés et le trait dans la boîte est la médiane. Les « moustaches » vont jusqu'aux valeurs habituelles ; les points isolés sont les valeurs éloignées.</dd></div>
+            <div><dt>Corrélation</dt><dd>De −1 à 1. Proche de 1 : les deux grandeurs montent ensemble ; proche de −1 : quand l'une monte, l'autre baisse ; proche de 0 : pas de lien en ligne droite.</dd></div>
+            <div><dt>Pente (droite de tendance)</dt><dd>De combien une valeur change en moyenne quand l'autre augmente de 1. Exemple : une pente de 0,02 veut dire +0,02 de Compa-Ratio par point de note de compétences.</dd></div>
+            <div><dt>Tendance non linéaire (Lowess)</dt><dd>Une courbe qui suit la tendance des points sans les obliger à suivre une ligne droite.</dd></div>
+          </dl>
+          <h3>Données RH</h3>
+          <dl>
+            <div><dt>Pôle (Entite_N1) et entité (Entite_N2)</dt><dd>Le pôle est la grande direction ; l'entité, le service à l'intérieur du pôle.</dd></div>
+            <div><dt>Métier (Job_Family) et poste (Job_Title)</dt><dd>Le métier regroupe des postes proches ; le poste est l'emploi précis du salarié.</dd></div>
+            <div><dt>Niveau</dt><dd>Le niveau du poste. Avec le métier, il donne la grille du salarié et sa médiane du marché.</dd></div>
+            <div><dt>Ancienneté et tranches d'ancienneté</dt><dd>Les années passées dans l'entreprise, regroupées en tranches : inf à 2, [2, 5[, puis de 5 ans en 5 ans ([5, 10[, [10, 15[ …). La dernière, « sup à … », regroupe les 5 % de salariés les plus anciens du fichier, pour que quelques très grandes anciennetés n'étirent pas le graphe. « [2, 5[ » veut dire de 2 ans compris à 5 ans non compris ; « sup à 15 », 15 ans ou plus.</dd></div>
+            <div><dt>Tranches d'âge</dt><dd>De 5 ans en 5 ans, écrites de la même façon : inf à 25, [25, 30[ … [55, 60[, sup à 60 (60 ans ou plus).</dd></div>
+            <div><dt>Diplôme (Niveau_Etude_Max)</dt><dd>Le niveau d'études le plus élevé du salarié (BAC+5, BAC+3…), lu dans le fichier des salariés. Le filtre « Diplôme » de chaque graphe garde les salariés d'un seul niveau d'études.</dd></div>
+            <div><dt>Âge à l'embauche</dt><dd>Âge − ancienneté : l'âge qu'avait le salarié en arrivant.</dd></div>
+            <div><dt>Competence_N1</dt><dd>La note de compétences de l'année précédente.</dd></div>
+            <div><dt>Performance N-1 (Performance_N1)</dt><dd>La performance de l'année précédente, en cinq libellés : Très en dessous, Proche de l'objectif, A l'objectif, Supérieur à l'objectif, Très au-delà.</dd></div>
+            <div><dt>Positionnement 9-Box (Positionnement_9BOX)</dt><dd>La catégorie du salarié quand on croise sa performance et sa compétence, lue telle quelle dans le fichier des salariés. Six catégories, de la meilleure à celle qui demande une décision : Hauts Potentiels, Talents, Performers, A repositionner, A développer, Décisions requises. Chacune garde la même couleur dans toute la page.</dd></div>
+            <div><dt>Matrice performance × compétence</dt><dd>La vue « Performance × compétence » du graphe 13, comme dans le tableau de bord RH : la performance N-1 en colonnes, la note de compétences en lignes (la meilleure en haut). Chaque case donne le nombre de salariés et prend la couleur de leur positionnement 9-Box ; si une case réunit plusieurs catégories, elle prend celle de la plus nombreuse, et le survol les donne toutes.</dd></div>
+            <div><dt>Hot job (tension du métier)</dt><dd>À quel point le métier est recherché sur le marché : plus la valeur est haute, plus la tension est forte.</dd></div>
+            <div><dt>Écart H / F</dt><dd>« Non corrigé » : salaire moyen des hommes comparé à celui des femmes, tous métiers et niveaux mélangés. « À grille égale » : même comparaison sur le Compa-Ratio, où chacun est comparé au milieu de sa propre grille.</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <details class="panel aide" id="aide">
+        <summary class="panel-head"><h2 class="panel-title"><span class="num">?</span>Se servir des graphes</h2><span class="panel-unit">afficher</span></summary>
+        <div class="panel-body">
+          <ul>
+            <li><strong>Zoomer :</strong> molette de la souris sur le graphe, ou dessiner un rectangle autour de la zone à agrandir.</li>
+            <li><strong>Se déplacer :</strong> choisir « Déplacer » dans la barre d'outils du graphe (en haut à droite), puis faire glisser.</li>
+            <li><strong>Étirer un seul axe :</strong> faire glisser le bout d'un axe. Faire glisser le milieu d'un axe le décale.</li>
+            <li><strong>Revenir à la vue de départ :</strong> double-cliquer sur le graphe.</li>
+            <li><strong>Voir un graphe en grand :</strong> bouton « Agrandir » en haut à droite du panneau ; le graphe occupe tout l'écran, ses filtres restent utilisables. « Réduire » ou la touche Échap ramène à la page.</li>
+            <li><strong>Filtrer :</strong> boutons et listes au-dessus de certains graphes. Le constat sous le graphe suit le filtre ; les chiffres clés du haut de page restent calculés sur tous les salariés.</li>
+            <li><strong>Choisir plusieurs niveaux :</strong> cliquer sur chaque niveau voulu (par exemple 3, 4 et 5) ; un second clic le retire. « Tous » enlève le filtre.</li>
+            <li><strong>Savoir à qui correspond un point :</strong> passer la souris dessus ; le matricule, le nom, le poste, le niveau et le salaire s'affichent.</li>
+            <li><strong>Voir la liste des salariés :</strong> cliquer sur une barre, une boîte, une case, une bulle ou un point (ou sur un nombre de salariés des chiffres clés et de la qualité des données). La liste s'ouvre comme dans Excel : recherche, tri et filtre par colonne avec le bouton ▾, puis « Exporter (Excel) » pour l'enregistrer.</li>
+            <li><strong>Cacher une série :</strong> cliquer sur son nom dans la légende ; double-cliquer pour n'afficher qu'elle.</li>
+            <li><strong>Trouver un mot dans le glossaire :</strong> taper dans la case en haut du glossaire (« mediane » suffit, sans accent ni majuscule). Seuls restent les mots qui contiennent le texte tapé, surligné en jaune ; Échap vide la case.</li>
+            <li><strong>Enregistrer un graphe en image</strong> (pour un support de comité) : icône d'appareil photo de la barre d'outils. L'image garde le zoom en cours.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <footer>Calculs refaits dans le navigateur à partir des trois fichiers, comme dans le notebook EDA_Positionnement_Salarial_Comite.ipynb. Aucune donnée n'est envoyée sur internet.</footer>
+</main>
+
+<!-- Liste des salariés derrière un clic sur un graphe, un chiffre clé ou un contrôle de qualité -->
+<div class="liste" id="liste" hidden>
+  <div class="panel liste-carte" role="dialog" aria-modal="true" aria-labelledby="liste-titre">
+    <div class="panel-head">
+      <div><h2 class="liste-titre" id="liste-titre">—</h2><p class="liste-sous" id="liste-sous"></p></div>
+      <div class="head-actions">
+        <button id="liste-export" type="button">
+          <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+          Exporter (Excel)</button>
+        <button id="liste-fermer" type="button">Fermer</button>
+      </div>
+    </div>
+    <div class="liste-corps" id="liste-corps"></div>
+  </div>
+</div>
+
+<!-- Bibliothèques (copies locales : la page marche sans internet), puis les scripts de la page, dans l'ordre où ils s'appuient les uns sur les autres. -->
+<script src="vendor/plotly.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="js/calculs.js"></script>
+<script src="js/communs.js"></script>
+<script src="js/filtres.js"></script>
+<script src="js/liste.js"></script>
+<script src="js/analyses.js"></script>
+<script src="js/pilotage.js"></script>
+<script src="js/simples.js"></script>
+<script src="js/fichiers.js"></script>
+<script src="js/plein-ecran.js"></script>
+<script src="js/glossaire.js"></script>
+<script src="js/page.js"></script>
+</body>
+</html>

@@ -14,5 +14,10 @@ notebooks/*.xlsx
 notebooks/*.csv
 # Ce que le notebook regression_sans_anomalies/ enregistre à côté de lui (matricules et salaires) non plus.
 regression_sans_anomalies/*.xlsx
-# Ce que les notebooks de regression_salaires/ enregistrent (matricules, salaires et prédictions) non plus.
-regression_salaires/resultats/
+# Ce que src/regression_salaire_optimisee.py enregistre (modèle, matricules, salaires et prédictions) non plus.
+regression_sans_anomalies/modele_optimise/
+# Ce que les notebooks de outils_remuneration/ enregistrent (matricules, salaires et prédictions) non plus.
+outils_remuneration/resultats/
+# Ni ce que la détection de outils_remuneration/ refait à chaque lancement (résultats, tableaux de bord, modèle).
+outils_remuneration/output/
+outils_remuneration/models/

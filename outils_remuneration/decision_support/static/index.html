@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Repères — Aide à la décision salariale</title>
+  <meta name="description" content="Obtenir le salaire prédit pour un profil, placé dans la grille de son poste.">
+  <meta name="theme-color" content="#e9a21b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Repères — Aide à la décision salariale">
+  <meta property="og:description" content="Obtenir le salaire prédit pour un profil, placé dans la grille de son poste.">
+  <meta property="og:image" content="/apercu.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/accueil.html" title="Revenir à l'écran d'accueil"><span class="brand-mark" aria-hidden="true"></span>Repères<span class="brand-sub">Aide à la décision salariale</span></a>
+    <dl class="context">
+      <div><dt>Environnement</dt><dd>Simulation locale</dd></div>
+      <div><dt>Unité</dt><dd class="unit-label">—</dd></div>
+      <div><dt>Base de référence</dt><dd id="employees-count">—</dd></div>
+    </dl>
+  </header>
+  <main>
+    <div class="page-head">
+      <div><p class="crumb">Rémunération › Simulation</p><h1>Simulation salariale</h1></div>
+    </div>
+    <div class="workspace">
+      <section class="panel form-panel" aria-labelledby="profile-title">
+        <h2 class="panel-title" id="profile-title">Paramètres</h2>
+        <form id="profile-form">
+          <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select></label>
+          <label class="field" for="niveau"><span class="field-name">Niveau</span><select id="niveau" name="niveau" required disabled><option value="">Choisir d’abord le métier</option></select></label>
+          <label class="field" for="seniority"><span class="field-name">Ancienneté</span><span class="input-unit"><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6" required><span>ans</span></span></label>
+          <fieldset class="model-fields" id="model-fields" hidden><legend>Profil de la personne</legend>
+            <p class="hint">Le modèle prédit le salaire à partir de ces champs, du niveau, de l’ancienneté, et de la grille et du marché du métier.</p>
+          </fieldset>
+          <button type="submit" id="submit" disabled>Prédire le salaire</button>
+          <p id="form-error" class="error" role="alert" hidden></p>
+        </form>
+        <p class="footnote">Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</p>
+      </section>
+      <section class="result-area" aria-live="polite" aria-busy="false" id="result-area">
+        <div class="panel empty-state" id="empty">
+          <div class="ghost-ruler" aria-hidden="true"><i></i><i></i><b></b></div>
+          <h2>Le salaire prédit pour un profil</h2>
+          <p>Renseignez le profil. Le modèle donne le salaire prédit et sa fourchette, placés dans la grille du poste.</p>
+        </div>
+        <div id="result" hidden>
+          <section id="verdict" class="panel verdict">
+            <p class="verdict-profile" id="result-profile"></p>
+            <h2>Salaire prédit</h2>
+            <p class="predicted"><span id="predicted"></span> <small class="unit-label"></small></p>
+            <p class="predicted-note" id="predicted-note"></p>
+          </section>
+          <section class="panel" id="ruler-card" aria-labelledby="ruler-title">
+            <div class="panel-head"><h3 class="panel-title" id="ruler-title">Dans la grille du poste</h3><span class="unit-label"></span></div>
+            <div class="panel-body">
+              <div class="ruler" id="ruler"></div>
+              <ul class="legend" id="legend">
+                <li><i class="key target"></i>Salaire prédit</li>
+                <li><i class="key range"></i>Où tombe le vrai salaire, 9 fois sur 10</li>
+                <li><i class="key band"></i>Grille du poste, du Min au Max</li>
+              </ul>
+            </div>
+          </section>
+          <p class="hint ruler-note" id="ruler-note"></p>
+        </div>
+      </section>
+    </div>
+    <footer id="source-note">Chargement des références du projet…</footer>
+  </main>
+</body>
+</html>
