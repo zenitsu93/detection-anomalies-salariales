@@ -17,6 +17,12 @@ Depuis la racine du projet, dans PowerShell :
 Ouvrir **http://127.0.0.1:8765**. Arrêter avec `Ctrl+C`.
 Si le port est occupé, ajouter `--port 8766`. Aucune dépendance supplémentaire n'est nécessaire.
 
+L'application sert aussi les autres pages de l'interface, aux mêmes chemins que dans le projet : l'écran d'accueil (`/accueil.html`), l'exploration (`/visualisation/exploration_salaires.html`) et les tableaux de bord (`/output/dashboard/...`). Seules des pages, leurs scripts et leurs images sortent, jamais un fichier Excel. Dans l'aide à la décision, « Repères », en haut à gauche, ramène à l'écran d'accueil.
+
+Le bouton « Refaire la détection » du tableau de bord passe par elle (`POST /api/detection`) : elle relance `src/detect_salary_anomalies.py`, puis relit les fichiers de `input/` pour l'aide à la décision. Il n'y a donc plus besoin de la redémarrer après avoir changé ces fichiers.
+
+Pour ouvrir une de ces pages dès que l'application est prête, ajouter `--ouvrir` suivi de la page. C'est ce que fait `lancer_interface.bat`, à la racine du projet, avec l'écran d'accueil (`--ouvrir accueil.html`) : un double-clic sur ce fichier refait la détection, démarre l'application et ouvre l'écran d'accueil.
+
 ## Utilisation
 
 1. Choisir le métier et le niveau (ceux du nouveau poste, pour une promotion).
