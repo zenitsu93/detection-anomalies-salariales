@@ -204,6 +204,12 @@ Les deux colonnes sont recopiées dans les résultats, juste après le niveau du
 
 ## 3. Tout lancer d'un coup
 
+**D'un double-clic (Windows) :** le fichier `lancer_interface.bat`, à la racine du projet. Il installe ce qui manque (le `.venv` et les bibliothèques, donc l'étape 1 n'est pas à faire à la main), refait la détection sur les fichiers de `input/`, démarre l'aide à la décision, puis ouvre l'écran d'accueil (`accueil.html`) dans le navigateur, avec ses trois cartes : explorer les données, détecter les anomalies, décider d'un salaire. La fenêtre noire doit rester ouverte : la fermer arrête l'interface.
+
+Pour passer d'un outil à l'autre, cliquer sur « Repères », en haut à gauche de chaque page : on revient à l'écran d'accueil. Après avoir remplacé les fichiers de `input/`, cliquer sur « Refaire la détection », en haut du tableau de bord : la détection est refaite (environ 30 secondes pour 10 000 salariés), le nouveau tableau de bord s'affiche, et l'écran d'accueil et l'aide à la décision passent aussi aux nouveaux fichiers. Ce bouton ne marche que si l'interface a été lancée par `lancer_interface.bat` ; sur un tableau de bord ouvert d'un double-clic, il le dit.
+
+**À la main, dans le terminal :** la détection seule, sans ouvrir l'interface.
+
 ```powershell
 python src/detect_salary_anomalies.py
 ```
