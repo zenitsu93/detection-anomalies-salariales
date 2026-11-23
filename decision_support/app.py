@@ -116,7 +116,9 @@ def make_handler(engine):
                 return self.send_json(403, {"error": "Accès local uniquement."})
             if self.path == "/api/detection":
                 return self.refaire_detection()
-            if self.path != "/api/analyze":
+            # Les deux questions de la page : le salaire prédit pour un profil (/api/analyze), et le profil
+            # d'un salarié retrouvé par son matricule (/api/salarie), pour la vue par salarié.
+            if self.path not in ("/api/analyze", "/api/salarie", "/api/matricules"):
                 return self.send_json(404, {"error": "Route inconnue."})
             if self.headers.get_content_type() != "application/json":
                 return self.send_json(415, {"error": "Un profil JSON est attendu."})
@@ -125,7 +127,13 @@ def make_handler(engine):
                 if length <= 0 or length > 16_384:
                     return self.send_json(413, {"error": "Taille du profil invalide."})
                 payload = json.loads(self.rfile.read(length))
-                result = engine.analyze(payload)
+                # Les matricules à proposer pendant qu'on tape dans la case « Matricule ».
+                if self.path == "/api/matricules":
+                    result = engine.matricules(payload.get("texte") if isinstance(payload, dict) else None)
+                elif self.path == "/api/salarie":
+                    result = engine.salarie(payload.get("matricule") if isinstance(payload, dict) else None)
+                else:
+                    result = engine.analyze(payload)
                 self.send_json(200, result)
             except (ValueError, TypeError) as exc:
                 self.send_json(400, {"error": str(exc)})

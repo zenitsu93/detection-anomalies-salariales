@@ -29,6 +29,22 @@ Pour ouvrir une de ces pages dès que l'application est prête, ajouter `--ouvri
 2. Remplir le profil de la personne : ancienneté, niveau d'études, âge, compétence N-1, performance N-1 et Hot job. C'est ce que lit le modèle, avec les valeurs du fichier des salariés : un choix dans une liste, ou un nombre entre le plus petit et le plus grand du fichier. Tous les champs sont obligatoires : sans l'un d'eux, le modèle ne peut pas prédire.
 3. Lire le salaire prédit.
 
+### Partir d'un salarié (depuis le 23/11/2026)
+
+Au lieu de remplir le profil à la main, taper un **matricule** en haut de la page, puis « Chercher » :
+
+- le bloc **« Ce salarié aujourd'hui »** s'affiche : son salaire réel, sa position dans la grille (salaire ÷ milieu de la grille), sa priorité dans la détection, la recommandation avec son coût, et les raisons de la détection écrites en clair. Ce bloc ne bouge pas ensuite : c'est le vrai salarié ;
+- le **profil** se remplit avec ses informations, sur une ligne ;
+- le **salaire prédit** de son profil s'affiche, avec son salaire réel à côté et sur la figure (le trait noir).
+
+Ensuite, **modifier une case** (l'ancienneté, la performance…) refait le salaire prédit. La case passe en jaune et la vraie valeur reste écrite dessous. Sous le grand chiffre, on lit le salaire prédit du vrai profil, l'effet des cases modifiées, et le salaire réel par rapport au salaire prédit. « Revenir au vrai profil » remet tout ; « Partir d'un profil vide » quitte le salarié.
+
+Trois choses à savoir pour bien lire :
+
+- le salaire prédit dit **ce que gagnent les salariés qui ont ce profil**. Ce n'est pas l'augmentation à donner à cette personne si sa situation change ;
+- l'effet est donné **pour toutes les cases modifiées ensemble**, pas case par case : les effets ne s'additionnent pas ;
+- **la priorité de la détection ne suit pas la simulation**. Elle se calcule en comparant le salarié à ses collègues sur tout le fichier : elle reste celle du vrai profil. Elle est lue dans `output/detection/anomalies.xlsx` ; ce gros fichier se charge en arrière-plan, donc pendant une vingtaine de secondes après le démarrage la page dit que la priorité se charge. Le « salaire attendu » de la détection n'est pas affiché : il vient d'une autre régression et ferait un deuxième chiffre à côté du salaire prédit.
+
 ## Lire le résultat
 
 - **Le salaire prédit**, en grand, et dessous sa fourchette : 9 fois sur 10, le vrai salaire d'un tel profil tombe entre ces deux montants.

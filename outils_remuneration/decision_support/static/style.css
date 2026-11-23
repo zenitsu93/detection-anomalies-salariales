@@ -48,21 +48,49 @@ main { max-width: 1320px; margin: auto; padding: 24px 32px 32px; }
 .crumb { font-size: 12px; color: var(--faint); margin: 0 0 2px; }
 h1 { font-size: 22px; font-weight: 600; }
 
-.workspace { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
 
 /* ---------- Panneaux ---------- */
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 16px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel-head); border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
 .panel-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--ink); }
-.panel-head .unit-label { font-size: 12px; color: var(--faint); }
+.panel-head span { font-size: 12px; color: var(--faint); }
 .panel-body { padding: 16px; margin: 0; }
 
-/* ---------- Formulaire ---------- */
-.form-panel { padding: 0 16px 16px; position: sticky; top: 16px; }
-.form-panel > .panel-title { margin: 0 -16px 16px; padding: 10px 16px; background: var(--panel-head); border-bottom: 1px solid var(--line); }
-.field-name { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
+/* ---------- La recherche par matricule ---------- */
+/* Une ligne : la case, « Chercher », puis « Partir d'un profil vide » pour simuler sans salarié. */
+.lookup { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 16px; }
+.lookup .field { margin: 0; width: 220px; }
+.lookup .or { color: var(--faint); font-size: 13px; padding-bottom: 8px; }
+.lookup-error { margin: 0 16px 16px; }
 
-.field { display: block; margin: 16px 0 4px; }
+/* ---------- Ce salarié aujourd'hui ---------- */
+/* Cinq cases côte à côte ; la dernière, celle des raisons, est deux fois plus large. Ce bloc ne
+   change pas pendant la simulation : c'est le vrai salarié. */
+.today { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 2fr); margin: 0; }
+.tile { padding: 14px 16px; border-right: 1px solid var(--line-soft); min-width: 0; }
+.tile:last-child { border-right: 0; }
+.tile dt { font-size: 12px; color: var(--muted); }
+.tile dd { margin: 2px 0 0; font-size: 20px; font-weight: 600; }
+.tile dd small { font-size: 12px; font-weight: 400; color: var(--faint); }
+.tile dd.reco { font-size: 15px; }
+.tile dd.reasons-box { font-size: 13px; font-weight: 400; }
+.tile p { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+.reasons { margin: 4px 0 0; padding-left: 18px; }
+/* La priorité : une pastille de la couleur du tableau de bord, et son nom écrit à côté. */
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; font-weight: 600; background: var(--panel-head); }
+.badge::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+.badge.critical::before { background: #b3261e; }
+.badge.major::before { background: #d9731f; }
+.badge.minor::before { background: var(--brand); }
+.badge.info::before { background: #c4c9cf; }
+.badge.outlier::before { background: #5b6b7d; }
+.badge.none::before { display: none; }
+
+/* ---------- Le profil ---------- */
+/* Toutes les cases sur une ligne ; elles passent à la ligne d'elles-mêmes sur un écran étroit. */
+.profile { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 12px; }
+.field-name { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; white-space: nowrap; }
+.field { display: block; min-width: 0; }
 .field input, .field select {
   display: block; width: 100%; min-width: 0; height: 36px; padding: 0 10px;
   font: 14px var(--font); color: var(--ink); background: var(--panel);
@@ -71,25 +99,24 @@ h1 { font-size: 22px; font-weight: 600; }
 .field select:disabled { background: var(--panel-head); color: var(--faint); }
 .field input::placeholder { color: var(--faint); }
 .field input:focus, .field select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
-.input-unit { display: block; position: relative; }
-.input-unit input { padding-right: 88px; }
-.input-unit > span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--faint); pointer-events: none; }
-.hint, .footnote { font-size: 12px; color: var(--muted); }
-/* Les champs du profil, regroupés sous leur titre et séparés du haut du formulaire par un trait. */
-.model-fields { border: 0; border-top: 1px solid var(--line-soft); margin: 16px 0 0; padding: 12px 0 0; }
-.model-fields legend { padding: 0 6px 0 0; font-size: 13px; font-weight: 600; color: var(--ink); }
-.model-fields .hint { margin: 4px 0 0; }
-.footnote { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+/* Une case modifiée par rapport au vrai profil du salarié : en jaune, avec sa vraie valeur dessous. */
+.field.changed input, .field.changed select { border-color: var(--brand); background: var(--brand-soft); font-weight: 600; }
+.was { display: block; min-height: 16px; margin-top: 4px; font-size: 11px; line-height: 16px; color: var(--warn); }
+.profile-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 16px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
+.actions { display: flex; gap: 12px; }
+.hint { font-size: 12px; color: var(--muted); }
 
-button { font: 600 14px var(--font); border-radius: var(--radius); cursor: pointer; }
-button[type=submit] { width: 100%; height: 40px; margin-top: 16px; background: var(--brand-dark); color: #fff; border: 1px solid var(--brand-dark); }
-button[type=submit]:hover:not(:disabled) { background: #3a2216; }
+button { font: 600 14px var(--font); border-radius: var(--radius); cursor: pointer; height: 36px; padding: 0 16px; white-space: nowrap; }
+button.primary { background: var(--brand-dark); color: #fff; border: 1px solid var(--brand-dark); }
+button.primary:hover:not(:disabled) { background: #3a2216; }
+button.ghost { background: var(--panel); color: var(--brand-dark); border: 1px solid #c4c9cf; }
+button.ghost:hover { background: var(--panel-head); }
 button:disabled { opacity: .5; cursor: wait; }
 input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .error { color: var(--error); background: var(--error-soft); border: 1px solid #f3c7c3; border-radius: var(--radius); padding: 8px 10px; font-size: 13px; margin: 12px 0 0; }
 
 /* ---------- État vide ---------- */
-.empty-state { min-height: 460px; padding: 48px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.empty-state { min-height: 300px; padding: 48px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .empty-state h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
 /* Figure animée de l'état vide : la grille, la fourchette, et le curseur du salaire prédit qui se
    promène dedans, pour annoncer ce que fait l'outil. */
@@ -104,8 +131,17 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .empty-state p { max-width: 440px; margin: 0 auto; color: var(--muted); }
 
 /* ---------- Résultat ---------- */
-/* Un seul grand chiffre : le salaire prédit. Sa fourchette s'écrit dessous, en une phrase. */
-.verdict { padding: 16px 20px; border-left: 4px solid var(--ok); }
+/* À gauche, un seul grand chiffre : le salaire prédit, sa fourchette en une phrase, puis les
+   comparaisons avec le vrai salarié. À droite, la figure. */
+.sim { display: grid; grid-template-columns: 400px minmax(0, 1fr); }
+/* Pendant qu'on tape dans une case, le résultat affiché est encore celui d'avant : il pâlit. */
+.stale { opacity: .45; }
+.ruler-card { padding: 16px 20px; }
+.compare { margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.compare div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.compare dt { color: var(--muted); }
+.compare dd { margin: 0; font-weight: 600; white-space: nowrap; }
+.verdict { padding: 16px 20px; border-left: 4px solid var(--ok); border-right: 1px solid var(--line-soft); }
 .verdict.insufficient { border-left-color: var(--faint); }
 .verdict-profile { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 .verdict h2 { font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -117,6 +153,12 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 /* Une seule ligne, sur trois étages : le salaire prédit, les deux bouts de sa fourchette, puis la
    grille avec son Min et son Max dessous. */
 .track { position: relative; height: 88px; }
+/* Avec un salarié : un étage de plus dessous, pour écrire son salaire réel sous le trait. */
+.track.with-real { height: 106px; }
+.val.real { top: 86px; color: var(--ink); font-weight: 600; }
+.val.real.mid { transform: translateX(-50%); }
+.tick { position: absolute; left: var(--x); top: 38px; height: 46px; width: 2px; margin-left: -1px; background: var(--ink); }
+.pip.before { position: absolute; top: 46px; left: var(--x); width: 12px; height: 12px; margin-left: -6px; background: var(--panel); border: 2px solid var(--brand-dark); border-radius: 50%; }
 .val { position: absolute; left: var(--x); padding: 0 4px; font-size: 12px; line-height: 16px; white-space: nowrap; color: var(--muted); }
 .val.top { top: 0; transform: translateX(-50%); font-size: 14px; font-weight: 600; color: var(--brand-dark); }
 .val.ends { top: 22px; }
@@ -134,7 +176,9 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .key.target { width: 10px; background: var(--brand-dark); border-radius: 50%; }
 .key.range { background: var(--brand-soft); border: 1.5px solid var(--brand); }
 .key.band { background: var(--neutral-soft); border: 1px solid #b7bdc4; }
-.ruler-note { margin: 0; }
+.key.before { width: 10px; border: 2px solid var(--brand-dark); border-radius: 50%; }
+.key.real { width: 2px; height: 14px; background: var(--ink); }
+.ruler-note { margin: 0 0 6px; }
 
 footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
 
@@ -145,7 +189,7 @@ footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line);
   .brand-sub { display: none; }
   main { padding: 16px; }
   .page-head { flex-direction: column; align-items: flex-start; }
-  .workspace { grid-template-columns: 1fr; }
-  .form-panel { position: static; }
+  .today, .sim { grid-template-columns: 1fr; }
+  .tile, .verdict { border-right: 0; border-bottom: 1px solid var(--line-soft); }
   .predicted { font-size: 28px; }
 }

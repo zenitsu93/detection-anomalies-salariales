@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Repères — Aide à la décision salariale</title>
-  <meta name="description" content="Obtenir le salaire prédit pour un profil, placé dans la grille de son poste.">
+  <meta name="description" content="Obtenir le salaire prédit pour un profil ou pour un salarié, placé dans la grille de son poste.">
   <meta name="theme-color" content="#e9a21b">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Repères — Aide à la décision salariale">
-  <meta property="og:description" content="Obtenir le salaire prédit pour un profil, placé dans la grille de son poste.">
+  <meta property="og:description" content="Obtenir le salaire prédit pour un profil ou pour un salarié, placé dans la grille de son poste.">
   <meta property="og:image" content="/apercu.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -30,49 +30,75 @@
     <div class="page-head">
       <div><p class="crumb">Rémunération › Simulation</p><h1>Simulation salariale</h1></div>
     </div>
-    <div class="workspace">
-      <section class="panel form-panel" aria-labelledby="profile-title">
-        <h2 class="panel-title" id="profile-title">Paramètres</h2>
-        <form id="profile-form">
-          <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select></label>
-          <label class="field" for="niveau"><span class="field-name">Niveau</span><select id="niveau" name="niveau" required disabled><option value="">Choisir d’abord le métier</option></select></label>
-          <label class="field" for="seniority"><span class="field-name">Ancienneté</span><span class="input-unit"><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6" required><span>ans</span></span></label>
-          <fieldset class="model-fields" id="model-fields" hidden><legend>Profil de la personne</legend>
-            <p class="hint">Le modèle prédit le salaire à partir de ces champs, du niveau, de l’ancienneté, et de la grille et du marché du métier.</p>
-          </fieldset>
-          <button type="submit" id="submit" disabled>Prédire le salaire</button>
-          <p id="form-error" class="error" role="alert" hidden></p>
-        </form>
-        <p class="footnote">Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</p>
-      </section>
-      <section class="result-area" aria-live="polite" aria-busy="false" id="result-area">
-        <div class="panel empty-state" id="empty">
-          <div class="ghost-ruler" aria-hidden="true"><i></i><i></i><b></b></div>
-          <h2>Le salaire prédit pour un profil</h2>
-          <p>Renseignez le profil. Le modèle donne le salaire prédit et sa fourchette, placés dans la grille du poste.</p>
+    <!-- La page se lit de haut en bas : le matricule, ce que l'on sait du salarié aujourd'hui, son profil
+         sur une ligne (chaque case se modifie), puis le salaire prédit. Sans matricule, on remplit le
+         profil à la main, comme avant. -->
+    <section class="panel">
+      <form id="lookup-form" class="lookup">
+        <label class="field" for="matricule"><span class="field-name">Matricule</span><input id="matricule" name="matricule" type="text" autocomplete="off" placeholder="Ex. Mat00045" list="matricules" required></label>
+        <!-- Les matricules proposés pendant la frappe : la liste est remplie par app.js à chaque lettre tapée. -->
+        <datalist id="matricules"></datalist>
+        <button type="submit" id="lookup" class="primary" disabled>Chercher</button>
+        <span class="or">ou</span>
+        <button type="button" id="blank" class="ghost">Partir d’un profil vide</button>
+      </form>
+      <p id="lookup-error" class="error lookup-error" role="alert" hidden></p>
+    </section>
+    <section class="panel" id="today" aria-labelledby="today-title" hidden>
+      <div class="panel-head"><h2 class="panel-title" id="today-title">Ce salarié aujourd’hui</h2><span id="today-id"></span></div>
+      <dl class="today">
+        <div class="tile"><dt>Salaire réel</dt><dd><span id="today-salary"></span> <small class="unit-label"></small></dd></div>
+        <div class="tile"><dt>Position dans la grille</dt><dd id="today-compa"></dd><p id="today-compa-note"></p></div>
+        <div class="tile"><dt>Priorité dans la détection</dt><dd><span class="badge" id="today-severity"></span></dd><p id="today-score"></p></div>
+        <div class="tile"><dt>Recommandation</dt><dd class="reco" id="today-reco"></dd><p id="today-cost"></p></div>
+        <div class="tile"><dt>Pourquoi la détection le fait remonter</dt><dd class="reasons-box"><ul class="reasons" id="today-reasons"></ul></dd><p id="today-peers"></p></div>
+      </dl>
+    </section>
+    <section class="panel" aria-labelledby="profile-title">
+      <div class="panel-head"><h2 class="panel-title" id="profile-title">Profil</h2><span>Modifier une case refait le salaire prédit</span></div>
+      <form id="profile-form" class="panel-body">
+        <div class="profile" id="profile-fields">
+          <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select><span class="was"></span></label>
+          <label class="field" for="niveau"><span class="field-name">Niveau</span><select id="niveau" name="niveau" required disabled><option value="">Choisir le métier</option></select><span class="was"></span></label>
+          <label class="field" for="seniority"><span class="field-name">Ancienneté (ans)</span><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6" required><span class="was"></span></label>
         </div>
-        <div id="result" hidden>
-          <section id="verdict" class="panel verdict">
+        <div class="profile-foot">
+          <span id="changed-note">Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</span>
+          <span class="actions"><button type="button" id="restore" class="ghost" hidden>Revenir au vrai profil</button><button type="submit" id="submit" class="primary" disabled>Prédire le salaire</button></span>
+        </div>
+        <p id="form-error" class="error" role="alert" hidden></p>
+      </form>
+    </section>
+    <section class="result-area" aria-live="polite" aria-busy="false" id="result-area">
+      <div class="panel empty-state" id="empty">
+        <div class="ghost-ruler" aria-hidden="true"><i></i><i></i><b></b></div>
+        <h2>Le salaire prédit pour un profil</h2>
+        <p>Tapez un matricule, ou remplissez le profil à la main. Le modèle donne le salaire prédit et sa fourchette, placés dans la grille du poste.</p>
+      </div>
+      <div id="result" hidden>
+        <section class="panel sim">
+          <div id="verdict" class="verdict">
             <p class="verdict-profile" id="result-profile"></p>
-            <h2>Salaire prédit</h2>
+            <h2 id="predicted-title">Salaire prédit</h2>
             <p class="predicted"><span id="predicted"></span> <small class="unit-label"></small></p>
             <p class="predicted-note" id="predicted-note"></p>
-          </section>
-          <section class="panel" id="ruler-card" aria-labelledby="ruler-title">
-            <div class="panel-head"><h3 class="panel-title" id="ruler-title">Dans la grille du poste</h3><span class="unit-label"></span></div>
-            <div class="panel-body">
-              <div class="ruler" id="ruler"></div>
-              <ul class="legend" id="legend">
-                <li><i class="key target"></i>Salaire prédit</li>
-                <li><i class="key range"></i>Où tombe le vrai salaire, 9 fois sur 10</li>
-                <li><i class="key band"></i>Grille du poste, du Min au Max</li>
-              </ul>
-            </div>
-          </section>
-          <p class="hint ruler-note" id="ruler-note"></p>
-        </div>
-      </section>
-    </div>
+            <dl class="compare" id="compare" hidden></dl>
+          </div>
+          <div id="ruler-card" class="ruler-card">
+            <div class="ruler" id="ruler"></div>
+            <ul class="legend" id="legend">
+              <li id="key-target"><i class="key target"></i><span id="key-target-text">Salaire prédit</span></li>
+              <li id="key-before"><i class="key before"></i>Salaire prédit, vrai profil</li>
+              <li id="key-real"><i class="key real"></i>Salaire réel</li>
+              <li id="key-range"><i class="key range"></i>Où tombe le vrai salaire, 9 fois sur 10</li>
+              <li><i class="key band"></i>Grille du poste, du Min au Max</li>
+            </ul>
+          </div>
+        </section>
+        <p class="hint ruler-note" id="ruler-note"></p>
+        <p class="hint ruler-note" id="caution" hidden>À lire comme : « voici ce que gagnent les salariés qui ont ce profil ». Ce n’est pas l’augmentation à donner à cette personne si sa situation change. La priorité de la détection ne suit pas la simulation : elle reste celle du vrai profil.</p>
+      </div>
+    </section>
     <footer id="source-note">Chargement des références du projet…</footer>
   </main>
 </body>

@@ -1,5 +1,8 @@
 """Le salaire prédit pour un profil, placé dans la grille de son poste, sans modifier les sources.
 
+Depuis le 23/11/2026, le profil peut aussi être celui d'un salarié du fichier : on tape son matricule
+(salarie, plus bas), la page se remplit, et chaque case modifiée refait le salaire prédit.
+
 Depuis le 17/11/2026, l'application ne donne plus qu'un résultat : le salaire que le modèle prédit
 pour le profil saisi, et la fourchette où le vrai salaire tombe 9 fois sur 10. La grille, le marché
 et les collègues ne sont plus que des repères à côté. Pourquoi : la fourchette et la cible tirées des
@@ -7,7 +10,9 @@ règles faisaient un deuxième résultat, à côté du salaire prédit ; la page
 
 import math
 from pathlib import Path
+import re
 import sys
+import threading
 
 import numpy as np
 import pandas as pd
@@ -34,7 +39,7 @@ SCOPE = {"Niveau": "même niveau", "Job_Family": "même métier", "Anciennete_Bu
 # ajouter une ligne : une colonne en chiffres du fichier des salariés.
 COLONNES = [
     "Niveau",               # le niveau du poste
-    "Rang_Etude_Max",       # le niveau d'études, en rang : 0 = secondaire, 1 = BAC... 7 = BAC+7
+    "Rang_Etude_Max",       # le niveau d'études, en rang : 1 = BAC MAX (le bac ou moins)... 7 = BAC+7
     "Age_Embauche",         # âge − ancienneté
     "Anciennete",           # l'ancienneté, en années
     "Competence_N1",        # la note de compétence de l'an dernier
@@ -59,6 +64,42 @@ DEJA_CONNUES = {"Niveau", "Anciennete", "Ratio_Grille_Marche", LOG_MID}
 LABELS = {"Age": "Âge", "Competence_N1": "Compétence N-1", "Performance_N1": "Performance N-1",
           "Hot_job": "Hot job", "Niveau_Etude_Max": "Niveau d'études"}
 
+# La vue par salarié (depuis le 23/11/2026) : on tape un matricule, la page se remplit avec son profil et
+# montre ce que la détection dit de lui. Ces trois tables servent à écrire en clair ce que la détection
+# a noté dans output/detection/anomalies.xlsx.
+# Le nom affiché de chaque priorité : les mêmes mots que dans le tableau de bord.
+PRIORITES = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "Info": "Info (sans action)",
+             "Outlier positif": "Outlier positif (au-dessus du Max)"}
+# Les seules colonnes lues dans le fichier de la détection.
+DETECTION = {"Matricule", "Severity", "RiskScore", "Reco", "Cout_Ajustement", "Reason_Principale", "Cohort_Size", "Cohort_Median"}
+RECOS = {"Ajuster vers MID": "Ajuster vers le milieu de la grille", "Ajuster au MIN": "Ajuster au Min de la grille"}
+# Les raisons courtes de la détection, et la phrase affichée à la place.
+RAISONS = {"Sous la mediane marche": "Salaire sous la médiane du marché",
+           "Salaire sous MIN interne": "Salaire sous le Min de sa grille"}
+
+
+def raison_en_clair(texte):
+    """Une raison écrite par la détection, récrite pour être lue sans connaître ses codes.
+    Exemple : « CompaRatio=0.80 (<0.85) » devient « Position dans la grille de 0,80, sous le seuil de
+    0,85 ». Une raison que cette fonction ne connaît pas est rendue telle quelle."""
+    texte = str(texte).strip()
+    if texte in RAISONS:
+        return RAISONS[texte]
+    ratio = re.fullmatch(r"CompaRatio=([\d.]+) \(<([\d.]+)\)", texte)
+    if ratio:
+        position, seuil = (v.replace(".", ",") for v in ratio.groups())
+        return f"Position dans la grille de {position}, sous le seuil de {seuil}"
+    if texte.startswith("Sous ses collegues"):
+        return "Salaire très en dessous de ses collègues comparables"
+    if texte.startswith("IA : "):
+        # Pourquoi retirer la parenthèse des montants : le « salaire attendu » de la détection vient de sa
+        # propre régression, pas du modèle de cette page. Affiché à côté du salaire prédit, il ferait
+        # deux chiffres différents pour la même chose. On garde l'écart en %, en disant d'où il vient.
+        texte = re.sub(r" \([^()]*kMAD[^()]*\)", "", texte[len("IA : "):])
+        texte = texte.replace("salaire attendu pour son profil", "salaire attendu par la détection pour son profil")
+        return texte[:1].upper() + texte[1:]
+    return texte
+
 
 def number(value, name, *, optional=False):
     if optional and (value is None or value == ""):
@@ -82,8 +123,13 @@ def key(value):
 
 
 class DecisionEngine:
-    def __init__(self, employees, bands, market, rules):
+    def __init__(self, employees, bands, market, rules, detection=None):
         self.rules = dict(rules)
+        # Ce que la détection dit de chaque salarié, rangé par matricule (voir lire_detection). Vide si la
+        # détection n'a pas encore été lancée. detection_prete passe à False le temps de la lecture du
+        # fichier en arrière-plan (voir from_project).
+        self.detection, self.detection_prete = {}, True
+        self.lire_detection(detection)
         # Mêmes valeurs par défaut que src/anomaly_cohortes.py.
         self.minimum_peers = int(self.rules.get("cohort_min_size", 15))
         if self.minimum_peers < 2:
@@ -112,6 +158,12 @@ class DecisionEngine:
         # modèle M5 de notebooks/Prediction_Compa_Ratio.ipynb (voir _train_regression).
         self.regression, self.regression_base = self._train_regression()
         self.fields = self._model_fields()
+
+    def lire_detection(self, detection):
+        """Range le tableau de la détection par matricule, en majuscules, pour que « mat00045 » trouve
+        « Mat00045 »."""
+        if detection is not None and "Matricule" in detection:
+            self.detection = {key(ligne["Matricule"]).upper(): ligne for ligne in detection.to_dict("records")}
 
     def _model_fields(self):
         """Les champs du profil à saisir : les colonnes que lit le modèle, sauf celles que
@@ -259,7 +311,24 @@ class DecisionEngine:
             return pd.read_excel(root / "input" / name)
 
         market = read("market.xlsx") if (root / "input" / "market.xlsx").exists() else None
-        return cls(read("employes.xlsx"), read("bands.xlsx"), market, rules)
+        engine = cls(read("employes.xlsx"), read("bands.xlsx"), market, rules)
+
+        # Le résultat de la détection, pour la vue par salarié.
+        # Pourquoi en arrière-plan : ce gros fichier Excel met une vingtaine de secondes à se lire. Lu
+        # ici, il retarderait d'autant l'ouverture de l'interface. La page marche tout de suite ; pendant
+        # ces secondes, elle dit seulement que la priorité se charge.
+        # Pourquoi un try : ce fichier n'existe pas avant la première détection, et il peut être ouvert
+        # dans Excel. La page dira alors que la priorité n'est pas disponible.
+        def lire():
+            try:
+                engine.lire_detection(pd.read_excel(root / "output" / "detection" / "anomalies.xlsx", usecols=lambda c: c in DETECTION))
+            except (OSError, ValueError):
+                pass
+            engine.detection_prete = True
+
+        engine.detection_prete = False
+        threading.Thread(target=lire, daemon=True).start()
+        return engine
 
     def metadata(self):
         pairs = self.bands.loc[self.bands.Job_Family.ne("") & self.bands.Niveau.ne(""), ["Job_Family", "Niveau"]]
@@ -319,6 +388,81 @@ class DecisionEngine:
         market = self._reference(self.market, profile, ["Median"])
         return {"profile": profile, "unit": UNIT, "band": band, "market": market,
                 "peers": self._peers(profile), "regression": self._regression(profile, band, market, inputs)}
+
+    def matricules(self, texte, limite=8):
+        """Les matricules à proposer pendant la frappe : ceux qui contiennent le texte tapé, sans tenir
+        compte des majuscules. Ceux qui commencent par ce texte passent en premier, puis l'ordre
+        alphabétique. Pourquoi « contiennent » : taper « 45 » suffit pour se voir proposer Mat00045.
+        Pourquoi limite : la page n'affiche qu'une courte liste, inutile d'en envoyer des milliers."""
+        cle = key(texte).upper()
+        if not cle or "Matricule" not in self.regression_base:
+            return {"matricules": []}
+        tous = self.regression_base.Matricule.map(key)
+        trouves = tous[tous.str.upper().str.contains(cle, regex=False)]
+        trouves = sorted(trouves, key=lambda m: (not m.upper().startswith(cle), m))
+        return {"matricules": trouves[:limite]}
+
+    def salarie(self, matricule):
+        """La vue par salarié : pour un matricule, son profil (de quoi remplir le formulaire de la page),
+        son salaire réel, sa position dans la grille et ce que la détection dit de lui.
+        Le salaire prédit n'est pas calculé ici : la page le demande ensuite avec ce profil, exactement
+        comme pour un profil saisi à la main. Une case modifiée repasse donc par le même calcul."""
+        cle = key(matricule).upper()
+        if not cle:
+            raise ValueError("Saisir un matricule.")
+        base = self.regression_base
+        if "Matricule" not in base:
+            raise ValueError("Le fichier des salariés n'a pas de colonne Matricule.")
+        lignes = base.loc[base.Matricule.map(key).str.upper() == cle]
+        if lignes.empty:
+            # Un salarié dont le salaire est illisible n'est pas gardé au démarrage : il n'est pas trouvé non plus.
+            raise ValueError(f"Matricule introuvable : {key(matricule)}.")
+        ligne = lignes.iloc[0]
+
+        def nombre(valeur):
+            valeur = pd.to_numeric(valeur, errors="coerce")
+            return None if pd.isna(valeur) or not math.isfinite(valeur) else round(float(valeur), 2)
+
+        profil = {"job_family": ligne.Job_Family, "niveau": ligne.Niveau, "seniority": nombre(ligne.get("Anciennete"))}
+        for field in self.fields:
+            valeur = ligne.get(field["name"])
+            if field["kind"] == "choice":
+                # Une case vide du fichier se choisit par « Inconnu », comme dans le formulaire.
+                profil[field["name"]] = "Inconnu" if pd.isna(valeur) else key(valeur)
+            else:
+                valeur = nombre(valeur)
+                # Pourquoi borner : l'arrondi à 2 chiffres peut faire dépasser d'un cheveu le plus grand
+                # nombre du fichier, et le formulaire refuserait alors la valeur du salarié lui-même.
+                profil[field["name"]] = None if valeur is None else min(max(valeur, field["min"]), field["max"])
+        salaire = float(ligne.Fixe_Annuel_MAD)
+        mid = nombre(ligne.get("Mid"))
+        entite = ligne.get("Entite_N1")
+        return {"matricule": key(ligne.Matricule), "entite": None if pd.isna(entite) else str(entite), "profile": profil,
+                "salary": round(salaire, 2), "mid": mid, "compa": round(salaire / mid, 2) if mid else None,
+                "detection": self._detection(cle), "detection_loading": not self.detection_prete}
+
+    def _detection(self, cle):
+        """Ce que la détection dit du salarié : sa priorité, son score, la recommandation et les raisons,
+        écrites en clair. None si la détection n'a pas de ligne pour lui."""
+        ligne = self.detection.get(cle)
+        if ligne is None:
+            return None
+
+        def nombre(colonne):
+            valeur = pd.to_numeric(ligne.get(colonne), errors="coerce")
+            return None if pd.isna(valeur) or not math.isfinite(valeur) else round(float(valeur), 2)
+
+        def texte(colonne):
+            valeur = ligne.get(colonne)
+            return None if valeur is None or pd.isna(valeur) else str(valeur).strip()
+
+        priorite = texte("Severity")
+        # Les raisons sont écrites à la suite, séparées par « & ».
+        raisons = [raison_en_clair(r) for r in (texte("Reason_Principale") or "").split(" & ") if r.strip()]
+        reco = texte("Reco")
+        return {"severity": priorite, "label": PRIORITES.get(priorite, priorite), "score": nombre("RiskScore"),
+                "reco": RECOS.get(reco, reco), "cost": nombre("Cout_Ajustement") or None, "reasons": raisons,
+                "peers": nombre("Cohort_Size"), "peer_median": nombre("Cohort_Median")}
 
     def _read_inputs(self, payload):
         """Les champs du profil saisis dans la page, contrôlés : un choix doit être une valeur du
