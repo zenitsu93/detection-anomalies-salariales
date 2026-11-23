@@ -168,8 +168,8 @@ POIDS_NIVEAU = np.array([0.04, 0.07, 0.11, 0.17, 0.22, 0.22, 0.17])
 # directeur de 24 ans etait aussi probable qu'un guichetier de 24 ans.
 # Age a la fin des etudes, selon le niveau d'etudes.
 AGE_FIN_ETUDES = {
-    "SECONDAIRE": 20, "BAC": 20, "BAC+1": 21, "BAC+2": 21, "BAC+3": 22, "BAC+4": 23, "BAC+5": 24,
-    "BAC+6": 25, "BAC+7": 27, "EXPERTISE COMPTABLE": 27, "NON DETERMINE": 22,
+    "BAC MAX": 20, "BAC+1": 21, "BAC+2": 21, "BAC+3": 22, "BAC+4": 23, "BAC+5": 24,
+    "BAC+6": 25, "BAC+7": 27, "NON DETERMINE": 22,
 }
 # Annees travaillees ailleurs avant d'entrer, en moyenne, selon le niveau du poste (1 = le plus
 # haut). Pourquoi plus pour les hauts niveaux : on y recrute plus souvent des profils experimentes.
@@ -196,9 +196,11 @@ COMP_MU, COMP_SD = 3.35, 0.60
 # les hauts niveaux et certains metiers ont plus souvent un diplome eleve (voir LIEN_DIPLOME_POSTE).
 # « NON DETERMINE » n'a pas de categorie d'ecole (case vide, comme dans le vrai fichier) ; il
 # tombe sur des salaries pris au hasard.
+# Depuis le 23/11/2026, deux regroupements, comme dans le notebook des diplomes : le secondaire (47) et le
+# bac (203) font un seul niveau, « BAC MAX » (le bac ou moins) ; l'expertise comptable (2 en commerce,
+# 1 a l'universite) est comptee dans BAC+7.
 PARTS_DIPLOME = {
-    ("SECONDAIRE", "AUTRES"): 47,
-    ("BAC", "AUTRES"): 203,
+    ("BAC MAX", "AUTRES"): 250,
     ("BAC+2", "AUTRES"): 1266,
     ("BAC+2", "DIPLOME DE COMMERCE"): 2,
     ("BAC+2", "DIPLOME UNIVERSITAIRE"): 334,
@@ -216,16 +218,14 @@ PARTS_DIPLOME = {
     ("BAC+6", "DIPLOME DE COMMERCE"): 1,
     ("BAC+6", "DIPLOME UNIVERSITAIRE"): 2,
     ("BAC+7", "DIPLOME D'INGENIEUR"): 2,
-    ("BAC+7", "DIPLOME DE COMMERCE"): 2,
-    ("BAC+7", "DIPLOME UNIVERSITAIRE"): 21,
-    ("EXPERTISE COMPTABLE", "DIPLOME DE COMMERCE"): 2,
-    ("EXPERTISE COMPTABLE", "DIPLOME UNIVERSITAIRE"): 1,
+    ("BAC+7", "DIPLOME DE COMMERCE"): 4,
+    ("BAC+7", "DIPLOME UNIVERSITAIRE"): 22,
     ("NON DETERMINE", None): 286,
 }
 
 # Rang de chaque niveau d'etudes, du plus bas au plus haut (le meme que dans la detection).
-RANG_ETUDE = {"SECONDAIRE": 0, "BAC": 1, "BAC+1": 2, "BAC+2": 3, "BAC+3": 4, "BAC+4": 5, "BAC+5": 6,
-              "BAC+6": 6, "BAC+7": 7, "EXPERTISE COMPTABLE": 7}
+RANG_ETUDE = {"BAC MAX": 1, "BAC+1": 2, "BAC+2": 3, "BAC+3": 4, "BAC+4": 5, "BAC+5": 6,
+              "BAC+6": 6, "BAC+7": 7}
 # Lien entre le poste et le diplome, de 0 (aucun : diplome au hasard) a 1 (le plus haut poste a
 # toujours le plus haut diplome). Pourquoi 0.6 : un cadre superieur a le plus souvent un BAC+5,
 # mais on trouve aussi des BAC+2 montes par l'anciennete.

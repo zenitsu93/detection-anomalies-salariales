@@ -30,15 +30,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Le rang de chaque niveau d'études, du moins élevé (0) au plus élevé (7). Pourquoi un nombre : un
-# texte se trie dans l'ordre alphabétique, si bien que SECONDAIRE passerait après BAC+7 et EXPERTISE
-# COMPTABLE ; avec le rang, Excel trie les niveaux d'études dans le bon ordre. C'est la même table que dans le
-# notebook des diplômes : BAC+6 compte comme BAC+5 (il est saisi surtout sur des masters) et l'expertise
-# comptable comme BAC+7. Un niveau absent de la table (« NON DETERMINE », par exemple) n'a pas de rang :
-# le salarié n'est pas compté comme « sans diplôme », son niveau est simplement inconnu.
+# Le rang de chaque niveau d'études, du moins élevé (1) au plus élevé (7). Pourquoi un nombre : un
+# texte se trie dans l'ordre alphabétique, si bien que BAC+7 passerait avant BAC MAX ; avec le rang,
+# Excel trie les niveaux d'études dans le bon ordre. C'est la même table que dans le notebook des
+# diplômes : BAC MAX veut dire « le bac ou moins » (secondaire, CAP, niveau bac, baccalauréat) et BAC+6
+# compte comme BAC+5 (il est saisi surtout sur des masters). Un niveau absent de la table (« NON
+# DETERMINE », par exemple) n'a pas de rang : le salarié n'est pas compté comme « sans diplôme », son
+# niveau est simplement inconnu.
 RANG_NIVEAU_ETUDE = {
-    "SECONDAIRE": 0,
-    "BAC": 1,
+    "BAC MAX": 1,
     "BAC+1": 2,
     "BAC+2": 3,
     "BAC+3": 4,
@@ -46,8 +46,12 @@ RANG_NIVEAU_ETUDE = {
     "BAC+5": 6,
     "BAC+6": 6,
     "BAC+7": 7,
-    "EXPERTISE COMPTABLE": 7,
 }
+# Les anciens noms de niveaux, et le niveau qui les remplace. Pourquoi les garder : depuis le 23/11/2026
+# le notebook des diplômes range le secondaire et le bac dans un seul niveau, BAC MAX, et l'expertise
+# comptable dans BAC+7 (avec le doctorat). Un fichier des salariés fait avant cette date porte encore
+# les anciens noms : ils sont lus comme les nouveaux, sans avoir à refaire le fichier.
+ANCIENS_NIVEAUX_ETUDE = {"SECONDAIRE": "BAC MAX", "BAC": "BAC MAX", "EXPERTISE COMPTABLE": "BAC+7"}
 
 # Les cinq libellés de la performance N-1 (colonne Performance_N1), du plus bas au plus haut.
 ORDRE_PERFORMANCE = ["Très en dessous", "Proche de l'objectif", "A l'objectif", "Supérieur à l'objectif", "Très au-delà"]
@@ -66,19 +70,32 @@ NOMS_DIPLOMES = {
 }
 
 
+def niveau_etude_actuel(niveaux: pd.Series) -> pd.Series:
+    """Remplace les anciens noms de niveaux par les nouveaux (voir ANCIENS_NIVEAUX_ETUDE) : « Secondaire »
+    et « Bac » deviennent « BAC MAX », « Expertise comptable » devient « BAC+7 ». Les autres cases ne
+    sont pas touchées. Les espaces et les majuscules ne comptent pas pour reconnaître un ancien nom."""
+    table = {ancien.replace(" ", ""): nouveau for ancien, nouveau in ANCIENS_NIVEAUX_ETUDE.items()}
+    texte = niveaux.astype("string").str.replace(r"\s+", "", regex=True).str.upper()
+    ancien_nom = texte.isin(list(table)).fillna(False).astype(bool)
+    return niveaux.where(~ancien_nom, texte.map(table).astype(object))
+
+
 def rang_etude(niveaux: pd.Series) -> pd.Series:
-    """Le rang (0 à 7) de chaque niveau d'études, ou une case vide si le niveau n'est pas dans
-    RANG_NIVEAU_ETUDE. Les espaces et les majuscules ne comptent pas : « Bac + 5 » vaut « BAC+5 »."""
+    """Le rang (1 à 7) de chaque niveau d'études, ou une case vide si le niveau n'est pas dans
+    RANG_NIVEAU_ETUDE. Les espaces et les majuscules ne comptent pas : « Bac + 5 » vaut « BAC+5 ».
+    Un ancien nom de niveau prend le rang du niveau qui le remplace (« Secondaire » : celui de BAC MAX)."""
     table = {niveau.replace(" ", ""): rang for niveau, rang in RANG_NIVEAU_ETUDE.items()}
+    for ancien, nouveau in ANCIENS_NIVEAUX_ETUDE.items():
+        table[ancien.replace(" ", "")] = RANG_NIVEAU_ETUDE[nouveau]
     texte = niveaux.astype("string").str.replace(r"\s+", "", regex=True).str.upper()
     return texte.map(table).astype(float)
 
 
 def tranche_etude(rangs: pd.Series) -> pd.Series:
-    """Range chaque rang dans une des trois tranches : « BAC+2 ou moins » (rangs 0 à 3), « BAC+3 ou
+    """Range chaque rang dans une des trois tranches : « BAC+2 ou moins » (rangs 1 à 3), « BAC+3 ou
     BAC+4 » (4 et 5), « BAC+5 et plus » (6 et 7). Case vide si le rang est inconnu.
     Pourquoi trois tranches et pas dix niveaux : pour comparer des salariés par diplôme, il faut assez de
-    monde dans chaque groupe ; les niveaux rares (secondaire, BAC+1, doctorat) feraient des groupes de
+    monde dans chaque groupe ; les niveaux rares (BAC+1, BAC+7) feraient des groupes de
     quelques personnes. Et une erreur d'un cran dans la saisie (BAC+4 au lieu de BAC+5) change moins
     souvent de tranche que de niveau."""
     tranche = pd.Series(np.nan, index=rangs.index, dtype=object)
@@ -92,8 +109,9 @@ def ajouter_diplomes(df: pd.DataFrame, nom_fichier: str = "employes.xlsx") -> pd
     """Lit le diplôme de chaque salarié dans ses propres colonnes du fichier des salariés, et en tire
     deux colonnes calculées. Les quatre colonnes du diplôme sont alors :
     - Niveau_Etude_Max : son niveau d'études le plus élevé, tel qu'écrit dans le fichier (« BAC+5 ») ;
+      seuls les anciens noms sont remplacés par les nouveaux (« SECONDAIRE » devient « BAC MAX ») ;
     - Cat_Ecole_Max : la catégorie de ce diplôme (« DIPLOME D'INGENIEUR »...), telle qu'écrite ;
-    - Rang_Etude_Max (calculée) : le rang de ce niveau, de 0 à 7 (voir RANG_NIVEAU_ETUDE) ;
+    - Rang_Etude_Max (calculée) : le rang de ce niveau, de 1 à 7 (voir RANG_NIVEAU_ETUDE) ;
     - Tranche_Etude (calculée) : sa tranche, « BAC+2 ou moins », « BAC+3 ou BAC+4 » ou « BAC+5 et plus ».
     Pourquoi plus de fichier des diplômes à part : le fichier des salariés porte désormais le diplôme de
     chacun, sur sa ligne. Il n'y a donc plus de matricules à faire correspondre d'un fichier à l'autre,
@@ -123,6 +141,7 @@ def ajouter_diplomes(df: pd.DataFrame, nom_fichier: str = "employes.xlsx") -> pd
     for colonne in manquantes:
         df[colonne] = np.nan
 
+    df["Niveau_Etude_Max"] = niveau_etude_actuel(df["Niveau_Etude_Max"])
     df["Rang_Etude_Max"] = rang_etude(df["Niveau_Etude_Max"])
     df["Tranche_Etude"] = tranche_etude(df["Rang_Etude_Max"])
     # Les niveaux écrits qui n'ont pas de rang, hors « NON DETERMINE » : une faute de frappe se voit ainsi

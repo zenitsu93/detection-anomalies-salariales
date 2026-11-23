@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     # Les colonnes les plus utiles en premier, toutes les autres ensuite.
     # Les colonnes du diplôme juste après le niveau du poste : on lit le salaire en sachant déjà quel
-    # diplôme a le salarié. Le rang (0 à 7) suit le niveau d'études, pour pouvoir trier dans le bon ordre.
+    # diplôme a le salarié. Le rang (1 à 7) suit le niveau d'études, pour pouvoir trier dans le bon ordre.
     front_cols = ["Matricule", "Nom", "Entite_N1", "Entite_N2", "Job_Family", "Job_Title", "Niveau",
                   "Niveau_Etude_Max", "Rang_Etude_Max", "Tranche_Etude", "Cat_Ecole_Max",
                   "Fixe_Annuel_MAD", "Min", "Mid", "Max", "CompaRatio", "RangePenetration",

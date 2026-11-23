@@ -166,12 +166,16 @@
 
   // Le niveau d'études (colonne Niveau_Etude_Max, facultative) : son rang, pour ranger les niveaux du moins au plus élevé
   // dans le filtre « Diplôme ». C'est la même table que RANG_NIVEAU_ETUDE dans src/anomaly_pretraitement.py. Un niveau
-  // absent de la table (« NON DETERMINE ») va à la fin.
-  const RANG_ETUDE = { 'SECONDAIRE': 0, 'BAC': 1, 'BAC+1': 2, 'BAC+2': 3, 'BAC+3': 4, 'BAC+4': 5, 'BAC+5': 6, 'BAC+6': 6,
-    'BAC+7': 7, 'EXPERTISE COMPTABLE': 7 };
+  // absent de la table (« NON DETERMINE ») va à la fin. BAC MAX veut dire « le bac ou moins ».
+  const RANG_ETUDE = { 'BAC MAX': 1, 'BAC+1': 2, 'BAC+2': 3, 'BAC+3': 4, 'BAC+4': 5, 'BAC+5': 6, 'BAC+6': 6, 'BAC+7': 7 };
+  // Les anciens noms de niveaux et celui qui les remplace (23/11/2026) : le secondaire et le bac sont rangés dans un seul
+  // niveau, BAC MAX, et l'expertise comptable dans BAC+7. Un fichier fait avant porte encore les anciens noms : ils sont
+  // lus comme les nouveaux. C'est la même table que ANCIENS_NIVEAUX_ETUDE dans src/anomaly_pretraitement.py.
+  const ANCIENS_NIVEAUX_ETUDE = { 'SECONDAIRE': 'BAC MAX', 'BAC': 'BAC MAX', 'EXPERTISECOMPTABLE': 'BAC+7' };
+  const niveauEtudeActuel = n => n == null ? n : (ANCIENS_NIVEAUX_ETUDE[String(n).replace(/\s+/g, '').toUpperCase()] ?? n);
   // Les espaces et les majuscules ne comptent pas : « Bac + 5 » vaut « BAC+5 », comme dans le Python.
   const SANS_ESPACES = Object.fromEntries(Object.entries(RANG_ETUDE).map(([n, r]) => [n.replace(/\s+/g, ''), r]));
-  const rangEtude = n => SANS_ESPACES[String(n).replace(/\s+/g, '').toUpperCase()];
+  const rangEtude = n => SANS_ESPACES[String(niveauEtudeActuel(n)).replace(/\s+/g, '').toUpperCase()];
   function niveauxEtude(df) {
     const r = n => rangEtude(n) ?? 99;
     return modalites(df, 'Niveau_Etude_Max').sort((a, b) => r(a) - r(b) || String(a).localeCompare(String(b), 'fr'));
@@ -233,7 +237,7 @@
         // P25 et P75 du marché : facultatifs, ils servent seulement au graphe de positionnement face au marché.
         Market_P25: nombre(m.P25), Market_P75: nombre(m.P75),
         // Le diplôme : facultatif, il sert au filtre « Diplôme » et à la liste des salariés. Case vide → null.
-        Niveau_Etude_Max: texte(e.Niveau_Etude_Max), Cat_Ecole_Max: texte(e.Cat_Ecole_Max),
+        Niveau_Etude_Max: niveauEtudeActuel(texte(e.Niveau_Etude_Max)), Cat_Ecole_Max: texte(e.Cat_Ecole_Max),
       };
       l.Age_Embauche = l.Age - l.Anciennete;
       l.Tranche_Age = trancheAge(l.Age);

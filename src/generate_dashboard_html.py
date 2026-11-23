@@ -103,9 +103,9 @@ COL_FR = {
     "Matricule": "Matricule", "Entite_N1": "Pôle", "Job_Family": "Métier", "Job_Title": "Poste",
     "Niveau": "Niveau",
     # Vides pour tout le monde si input/employes.xlsx n'a pas de colonnes du diplôme. Le rang
-    # (0 = secondaire, 7 = BAC+7) est là pour trier : trié comme un texte, « Niveau d'études » mettrait
-    # SECONDAIRE après BAC+7.
-    "Niveau_Etude_Max": "Niveau d'études", "Rang_Etude_Max": "Rang d'études (0 à 7)",
+    # (1 = BAC MAX, le bac ou moins ; 7 = BAC+7) est là pour trier : trié comme un texte, « Niveau
+    # d'études » mettrait BAC MAX après BAC+7.
+    "Niveau_Etude_Max": "Niveau d'études", "Rang_Etude_Max": "Rang d'études (1 à 7)",
     "Cat_Ecole_Max": "Catégorie du diplôme",
     "Sexe": "Sexe", "Severity": "Priorité", "RiskScore": "Score général",
     "CompaRatio": "CompaRatio", "Rule_Flags": "Signaux",
@@ -225,7 +225,7 @@ def compter(df: pd.DataFrame, gg: pd.DataFrame, rule_params: dict) -> dict:
 
 
 def diplomes_presents(df: pd.DataFrame) -> list:
-    """Les niveaux d'études du fichier, du plus bas au plus haut (rang 0 à 7), puis ceux sans rang
+    """Les niveaux d'études du fichier, du plus bas au plus haut (rang 1 à 7), puis ceux sans rang
     (NON DETERMINE...) par ordre alphabétique. Liste vide si le fichier n'a pas de diplôme."""
     rangs = df.dropna(subset=["Niveau_Etude_Max"]).groupby("Niveau_Etude_Max")["Rang_Etude_Max"].first()
     return sorted(rangs.index, key=lambda n: (pd.isna(rangs[n]), 0 if pd.isna(rangs[n]) else rangs[n], n))

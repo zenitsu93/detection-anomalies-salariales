@@ -66,7 +66,7 @@ NOMS = {
 CATEGORIE = "Categorie : "
 
 # Le rang d'un niveau d'études écrit en toutes lettres : 6 -> « BAC+5 ». Pour un rang que partagent deux
-# niveaux, on garde le premier de la table (BAC+5 plutôt que BAC+6, BAC+7 plutôt que l'expertise comptable).
+# niveaux, on garde le premier de la table (BAC+5 plutôt que BAC+6).
 NIVEAU_DU_RANG = {}
 for _niveau, _rang in RANG_NIVEAU_ETUDE.items():
     NIVEAU_DU_RANG.setdefault(_rang, _niveau)

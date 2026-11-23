@@ -39,8 +39,10 @@ RESULTATS.mkdir(exist_ok=True)
 
 # Les rangs de la performance et du niveau d'études, pour les passer en chiffres
 RANG_PERFORMANCE = {"Très en dessous": 1, "Proche de l'objectif": 2, "A l'objectif": 3, "Supérieur à l'objectif": 4, "Très au-delà": 5}
-RANG_ETUDE = {'SECONDAIRE': 0, 'BAC': 1, 'BAC+1': 2, 'BAC+2': 3, 'BAC+3': 4, 'BAC+4': 5, 'BAC+5': 6, 'BAC+6': 6,
-              'BAC+7': 7, 'EXPERTISE COMPTABLE': 7}
+# BAC MAX = le bac ou moins. Les trois derniers sont les anciens noms (fichiers d'avant le 23/11/2026) :
+# le secondaire et le bac valent BAC MAX, l'expertise comptable vaut BAC+7.
+RANG_ETUDE = {'BAC MAX': 1, 'BAC+1': 2, 'BAC+2': 3, 'BAC+3': 4, 'BAC+4': 5, 'BAC+5': 6, 'BAC+6': 6, 'BAC+7': 7,
+              'SECONDAIRE': 1, 'BAC': 1, 'EXPERTISE COMPTABLE': 7}
 
 
 def outliers(colonne):

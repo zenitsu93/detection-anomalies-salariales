@@ -61,11 +61,11 @@ COLONNES = {
     "Performance_N1": "catégorie",       # la performance de l'an dernier (« A l'objectif »...)
     "Positionnement_9BOX": "catégorie",  # la case 9-Box
     "Hot_job": "nombre",                 # la tension du métier sur le marché (0 à 2)
-    "Rang_Etude_Max": "nombre",          # le niveau d'études : 0 = secondaire, 1 = BAC... 7 = BAC+7
+    "Rang_Etude_Max": "nombre",          # le niveau d'études : 1 = BAC MAX (le bac ou moins)... 7 = BAC+7
     "Cat_Ecole_Max": "catégorie",        # la catégorie d'école (ingénieur, commerce, université, autres)
 }
 # Pourquoi le niveau d'études en nombre (son rang) : certains niveaux comptent très peu de salariés
-# (BAC+6, expertise comptable), le modèle ne pourrait rien apprendre sur eux seuls ; avec le rang, il
+# (BAC+1, BAC+6, BAC+7), le modèle ne pourrait rien apprendre sur eux seuls ; avec le rang, il
 # apprend un seul effet, qui vaut pour tous les niveaux.
 
 
@@ -76,7 +76,7 @@ def tableau_x(df: pd.DataFrame, colonnes) -> pd.DataFrame:
     - Une catégorie vide devient « Inconnu », qui a sa propre colonne 0/1. Une colonne de texte absente
       de COLONNES (la compétence, si elle est écrite en libellés) est elle aussi lue en catégorie.
     - Un niveau d'études inconnu : rang mis à 0, et une colonne « Rang_Etude_Inconnu » à 1, qui reçoit
-      son propre effet (sinon il compterait comme « secondaire »).
+      son propre effet (sinon il compterait comme un niveau plus bas que tous les autres).
     - Une autre case vide parmi les nombres reste vide : ce salarié n'apprend pas au modèle et n'a pas
       de salaire prédit."""
     x = df[list(colonnes)].copy()

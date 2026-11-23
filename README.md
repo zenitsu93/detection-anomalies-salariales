@@ -202,10 +202,10 @@ Les colonnes `Pays`, `FTE`, `Devise` et `Date_Effet_Paie` du fichier fourni ne s
 
 | Colonne | Contenu | Exemple |
 | --- | --- | --- |
-| `Niveau_Etude_Max` | niveau d'études le plus élevé : `SECONDAIRE`, `BAC`, `BAC+1` à `BAC+7`, `EXPERTISE COMPTABLE` (les espaces et les majuscules ne comptent pas) ; tout autre texte (`NON DETERMINE`, par exemple) compte comme « niveau inconnu », et le terminal liste ceux qu'il n'a pas reconnus, hors `NON DETERMINE` | `BAC+5` |
+| `Niveau_Etude_Max` | niveau d'études le plus élevé : `BAC MAX` (le bac ou moins), `BAC+1` à `BAC+7` (les espaces et les majuscules ne comptent pas) ; les anciens noms sont encore lus : `SECONDAIRE` et `BAC` valent `BAC MAX`, `EXPERTISE COMPTABLE` vaut `BAC+7` ; tout autre texte (`NON DETERMINE`, par exemple) compte comme « niveau inconnu », et le terminal liste ceux qu'il n'a pas reconnus, hors `NON DETERMINE` | `BAC+5` |
 | `Cat_Ecole_Max` | catégorie de ce diplôme | `DIPLOME D'INGENIEUR` |
 
-Les deux colonnes sont recopiées dans les résultats, juste après le niveau du poste, avec deux colonnes calculées : `Rang_Etude_Max`, le rang du niveau d'études, de 0 (secondaire) à 7 (BAC+7 et expertise comptable ; BAC+6 compte comme BAC+5), pour trier dans le bon ordre ; et `Tranche_Etude`, la tranche du diplôme (`BAC+2 ou moins`, `BAC+3 ou BAC+4`, `BAC+5 et plus`). Le niveau d'études, son rang et la catégorie sont aussi dans la liste des salariés du tableau de bord. Ces colonnes ne changent ni les scores ni les priorités. Sans elles, tout se passe comme avant, et les colonnes restent vides. Au lancement, le terminal dit pour combien de salariés le niveau d'études est connu, ou que les colonnes du diplôme manquent.
+Les deux colonnes sont recopiées dans les résultats, juste après le niveau du poste, avec deux colonnes calculées : `Rang_Etude_Max`, le rang du niveau d'études, de 1 (`BAC MAX`, le bac ou moins) à 7 (BAC+7, doctorat et expertise comptable ; BAC+6 compte comme BAC+5), pour trier dans le bon ordre ; et `Tranche_Etude`, la tranche du diplôme (`BAC+2 ou moins`, `BAC+3 ou BAC+4`, `BAC+5 et plus`). Le niveau d'études, son rang et la catégorie sont aussi dans la liste des salariés du tableau de bord. Ces colonnes ne changent ni les scores ni les priorités. Sans elles, tout se passe comme avant, et les colonnes restent vides. Au lancement, le terminal dit pour combien de salariés le niveau d'études est connu, ou que les colonnes du diplôme manquent.
 
 ## 3. Tout lancer d'un coup
 
