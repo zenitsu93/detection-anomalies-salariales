@@ -21,3 +21,7 @@ outils_remuneration/resultats/
 # Ni ce que la détection de outils_remuneration/ refait à chaque lancement (résultats, tableaux de bord, modèle).
 outils_remuneration/output/
 outils_remuneration/models/
+# L'extraction consolidée des diplômes porte de vrais noms, prénoms et dates de naissance, et les fichiers que le notebook
+# en tire aussi : ils ne sont jamais envoyés sur GitHub.
+fiabilisation_diplomes/BDD Dipl*consolid*.xlsx
+fiabilisation_diplomes/BDD_Diplomes_FINAL*.xlsx
