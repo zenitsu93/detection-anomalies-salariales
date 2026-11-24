@@ -273,6 +273,13 @@ LOG_MID = "Log_Mid"
 RANGS = ("Rang_Etude_Max", "Rang_Performance")
 # Les colonnes de M5 qui décrivent le POSTE, et pas la personne (même idée que POSTE, plus haut).
 POSTE_M5 = ("Niveau", "Ratio_Grille_Marche", LOG_MID)
+# Les colonnes pour lesquelles le salaire prédit ne doit JAMAIS baisser quand elles montent, tout le reste
+# du profil restant pareil. Pourquoi : sans cette règle, le modèle recopie les hasards des petits groupes
+# de salariés. On voyait par exemple un salaire prédit plus haut avec un niveau d'études « non déterminé »
+# (lu comme le rang du milieu) qu'avec un BAC+5. Pour laisser le modèle libre sur une colonne, effacer son
+# nom ici. À savoir : si, dans les vraies données, un diplôme plus haut ne paie pas toujours plus, le
+# modèle ne le montrera plus ; il donnera au mieux le même salaire.
+CROISSANTES_M5 = ("Rang_Etude_Max",)
 
 
 def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
@@ -302,6 +309,16 @@ def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
     return x
 
 
+def nouveau_m5(colonnes) -> HistGradientBoostingRegressor:
+    """Un modèle M5 pas encore entraîné, pour les colonnes données. Écrit une seule fois : les modèles
+    de la validation croisée et le modèle final ont ainsi les mêmes réglages.
+    monotonic_cst : 1 pour une colonne de CROISSANTES_M5 (le salaire prédit ne baisse jamais quand elle
+    monte), 0 pour les autres (le modèle fait comme il veut).
+    random_state=42 : le même résultat à chaque lancement."""
+    return HistGradientBoostingRegressor(
+        monotonic_cst=[1 if c in CROISSANTES_M5 else 0 for c in colonnes], random_state=42)
+
+
 def entrainer_m5(df: pd.DataFrame, final=True):
     """Entraîne M5 sur un tableau de salariés (avec leur Mid et leur ratio grille / marché). Rend None
     si le modèle ne peut pas apprendre (pas de grille, trop peu de salariés complets).
@@ -312,6 +329,8 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     - avec un gradient boosting : des centaines de petits arbres qui se corrigent l'un l'autre. Il
       suit des effets qui ne sont pas en ligne droite (une ancienneté qui compte plus dans certains
       niveaux, par exemple) ;
+    - à une différence près : le salaire prédit ne baisse jamais quand le niveau d'études monte (voir
+      CROISSANTES_M5) ;
     - avec les colonnes de COLONNES_M5 et le Mid de la grille en logarithme. Une colonne absente du
       fichier, ou vide, est laissée de côté ; une colonne en rang aussi, si la plupart de ses libellés
       ne sont pas reconnus.
@@ -345,16 +364,16 @@ def entrainer_m5(df: pd.DataFrame, final=True):
         return None
 
     predit = pd.Series(np.nan, index=X.index)
-    # random_state=42 : le même découpage, donc le même résultat, à chaque lancement.
+    # random_state=42 : le même découpage à chaque lancement.
     for apprend, verifie in KFold(PAQUETS, shuffle=True, random_state=42).split(X):
-        modele = HistGradientBoostingRegressor(random_state=42).fit(X.iloc[apprend], y.iloc[apprend])
+        modele = nouveau_m5(X.columns).fit(X.iloc[apprend], y.iloc[apprend])
         predit.iloc[verifie] = modele.predict(X.iloc[verifie])
     residus = y - predit
     centre, echelle = ecart_robuste(residus)
     normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
     bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
 
-    modele = HistGradientBoostingRegressor(random_state=42).fit(X, y) if final else None
+    modele = nouveau_m5(X.columns).fit(X, y) if final else None
     return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
             "fourchette": (float(bas), float(haut)), "centre": centre, "echelle": echelle,
             "attendu": predit, "residus": residus, "X": X}
