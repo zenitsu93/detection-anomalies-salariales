@@ -32,6 +32,18 @@ rem 2. Les bibliothèques. La première fois, tout s'installe (quelques minutes)
 rem    les fois suivantes, pip voit que tout est déjà là et passe en quelques secondes.
 echo Vérification des bibliothèques du notebook...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements-notebook.txt || goto :erreur_pip
+rem    Pourquoi tester en plus : pip regarde seulement si une bibliothèque est notée comme installée, pas si
+rem    tous ses fichiers sont là. Si une installation a été coupée en route, ou si l'antivirus a retiré des
+rem    fichiers, pip ne voit rien et le programme s'arrête plus loin avec un message peu clair
+rem    (« No module named ... »). Dans ce cas on refait le dossier .venv en entier, comme au premier lancement.
+call :tester_bibliotheques && goto :bibliotheques_pretes
+echo Des fichiers manquent dans les bibliothèques du dossier .venv : on le refait en entier.
+echo Cela prend plusieurs minutes, comme au premier lancement.
+rmdir /s /q .venv
+call :creer_venv || goto :fin_erreur
+".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements-notebook.txt || goto :erreur_pip
+call :tester_bibliotheques || goto :erreur_bibliotheques
+:bibliotheques_pretes
 
 rem 3. Le kernel. On présente le Python du venv à Jupyter sous le nom « Python (.venv salaires) ».
 rem    Le notebook demande ce kernel-là : il s'ouvre donc directement avec le bon Python, sans rien choisir.
@@ -67,6 +79,15 @@ echo Création du venv avec %PYBASE%...
 %PYBASE% -m venv .venv || exit /b 1
 exit /b 0
 
+:tester_bibliotheques
+rem Deux contrôles, sans rien afficher. Renvoie une erreur dès que l'un des deux échoue.
+rem a) Chaque bibliothèque garde la liste de ses fichiers : on regarde s'ils sont tous encore là.
+rem    Les .pyc ne comptent pas : Python les refait tout seul quand ils manquent.
+".venv\Scripts\python.exe" -c "import sys; from importlib.metadata import distributions; sys.exit(any(not f.locate().exists() for d in distributions() for f in (d.files or []) if f.suffix != '.pyc'))" >nul 2>&1 || exit /b 1
+rem b) On charge pour de bon les bibliothèques demandées, comme le fera la suite.
+".venv\Scripts\python.exe" -c "import numpy, pandas, sklearn.ensemble, yaml, joblib, openpyxl, plotly, statsmodels.api, ipykernel, notebook" >nul 2>&1 || exit /b 1
+exit /b 0
+
 :verifier_longueur
 rem Pourquoi : certaines bibliothèques rangent leurs fichiers très profond. Le plus long fait 161 caractères
 rem à partir de .venv (un fichier de jupyterlab, que Jupyter installe avec lui). Or, par défaut, Windows refuse
@@ -96,6 +117,13 @@ exit /b 1
 :notebook_introuvable
 echo Notebook introuvable : "%CD%\%NOTEBOOK%"
 echo S'il a été renommé, mettre son nouveau nom dans le .bat qui l'ouvre.
+goto :fin_erreur
+
+:erreur_bibliotheques
+echo.
+echo Les bibliothèques ne marchent toujours pas, même après avoir refait le dossier .venv.
+echo Le plus souvent, c'est l'antivirus du PC qui retire ou bloque certains de leurs fichiers :
+echo demandez à l'informatique d'autoriser ce dossier.
 goto :fin_erreur
 
 :erreur_pip

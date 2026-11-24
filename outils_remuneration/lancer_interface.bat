@@ -34,6 +34,18 @@ rem 2. Les bibliothèques. La première fois, tout s'installe (quelques minutes)
 rem    les fois suivantes, pip voit que tout est déjà là et passe en quelques secondes.
 echo Vérification des bibliothèques...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt || goto :erreur_pip
+rem    Pourquoi tester en plus : pip regarde seulement si une bibliothèque est notée comme installée, pas si
+rem    tous ses fichiers sont là. Si une installation a été coupée en route, ou si l'antivirus a retiré des
+rem    fichiers, pip ne voit rien et le programme s'arrête plus loin avec un message peu clair
+rem    (« No module named ... »). Dans ce cas on refait le dossier .venv en entier, comme au premier lancement.
+call :tester_bibliotheques && goto :bibliotheques_pretes
+echo Des fichiers manquent dans les bibliothèques du dossier .venv : on le refait en entier.
+echo Cela prend plusieurs minutes, comme au premier lancement.
+rmdir /s /q .venv
+call :creer_venv || goto :fin_erreur
+".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt || goto :erreur_pip
+call :tester_bibliotheques || goto :erreur_bibliotheques
+:bibliotheques_pretes
 
 rem 3. La détection. Elle relit les fichiers de input\ et refait les résultats, le tableau de bord et
 rem    l'écran d'accueil. Pourquoi la refaire à chaque lancement : les trois outils montrent ainsi toujours
@@ -72,6 +84,15 @@ echo Création du venv avec %PYBASE%...
 %PYBASE% -m venv .venv || exit /b 1
 exit /b 0
 
+:tester_bibliotheques
+rem Deux contrôles, sans rien afficher. Renvoie une erreur dès que l'un des deux échoue.
+rem a) Chaque bibliothèque garde la liste de ses fichiers : on regarde s'ils sont tous encore là.
+rem    Les .pyc ne comptent pas : Python les refait tout seul quand ils manquent.
+".venv\Scripts\python.exe" -c "import sys; from importlib.metadata import distributions; sys.exit(any(not f.locate().exists() for d in distributions() for f in (d.files or []) if f.suffix != '.pyc'))" >nul 2>&1 || exit /b 1
+rem b) On charge pour de bon les bibliothèques demandées, comme le fera la suite.
+".venv\Scripts\python.exe" -c "import numpy, pandas, sklearn.ensemble, yaml, joblib, openpyxl" >nul 2>&1 || exit /b 1
+exit /b 0
+
 :verifier_longueur
 rem Pourquoi : certaines bibliothèques rangent leurs fichiers très profond. Le plus long fait 161 caractères
 rem à partir de .venv (un fichier de jupyterlab, que Jupyter installe avec lui). Or, par défaut, Windows refuse
@@ -99,14 +120,27 @@ exit /b 1
 :erreur_detection
 echo.
 echo La détection s'est arrêtée : le message juste au-dessus dit pourquoi.
-echo Le plus souvent, il manque un des trois fichiers de input\ (employes.xlsx, bands.xlsx, market.xlsx),
-echo ou l'un d'eux est resté ouvert dans Excel.
+rem On ne parle des fichiers de input\ que si c'est bien eux : on regarde lequel manque.
+rem (Les bibliothèques, elles, ont déjà été testées à l'étape 2.)
+set "MANQUE="
+for %%f in (employes.xlsx bands.xlsx market.xlsx) do if not exist "input\%%f" (
+    echo Il manque le fichier input\%%f.
+    set "MANQUE=1"
+)
+if not defined MANQUE echo S'il parle de « Permission denied », un fichier de input\ ou de output\ est resté ouvert dans Excel : fermez-le, puis relancez ce fichier.
 goto :fin_erreur
 
 :erreur_aide_decision
 echo.
 echo L'interface n'a pas démarré : le message juste au-dessus dit pourquoi.
 echo Si elle tourne déjà dans une autre fenêtre noire, fermez cette autre fenêtre puis relancez ce fichier.
+goto :fin_erreur
+
+:erreur_bibliotheques
+echo.
+echo Les bibliothèques ne marchent toujours pas, même après avoir refait le dossier .venv.
+echo Le plus souvent, c'est l'antivirus du PC qui retire ou bloque certains de leurs fichiers :
+echo demandez à l'informatique d'autoriser ce dossier.
 goto :fin_erreur
 
 :erreur_pip
