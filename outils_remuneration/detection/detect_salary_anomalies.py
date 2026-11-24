@@ -21,10 +21,13 @@ Utilisation, depuis le dossier du projet :
       python src/detect_salary_anomalies.py
 Les résultats sont enregistrés :
 - dans output/detection/ : anomalies.xlsx et gender_gap.xlsx, à ouvrir avec Excel ;
+- dans output/detection/historique/ : une copie datée de ces deux fichiers à chaque lancement
+  (anomalies_AAAA-MM-JJ_HH-MM-SS.xlsx), pour garder la trace des détections d'avant ;
 - dans output/dashboard/ : le tableau de bord, sous un nom daté
   (dashboard_anomalies_AAAA-MM-JJ_HH-MM-SS.html), à ouvrir avec un navigateur.
 """
 
+import shutil
 import time
 from pathlib import Path
 
@@ -114,7 +117,21 @@ if __name__ == "__main__":
     df.round(2).to_excel(dossier / "anomalies.xlsx", index=False)
     gg.round(2).to_excel(dossier / "gender_gap.xlsx", index=False)
 
+    # Une copie datée de ces deux fichiers, dans output/detection/historique/ (depuis le 24/11/2026).
+    # Pourquoi : anomalies.xlsx et gender_gap.xlsx sont récrits à chaque détection, donc à chaque lancement
+    # de l'interface. Sans copie, on perd le résultat d'avant et on ne peut plus dire ce qui a changé.
+    # Pourquoi garder aussi les deux fichiers sans date : ce sont eux que lisent l'aide à la décision et
+    # l'écran d'accueil ; ils contiennent toujours la dernière détection.
+    # La date est celle du tableau de bord fait au même lancement (dashboard_anomalies_AAAA-MM-JJ_HH-MM-SS) :
+    # on retrouve ainsi quel fichier Excel va avec quel tableau de bord.
+    date = tableau_de_bord.stem.removeprefix("dashboard_anomalies_")
+    historique = dossier / "historique"
+    historique.mkdir(exist_ok=True)
+    for nom in ("anomalies", "gender_gap"):
+        shutil.copyfile(dossier / f"{nom}.xlsx", historique / f"{nom}_{date}.xlsx")
+
     print(f"\nTerminé en {secondes(debut)} : {len(df)} salariés analysés.")
     print(f"- Excel (anomalies.xlsx, gender_gap.xlsx) : {dossier}")
+    print(f"- Copie datée de ces deux fichiers (anomalies_{date}.xlsx...) : {historique}")
     print(f"- Tableau de bord : {tableau_de_bord}")
     print(f"- Écran d'accueil, à ouvrir en premier : {accueil}")

@@ -25,3 +25,7 @@ outils_remuneration/models/
 # en tire aussi : ils ne sont jamais envoyés sur GitHub.
 fiabilisation_diplomes/BDD Dipl*consolid*.xlsx
 fiabilisation_diplomes/BDD_Diplomes_FINAL*.xlsx
+
+# Les copies datées des résultats de la détection : une trace locale, lourde (3 Mo par lancement)
+# et nominative sur les vraies données. Elles ne vont pas sur GitHub.
+output/detection/historique/

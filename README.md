@@ -242,7 +242,8 @@ Pendant le calcul, le terminal affiche chaque étape au moment où elle commence
 Les résultats arrivent dans `output/detection/` :
 
 - `anomalies.xlsx` : un salarié par ligne, avec son score, sa priorité, ses motifs et la recommandation (à ouvrir avec Excel) ;
-- `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + niveau.
+- `gender_gap.xlsx` : les écarts de salaire femmes / hommes, par métier + niveau ;
+- `historique/` : une copie datée de ces deux fichiers à chaque détection (`anomalies_AAAA-MM-JJ_HH-MM-SS.xlsx`), avec la même date que le tableau de bord du même lancement. Les deux fichiers sans date sont récrits à chaque fois : la copie garde la trace des détections d'avant. Ce dossier n'est pas envoyé sur GitHub.
 
 Dans ces fichiers, comme dans tous les fichiers Excel écrits par le projet, les nombres calculés ont 2 chiffres après la virgule. L'arrondi se fait au moment d'écrire le fichier : les calculs gardent toute leur précision, donc les étiquettes, les scores et les priorités ne changent pas. Une seule exception, le diagnostic de la régression (`output/regression/diagnostic_regression.xlsx`), écrit avec 4 chiffres : ses mesures sont des parts (0,1057 = 10,57 %), et avec 2 chiffres un écart de 0,3 % s'écrirait 0.
 

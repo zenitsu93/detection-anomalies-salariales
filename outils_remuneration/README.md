@@ -52,7 +52,7 @@ Double-cliquer sur `lancer_interface.bat`. Il installe ce qui manque, refait la 
 - **Après avoir remplacé les fichiers de `input/`** : cliquer sur « Refaire la détection », en haut du tableau de bord. Le nouveau tableau de bord s'affiche, et l'écran d'accueil et l'aide à la décision passent aussi aux nouveaux fichiers.
 - **La fenêtre noire doit rester ouverte** : la fermer arrête l'interface.
 
-Les fichiers Excel de la détection arrivent dans `output/detection/` (`anomalies.xlsx`, `gender_gap.xlsx`). Les seuils, les poids et les priorités se règlent dans `config/rules.yaml`.
+Les fichiers Excel de la détection arrivent dans `output/detection/` (`anomalies.xlsx`, `gender_gap.xlsx`), et une copie datée de chacun dans `output/detection/historique/` à chaque détection, pour garder la trace des détections d'avant. Les seuils, les poids et les priorités se règlent dans `config/rules.yaml`.
 
 Les fichiers de `detection/`, `visualisation/`, `decision_support/` et `accueil/` sont des copies de ceux du projet. Dans `detection/`, les commentaires parlent encore de `src/` : c'est le nom de ce dossier dans le projet. Deux fichiers seulement diffèrent du projet, d'une ligne chacun, pour chercher la détection dans `detection/` au lieu de `src/` : `decision_support/app.py` et `decision_support/engine.py`.
 
