@@ -13,10 +13,11 @@ rules:
     min_salary: 20         # salaire sous le plancher de son niveau (min_salary_by_niveau)
 
   # Ce que regarde l'IA (depuis le 10/11/2026) :
-  # - ecart_attendu : l'écart entre le salaire et le salaire ATTENDU pour le poste et le profil (métier,
-  #   niveau, grille, ancienneté, performance, compétence, diplôme...), prédit par la régression
-  #   (src/anomaly_signal_regression.py) avec un modèle qui n'a pas vu le salarié. Elle repère les salariés
-  #   payés nettement moins que des collègues de même profil, même dans leur grille ;
+  # - ecart_attendu : l'écart entre le salaire et le salaire ATTENDU pour le poste et le profil (niveau,
+  #   grille, marché, ancienneté, âge à l'embauche, performance, compétence, diplôme, Hot job), prédit par
+  #   le modèle M5 (detection/anomaly_signal_regression.py, entrainer_m5) avec un modèle qui n'a pas vu le
+  #   salarié. C'est le même modèle que celui de l'aide à la décision (depuis le 24/11/2026). Elle repère
+  #   les salariés payés nettement moins que des collègues de même profil, même dans leur grille ;
   # - isolation_forest : l'ancienne IA, qui repère les profils RARES (un âge, une ancienneté, un salaire
   #   de haut niveau), qu'ils soient mal payés ou non.
   # Pourquoi ecart_attendu : sur le banc d'essai (python analyse_modeles/banc_essai_ia.py), elle trouve

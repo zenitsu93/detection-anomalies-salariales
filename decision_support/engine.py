@@ -4,7 +4,7 @@ Depuis le 23/11/2026, le profil peut aussi être celui d'un salarié du fichier 
 (salarie, plus bas), la page se remplit, et chaque case modifiée refait le salaire prédit.
 
 Depuis le 17/11/2026, l'application ne donne plus qu'un résultat : le salaire que le modèle prédit
-pour le profil saisi, et la fourchette où le vrai salaire tombe 9 fois sur 10. La grille, le marché
+pour le profil saisi, et la fourchette où tombent 9 salariés sur 10 qui ont ce profil. La grille, le marché
 et les collègues ne sont plus que des repères à côté. Pourquoi : la fourchette et la cible tirées des
 règles faisaient un deuxième résultat, à côté du salaire prédit ; la page montrait trop de chiffres."""
 
@@ -17,8 +17,6 @@ import threading
 import numpy as np
 import pandas as pd
 import yaml
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.model_selection import KFold
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,35 +25,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from anomaly_pretraitement import ORDRE_PERFORMANCE, ajouter_diplomes, bucket_anciennete, rang_etude
-# De la régression du projet, on ne garde que la recette de la fourchette (voir _train_regression).
-from anomaly_signal_regression import PAQUETS, SEUIL_ROBUSTE, ecart_robuste
+# Le modèle du salaire prédit (M5) est écrit dans ce fichier-là : la détection et cette page lisent le même.
+from anomaly_signal_regression import LOG_MID, entrainer_m5, tableau_m5
 
 # Même unité que les CSV : aucune conversion.
 UNIT = "kMAD / an"
 # Le périmètre d'un groupe de collègues, écrit en clair colonne par colonne.
 SCOPE = {"Niveau": "même niveau", "Job_Family": "même métier", "Anciennete_Bucket": "ancienneté {} ans"}
-# Les colonnes que lit le modèle du salaire prédit : la liste COLONNES du notebook
-# notebooks/Prediction_Compa_Ratio.ipynb. Pour en retirer une, effacer sa ligne. Pour en ajouter une,
-# ajouter une ligne : une colonne en chiffres du fichier des salariés.
-COLONNES = [
-    "Niveau",               # le niveau du poste
-    "Rang_Etude_Max",       # le niveau d'études, en rang : 1 = BAC MAX (le bac ou moins)... 7 = BAC+7
-    "Age_Embauche",         # âge − ancienneté
-    "Anciennete",           # l'ancienneté, en années
-    "Competence_N1",        # la note de compétence de l'an dernier
-    "Rang_Performance",     # la performance de l'an dernier, en rang : 1 = « Très en dessous »... 5 = « Très au-delà »
-    "Hot_job",              # la tension du métier sur le marché
-    "Ratio_Grille_Marche",  # Mid / médiane du marché
-]
-# Le modèle apprend le salaire : il reçoit en plus le Mid de la grille, en logarithme comme le salaire.
-# Pourquoi : sans lui, il ne connaît pas la grille du poste (EN_PLUS_POUR_LE_SALAIRE dans le notebook).
-LOG_MID = "Log_Mid"
 # Les colonnes que le modèle calcule, et ce que la page demande à la place : on saisit « BAC+5 », pas
 # son rang ; l'âge, pas l'âge à l'embauche.
 SAISIE = {"Rang_Etude_Max": "Niveau_Etude_Max", "Age_Embauche": "Age", "Rang_Performance": "Performance_N1"}
-# Les deux colonnes en rang. Un libellé inconnu ou une case vide y prend le rang du milieu (la médiane),
-# comme dans le notebook.
-RANGS = ("Rang_Etude_Max", "Rang_Performance")
 # Les colonnes du modèle que la page ne demande pas dans « Profil de la personne » : le niveau et
 # l'ancienneté sont déjà en haut du formulaire ; le ratio grille / marché et le Mid viennent de la
 # grille et du marché du métier + niveau.
@@ -70,6 +49,8 @@ LABELS = {"Age": "Âge", "Competence_N1": "Compétence N-1", "Performance_N1": "
 # Le nom affiché de chaque priorité : les mêmes mots que dans le tableau de bord.
 PRIORITES = {"Critical": "Critique", "Major": "Majeure", "Minor": "Mineure", "Info": "Info (sans action)",
              "Outlier positif": "Outlier positif (au-dessus du Max)"}
+# Les colonnes du fichier des salariés où se lit le nom de la personne (voir salarie()).
+NOMS = {"nom", "prenom", "nomprenom", "nometprenom", "nomcomplet"}
 # Les seules colonnes lues dans le fichier de la détection.
 DETECTION = {"Matricule", "Severity", "RiskScore", "Reco", "Cout_Ajustement", "Reason_Principale", "Cohort_Size", "Cohort_Median"}
 RECOS = {"Ajuster vers MID": "Ajuster vers le milieu de la grille", "Ajuster au MIN": "Ajuster au Min de la grille"}
@@ -92,9 +73,10 @@ def raison_en_clair(texte):
     if texte.startswith("Sous ses collegues"):
         return "Salaire très en dessous de ses collègues comparables"
     if texte.startswith("IA : "):
-        # Pourquoi retirer la parenthèse des montants : le « salaire attendu » de la détection vient de sa
-        # propre régression, pas du modèle de cette page. Affiché à côté du salaire prédit, il ferait
-        # deux chiffres différents pour la même chose. On garde l'écart en %, en disant d'où il vient.
+        # Pourquoi retirer la parenthèse des montants : le « salaire attendu » de la détection vient du
+        # même modèle que cette page, mais d'un modèle qui n'a pas vu le salarié (pour qu'un salaire
+        # anormal ne se cache pas). Il diffère donc un peu du salaire prédit affiché ici. Les deux côte à
+        # côte feraient deux chiffres pour la même chose. On garde l'écart en %, en disant d'où il vient.
         texte = re.sub(r" \([^()]*kMAD[^()]*\)", "", texte[len("IA : "):])
         texte = texte.replace("salaire attendu pour son profil", "salaire attendu par la détection pour son profil")
         return texte[:1].upper() + texte[1:]
@@ -205,53 +187,14 @@ class DecisionEngine:
             fields.append(field)
         return fields
 
-    @staticmethod
-    def _model_columns(table):
-        """Les colonnes de COLONNES, en chiffres, pour un tableau de salariés ou pour le profil saisi,
-        puis le Mid en logarithme (LOG_MID).
-        Mêmes calculs que le notebook : le niveau lu en nombre, l'âge à l'embauche = âge − ancienneté,
-        le niveau d'études et la performance passés en rang. Une colonne dont il manque la source reste
-        vide."""
-        def nombre(colonne):
-            if colonne not in table:
-                return pd.Series(np.nan, index=table.index)
-            return pd.to_numeric(table[colonne], errors="coerce")
-
-        x = pd.DataFrame(index=table.index)
-        for colonne in COLONNES:
-            if colonne == "Age_Embauche":
-                x[colonne] = nombre("Age") - nombre("Anciennete")
-            elif colonne == "Rang_Performance":
-                rangs = {libelle: i + 1 for i, libelle in enumerate(ORDRE_PERFORMANCE)}
-                x[colonne] = (table["Performance_N1"].map(rangs).astype(float) if "Performance_N1" in table
-                              else np.nan)
-            else:
-                x[colonne] = nombre(colonne)
-        # Un Mid absent, nul ou négatif n'a pas de logarithme : la case reste vide.
-        mid = nombre("Mid")
-        x[LOG_MID] = np.log(mid.where(mid > 0))
-        return x
-
     def _train_regression(self):
         """Le modèle du salaire prédit et le tableau sur lequel il a appris. Si le modèle ne peut pas
         apprendre (pas de grille...), pas de salaire prédit (None).
 
-        La façon de faire est celle du modèle M5 de notebooks/Prediction_Compa_Ratio.ipynb, retenu le
-        17/11/2026 (jusque-là, c'était M6, qui apprenait le Compa-Ratio) :
-        - il apprend le salaire, en logarithme : un écart se lit alors en pourcentage (10 % de plus), et
-          les très hauts salaires pèsent moins. Salaire prédit = exponentielle du log prédit ;
-        - avec un gradient boosting : des centaines de petits arbres qui se corrigent l'un l'autre. Il
-          suit des effets qui ne sont pas en ligne droite (une ancienneté qui compte plus dans certains
-          niveaux, par exemple) ;
-        - avec les colonnes de COLONNES, et le Mid de la grille en logarithme (LOG_MID) : c'est par lui
-          que le modèle connaît la grille du poste. Une colonne absente du fichier, ou vide, est laissée
-          de côté ; une colonne en rang aussi, si la plupart de ses libellés ne sont pas reconnus.
-
-        La fourchette (« 9 fois sur 10 ») garde la recette de src/anomaly_signal_regression.py : chaque
-        salarié est prédit par un modèle qui ne l'a pas vu (validation croisée en PAQUETS paquets), on
-        range les erreurs, et on retire les 5 % les plus basses et les 5 % les plus hautes. Les salaires
-        très loin de ce qui est attendu (plus de SEUIL_ROBUSTE écarts habituels) ne comptent pas : la
-        fourchette dit où tombe un salaire normal pour ce profil."""
+        Le modèle est M5, celui de notebooks/Prediction_Compa_Ratio.ipynb, retenu le 17/11/2026. Il est
+        écrit une seule fois, dans src/anomaly_signal_regression.py (entrainer_m5) : depuis le
+        24/11/2026, la détection lit le même pour son salaire attendu. Ici, on lui prépare seulement le
+        tableau des salariés, avec le Mid de leur grille et leur ratio grille / marché."""
         keys = ["Job_Family", "Niveau"]
         grille = self.bands[keys + ["Mid"]].assign(Mid=lambda t: pd.to_numeric(t.Mid, errors="coerce"))
         base = self.employees.merge(grille, on=keys, how="left")
@@ -260,36 +203,7 @@ class DecisionEngine:
             base = base.merge(marche, on=keys, how="left")
             base["Ratio_Grille_Marche"] = base.Mid / base.pop("Median").replace(0, np.nan)
         base = ajouter_diplomes(base)
-
-        X = self._model_columns(base).replace([np.inf, -np.inf], np.nan)
-        colonnes = [c for c in COLONNES if X[c].notna().mean() > (0.5 if c in RANGS else 0)]
-        X = X[colonnes + [LOG_MID]]
-        # Un rang inconnu prend le rang du milieu. La page fera pareil pour le profil saisi.
-        medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS}
-        X = X.fillna(medianes)
-        # Ce que le modèle apprend : le logarithme du salaire.
-        y = np.log(base.Fixe_Annuel_MAD)
-        # Un salarié sans grille, ou avec une case vide dans une des colonnes, n'apprend pas au modèle.
-        complets = X.notna().all(axis=1) & np.isfinite(y)
-        X, y = X[complets], y[complets]
-        if not colonnes or len(X) < 10 * PAQUETS:
-            return None, base
-
-        # La fourchette : les erreurs de chaque salarié, prédit par un modèle qui ne l'a pas vu.
-        predit = pd.Series(np.nan, index=X.index)
-        # random_state=42 : le même découpage, donc la même fourchette, à chaque démarrage.
-        for apprend, verifie in KFold(PAQUETS, shuffle=True, random_state=42).split(X):
-            modele = HistGradientBoostingRegressor(random_state=42).fit(X.iloc[apprend], y.iloc[apprend])
-            predit.iloc[verifie] = modele.predict(X.iloc[verifie])
-        residus = y - predit
-        centre, echelle = ecart_robuste(residus)
-        normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
-        bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
-
-        # Le modèle que la page interroge apprend sur tous les salariés.
-        modele = HistGradientBoostingRegressor(random_state=42).fit(X, y)
-        return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
-                "fourchette": (float(bas), float(haut))}, base
+        return entrainer_m5(base), base
 
     @staticmethod
     def _prepare(table, columns, label):
@@ -437,7 +351,14 @@ class DecisionEngine:
         salaire = float(ligne.Fixe_Annuel_MAD)
         mid = nombre(ligne.get("Mid"))
         entite = ligne.get("Entite_N1")
-        return {"matricule": key(ligne.Matricule), "entite": None if pd.isna(entite) else str(entite), "profile": profil,
+        # Le nom et le prénom, pour les écrire au-dessus du profil. Pourquoi chercher plusieurs colonnes :
+        # selon le fichier, ils sont dans une seule colonne (« Nom ») ou dans deux (« Nom », « Prénom »).
+        # Les majuscules, les accents, les espaces et les « _ » ne comptent pas pour les reconnaître.
+        # Une case vide ne donne rien : la page n'écrit alors pas de nom.
+        nom = " ".join(key(ligne[c]) for c in base.columns
+                       if str(c).lower().replace("é", "e").replace("_", "").replace(" ", "") in NOMS and not pd.isna(ligne[c]))
+        return {"matricule": key(ligne.Matricule), "nom": nom or None,
+                "entite": None if pd.isna(entite) else str(entite), "profile": profil,
                 "salary": round(salaire, 2), "mid": mid, "compa": round(salaire / mid, 2) if mid else None,
                 "detection": self._detection(cle), "detection_loading": not self.detection_prete}
 
@@ -486,7 +407,7 @@ class DecisionEngine:
 
     def _regression(self, profile, band, market, inputs):
         # Le résultat de la page : le salaire que le modèle prédit pour le profil saisi, avec la grille et
-        # le marché du métier + niveau choisis, et la fourchette où le vrai salaire tombe 9 fois sur 10.
+        # le marché du métier + niveau choisis, et la fourchette où tombent 9 salariés sur 10 qui ont ce profil.
         # missing : les champs encore vides, que la page demande de remplir.
         result = {"predicted": None, "low": None, "high": None, "missing": [], "available": self.regression is not None}
         if self.regression is None:
@@ -501,7 +422,7 @@ class DecisionEngine:
         if "Niveau_Etude_Max" in ligne:
             ligne["Rang_Etude_Max"] = rang_etude(ligne["Niveau_Etude_Max"])
         # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre ; un rang inconnu prend le rang du milieu.
-        X = self._model_columns(ligne)[self.regression["colonnes"]].fillna(self.regression["medianes"])
+        X = tableau_m5(ligne)[self.regression["colonnes"]].fillna(self.regression["medianes"])
         # Pas de grille pour ce métier + niveau (ou pas de marché) : une case reste vide, pas de
         # prédiction. Pourquoi le vérifier ici : le gradient boosting accepte une case vide et
         # répondrait quand même.

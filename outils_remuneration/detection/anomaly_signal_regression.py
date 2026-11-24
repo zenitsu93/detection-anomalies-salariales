@@ -3,6 +3,12 @@
 
 """Régression du salaire : le « salaire attendu » de chaque salarié, vu son poste et son profil.
 
+Depuis le 24/11/2026, le salaire attendu de la détection vient du modèle M5 (entrainer_m5, plus bas) :
+le gradient boosting retenu dans notebooks/Prediction_Compa_Ratio.ipynb, le même que celui de l'aide à
+la décision. La régression en ligne droite décrite ci-dessous ne sert plus à la détection. Elle reste
+pour le diagnostic (python src/anomaly_signal_regression.py) : c'est elle qui sait dire « un an
+d'ancienneté en plus = tant de % », ce qu'un gradient boosting ne dit pas.
+
 Ce que fait ce fichier, et pourquoi (refonte du 10/11/2026) :
 - Validation croisée en 5 paquets : le modèle apprend sur 4 paquets et prédit le 5e, qu'il n'a pas vu ;
   on recommence pour chaque paquet. Chaque salarié reçoit ainsi un salaire attendu calculé SANS LUI
@@ -43,7 +49,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold, RepeatedKFold
 
-from anomaly_pretraitement import preparer_employes
+from anomaly_pretraitement import ORDRE_PERFORMANCE, preparer_employes
 
 # Le tableau unique des colonnes que lit le modèle, avec leur type. Pour en retirer une, effacer sa
 # ligne ; pour en ajouter une, ajouter une ligne.
@@ -194,9 +200,8 @@ def entrainer(df: pd.DataFrame, colonnes=None):
         "Exclus_Apprentissage": float(1 - normaux.mean()),
     }
 
-    # Le modèle final apprend sur tous les salariés (toujours en robuste) : c'est lui que l'aide à la
-    # décision interroge pour un nouveau profil.
-    modele, garde = _robuste(X, Y)
+    # Le modèle final apprend sur tous les salariés (toujours en robuste).
+    modele, _ = _robuste(X, Y)
     reg = {
         "modele": modele,
         # Pourquoi garder la liste des colonnes lues : predire doit refaire exactement le même tableau.
@@ -205,8 +210,6 @@ def entrainer(df: pd.DataFrame, colonnes=None):
         "fourchette": (float(bas), float(haut)),
         "centre": centre,
         "echelle": echelle,
-        # Le profil moyen des salariés qui ont appris : l'explication compare chacun à lui.
-        "moyenne_X": X[garde].mean(),
     }
     return reg, metriques
 
@@ -241,20 +244,126 @@ def colonne_source(colonne_x, colonnes):
     return colonne_x
 
 
-def contributions(X: pd.DataFrame, reg: dict) -> pd.DataFrame:
-    """Pour chaque salarié et chaque colonne d'origine, de combien elle relève (ou baisse) son salaire
-    attendu par rapport au profil moyen, en log. Pourquoi c'est exact : le modèle est une somme
-    d'effets ; l'écart au profil moyen est donc la somme des écarts de chaque colonne. Les colonnes 0/1
-    d'une même catégorie (la performance...) sont additionnées."""
-    effets = (X[reg["colonnes_X"]] - reg["moyenne_X"]) * reg["modele"].coef_
-    sources = [colonne_source(c, reg["colonnes"]) for c in reg["colonnes_X"]]
-    return effets.T.groupby(sources).sum().T
+# -----------------------------------------------------------------------------
+# Le modèle M5 : celui que lisent la détection ET l'aide à la décision (depuis le 24/11/2026)
+# -----------------------------------------------------------------------------
+# Pourquoi un seul modèle : jusque-là, la détection calculait son salaire attendu avec la régression de
+# ce fichier, et l'aide à la décision (decision_support/engine.py) prédisait le salaire avec M5, le
+# modèle retenu dans notebooks/Prediction_Compa_Ratio.ipynb. Deux modèles, deux listes de colonnes : la
+# page pouvait montrer un salarié très sous son salaire prédit pendant que la détection ne lui reprochait
+# rien. Le modèle est maintenant écrit ici, une seule fois, et les deux le lisent.
+
+# Les colonnes que lit M5 : la liste COLONNES du notebook. Pour en retirer une, effacer sa ligne. Pour en
+# ajouter une, ajouter une ligne : une colonne en chiffres du fichier des salariés.
+COLONNES_M5 = [
+    "Niveau",               # le niveau du poste
+    "Rang_Etude_Max",       # le niveau d'études, en rang : 1 = BAC MAX (le bac ou moins)... 7 = BAC+7
+    "Age_Embauche",         # âge − ancienneté
+    "Anciennete",           # l'ancienneté, en années
+    "Competence_N1",        # la note de compétence de l'an dernier
+    "Rang_Performance",     # la performance de l'an dernier, en rang : 1 = « Très en dessous »... 5 = « Très au-delà »
+    "Hot_job",              # la tension du métier sur le marché
+    "Ratio_Grille_Marche",  # Mid / médiane du marché
+]
+# Le modèle apprend le salaire : il reçoit en plus le Mid de la grille, en logarithme comme le salaire.
+# Pourquoi : sans lui, il ne connaît pas la grille du poste (EN_PLUS_POUR_LE_SALAIRE dans le notebook).
+LOG_MID = "Log_Mid"
+# Les deux colonnes en rang. Un libellé inconnu ou une case vide y prend le rang du milieu (la médiane),
+# comme dans le notebook.
+RANGS = ("Rang_Etude_Max", "Rang_Performance")
+# Les colonnes de M5 qui décrivent le POSTE, et pas la personne (même idée que POSTE, plus haut).
+POSTE_M5 = ("Niveau", "Ratio_Grille_Marche", LOG_MID)
 
 
-def score_ecart_attendu(df: pd.DataFrame, rule_params: dict, colonnes=None) -> pd.DataFrame:
+def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
+    """Les colonnes de COLONNES_M5, en chiffres, pour un tableau de salariés ou pour un profil saisi,
+    puis le Mid en logarithme (LOG_MID).
+    Mêmes calculs que le notebook : le niveau lu en nombre, l'âge à l'embauche = âge − ancienneté,
+    le niveau d'études et la performance passés en rang. Une colonne dont il manque la source reste
+    vide."""
+    def nombre(colonne):
+        if colonne not in table:
+            return pd.Series(np.nan, index=table.index)
+        return pd.to_numeric(table[colonne], errors="coerce")
+
+    x = pd.DataFrame(index=table.index)
+    for colonne in COLONNES_M5:
+        if colonne == "Age_Embauche":
+            x[colonne] = nombre("Age") - nombre("Anciennete")
+        elif colonne == "Rang_Performance":
+            rangs = {libelle: i + 1 for i, libelle in enumerate(ORDRE_PERFORMANCE)}
+            x[colonne] = (table["Performance_N1"].map(rangs).astype(float) if "Performance_N1" in table
+                          else np.nan)
+        else:
+            x[colonne] = nombre(colonne)
+    # Un Mid absent, nul ou négatif n'a pas de logarithme : la case reste vide.
+    mid = nombre("Mid")
+    x[LOG_MID] = np.log(mid.where(mid > 0))
+    return x
+
+
+def entrainer_m5(df: pd.DataFrame, final=True):
+    """Entraîne M5 sur un tableau de salariés (avec leur Mid et leur ratio grille / marché). Rend None
+    si le modèle ne peut pas apprendre (pas de grille, trop peu de salariés complets).
+
+    La façon de faire est celle du modèle M5 de notebooks/Prediction_Compa_Ratio.ipynb :
+    - il apprend le salaire, en logarithme : un écart se lit alors en pourcentage (10 % de plus), et
+      les très hauts salaires pèsent moins. Salaire prédit = exponentielle du log prédit ;
+    - avec un gradient boosting : des centaines de petits arbres qui se corrigent l'un l'autre. Il
+      suit des effets qui ne sont pas en ligne droite (une ancienneté qui compte plus dans certains
+      niveaux, par exemple) ;
+    - avec les colonnes de COLONNES_M5 et le Mid de la grille en logarithme. Une colonne absente du
+      fichier, ou vide, est laissée de côté ; une colonne en rang aussi, si la plupart de ses libellés
+      ne sont pas reconnus.
+
+    Ce que rend le dictionnaire :
+    - attendu : le log du salaire attendu de chaque salarié, prédit par un modèle qui ne l'a PAS vu
+      (validation croisée en PAQUETS paquets). C'est lui que lit la détection. Pourquoi : un salaire
+      anormal qui sert à apprendre tire le modèle vers lui et se cache ;
+    - residus : le log du vrai salaire moins ce log attendu ;
+    - fourchette : on range ces erreurs, et on retire les 5 % les plus basses et les 5 % les plus
+      hautes. Les salaires très loin de ce qui est attendu (plus de SEUIL_ROBUSTE écarts habituels) ne
+      comptent pas : la fourchette dit où tombe un salaire normal pour ce profil ;
+    - centre, echelle : l'erreur du milieu et l'écart habituel de ces erreurs (voir ecart_robuste) ;
+    - modele : le modèle final, qui apprend sur tous les salariés. C'est lui que l'aide à la décision
+      interroge pour un profil saisi. final=False : pas de modèle final, quand seul « attendu » sert ;
+    - colonnes, medianes, X : les colonnes lues, le rang du milieu des colonnes en rang, et le tableau
+      sur lequel le modèle a appris."""
+    X = tableau_m5(df).replace([np.inf, -np.inf], np.nan)
+    colonnes = [c for c in COLONNES_M5 if X[c].notna().mean() > (0.5 if c in RANGS else 0)]
+    X = X[colonnes + [LOG_MID]]
+    # Un rang inconnu prend le rang du milieu. L'aide à la décision fera pareil pour le profil saisi.
+    medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS}
+    X = X.fillna(medianes)
+    # Ce que le modèle apprend : le logarithme du salaire.
+    salaire = pd.to_numeric(df["Fixe_Annuel_MAD"], errors="coerce")
+    y = np.log(salaire.where(salaire > 0))
+    # Un salarié sans grille, ou avec une case vide dans une des colonnes, n'apprend pas au modèle.
+    complets = X.notna().all(axis=1) & y.notna()
+    X, y = X[complets], y[complets]
+    if not colonnes or len(X) < 10 * PAQUETS:
+        return None
+
+    predit = pd.Series(np.nan, index=X.index)
+    # random_state=42 : le même découpage, donc le même résultat, à chaque lancement.
+    for apprend, verifie in KFold(PAQUETS, shuffle=True, random_state=42).split(X):
+        modele = HistGradientBoostingRegressor(random_state=42).fit(X.iloc[apprend], y.iloc[apprend])
+        predit.iloc[verifie] = modele.predict(X.iloc[verifie])
+    residus = y - predit
+    centre, echelle = ecart_robuste(residus)
+    normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
+    bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
+
+    modele = HistGradientBoostingRegressor(random_state=42).fit(X, y) if final else None
+    return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
+            "fourchette": (float(bas), float(haut)), "centre": centre, "echelle": echelle,
+            "attendu": predit, "residus": residus, "X": X}
+
+
+def score_ecart_attendu(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
     """Le signal de l'IA fondé sur l'écart au salaire attendu. Rend un NOUVEAU DataFrame avec :
-    - Salaire_Attendu, Attendu_Bas, Attendu_Haut : le salaire attendu et sa fourchette (9 fois sur 10),
-      prédits par un modèle qui n'a pas vu le salarié ;
+    - Salaire_Attendu, Attendu_Bas, Attendu_Haut : le salaire attendu et sa fourchette (où tombent
+      9 salariés sur 10 de même profil), prédits par un modèle qui n'a pas vu le salarié ;
     - Ecart_Attendu : salaire / salaire attendu - 1 (-0,15 = payé 15 % de moins qu'attendu) ;
     - Z_Attendu : cet écart en écarts habituels (-2 = nettement sous l'attendu, -3 = très en dessous) ;
     - ML_AnomalyScore : 0 si le salaire est au niveau attendu ou au-dessus, puis monte jusqu'à 100 quand
@@ -262,25 +371,24 @@ def score_ecart_attendu(df: pd.DataFrame, rule_params: dict, colonnes=None) -> p
       15/10/2026, être payé au-dessus n'est pas un cas à traiter. Pourquoi un seuil fixe plutôt que « de 0
       pour le plus banal à 100 pour le plus atypique du fichier » : le même score veut alors dire la même
       chose d'un fichier à l'autre, et un seul salarié extrême n'écrase plus le score de tous les autres.
-    Un salarié sans salaire attendu (pas de grille, âge manquant...) a un score de 0."""
+    Un salarié sans salaire attendu (pas de grille, âge manquant...) a un score de 0.
+
+    Depuis le 24/11/2026, le salaire attendu vient du modèle M5 (entrainer_m5, plus haut), le même que
+    celui de l'aide à la décision, et plus de la régression en ligne droite de ce fichier."""
     z_plein = float(rule_params.get("ml_z_plein", 3.0))
     df = df.copy()
-    if colonnes is None:
-        colonnes = [c for c in COLONNES if c in df and df[c].notna().any()]
-    X, Y = _donnees(df, colonnes)
-    predit, _ = hors_echantillon(X, Y)
-    residus = Y - predit
-    centre, echelle = ecart_robuste(residus)
-    normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
-    bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
-
     for colonne in ["Salaire_Attendu", "Attendu_Bas", "Attendu_Haut", "Ecart_Attendu", "Z_Attendu"]:
         df[colonne] = np.nan
-    df.loc[X.index, "Salaire_Attendu"] = np.exp(predit)
-    df.loc[X.index, "Attendu_Bas"] = np.exp(predit + bas)
-    df.loc[X.index, "Attendu_Haut"] = np.exp(predit + haut)
-    df.loc[X.index, "Ecart_Attendu"] = np.exp(residus) - 1
-    df.loc[X.index, "Z_Attendu"] = (residus - centre) / echelle
+    # final=False : seul le salaire attendu de chaque salarié sert ici, pas le modèle final.
+    m5 = entrainer_m5(df, final=False)
+    if m5 is not None:
+        predit, residus = m5["attendu"], m5["residus"]
+        bas, haut = m5["fourchette"]
+        df.loc[predit.index, "Salaire_Attendu"] = np.exp(predit)
+        df.loc[predit.index, "Attendu_Bas"] = np.exp(predit + bas)
+        df.loc[predit.index, "Attendu_Haut"] = np.exp(predit + haut)
+        df.loc[predit.index, "Ecart_Attendu"] = np.exp(residus) - 1
+        df.loc[predit.index, "Z_Attendu"] = (residus - m5["centre"]) / m5["echelle"]
     df["ML_AnomalyScore"] = (100 * (-df["Z_Attendu"] / z_plein).clip(0, 1)).fillna(0.0)
     return df
 
@@ -392,11 +500,11 @@ def comparer_boosting(df: pd.DataFrame, colonnes=None) -> dict:
     return resultat
 
 
-def couverture_par_niveau(df: pd.DataFrame, colonnes=None) -> pd.DataFrame:
+def couverture_par_niveau(df: pd.DataFrame) -> pd.DataFrame:
     """Pour chaque niveau : part des salaires dans la fourchette (visée 90 %) et erreur moyenne en %.
     Pourquoi : une fourchette juste « en moyenne » peut être trop étroite pour les hauts niveaux, où les
     salaires varient davantage, et trop large pour les autres."""
-    d = score_ecart_attendu(df, {}, colonnes)
+    d = score_ecart_attendu(df, {})
     d = d[d["Salaire_Attendu"].notna()]
     dans = (d["Fixe_Annuel_MAD"] >= d["Attendu_Bas"]) & (d["Fixe_Annuel_MAD"] <= d["Attendu_Haut"])
     return (d.assign(Dans=dans, Erreur=d["Ecart_Attendu"].abs())
@@ -404,7 +512,7 @@ def couverture_par_niveau(df: pd.DataFrame, colonnes=None) -> pd.DataFrame:
                                    Erreur_Mediane_pct=("Erreur", "median")).reset_index())
 
 
-def ecart_femmes_hommes(df: pd.DataFrame, colonnes=None) -> pd.DataFrame:
+def ecart_femmes_hommes(df: pd.DataFrame) -> pd.DataFrame:
     """L'écart de salaire femmes / hommes À PROFIL ÉGAL, par métier et en tout : la moyenne de l'écart
     au salaire attendu des femmes moins celle des hommes. Le modèle ne lit pas le sexe : il attend le
     même salaire pour une femme et un homme de même profil ; ce qui reste est l'écart que le poste, le
@@ -413,7 +521,7 @@ def ecart_femmes_hommes(df: pd.DataFrame, colonnes=None) -> pd.DataFrame:
     de profils différents (plus d'ancienneté d'un côté) ; celui-ci les met à égalité."""
     if "Sexe" not in df:
         return pd.DataFrame()
-    d = score_ecart_attendu(df, {}, colonnes)
+    d = score_ecart_attendu(df, {})
     d = d[d["Ecart_Attendu"].notna() & d["Sexe"].isin(["F", "M"])]
     d = d.assign(Log=np.log1p(d["Ecart_Attendu"]))
 
