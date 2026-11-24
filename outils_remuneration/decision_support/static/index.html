@@ -49,22 +49,27 @@
       <dl class="today">
         <div class="tile"><dt>Salaire réel</dt><dd><span id="today-salary"></span> <small class="unit-label"></small></dd></div>
         <div class="tile"><dt>Position dans la grille</dt><dd id="today-compa"></dd><p id="today-compa-note"></p></div>
-        <div class="tile"><dt>Priorité dans la détection</dt><dd><span class="badge" id="today-severity"></span></dd><p id="today-score"></p></div>
+        <div class="tile"><dt>Résultat de la détection</dt><dd><span class="badge" id="today-severity"></span></dd><p id="today-score"></p></div>
         <div class="tile"><dt>Recommandation</dt><dd class="reco" id="today-reco"></dd><p id="today-cost"></p></div>
-        <div class="tile"><dt>Pourquoi la détection le fait remonter</dt><dd class="reasons-box"><ul class="reasons" id="today-reasons"></ul></dd><p id="today-peers"></p></div>
+        <div class="tile"><dt id="today-why">Pourquoi la détection le fait remonter</dt><dd class="reasons-box"><ul class="reasons" id="today-reasons"></ul></dd><p id="today-peers"></p></div>
       </dl>
     </section>
     <section class="panel" aria-labelledby="profile-title">
-      <div class="panel-head"><h2 class="panel-title" id="profile-title">Profil</h2><span>Modifier une case refait le salaire prédit</span></div>
+      <div class="panel-head"><h2 class="panel-title" id="profile-title">Profil</h2><span>Le salaire prédit se refait dès qu’une case est validée</span></div>
       <form id="profile-form" class="panel-body">
+        <!-- Le nom et le prénom du salarié cherché : un simple texte, qui ne se modifie pas. -->
+        <p class="profile-name" id="profile-name" hidden></p>
         <div class="profile" id="profile-fields">
           <label class="field" for="job"><span class="field-name">Métier</span><select id="job" name="job_family" required disabled><option value="">Chargement…</option></select><span class="was"></span></label>
           <label class="field" for="niveau"><span class="field-name">Niveau</span><select id="niveau" name="niveau" required disabled><option value="">Choisir le métier</option></select><span class="was"></span></label>
           <label class="field" for="seniority"><span class="field-name">Ancienneté (ans)</span><input id="seniority" name="seniority" type="number" min="0" step="0.1" placeholder="Ex. 6" required><span class="was"></span></label>
         </div>
-        <div class="profile-foot">
-          <span id="changed-note">Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.</span>
-          <span class="actions"><button type="button" id="restore" class="ghost" hidden>Revenir au vrai profil</button><button type="submit" id="submit" class="primary" disabled>Prédire le salaire</button></span>
+        <!-- Le pied du profil n'apparaît que si des cases sont modifiées : il dit combien, et permet de revenir
+             au vrai profil. Pas de bouton « Prédire le salaire » : le salaire prédit se refait tout seul dès
+             qu'une case est validée. -->
+        <div class="profile-foot" id="profile-foot" hidden>
+          <span id="changed-note"></span>
+          <span class="actions"><button type="button" id="restore" class="ghost" hidden>Revenir au vrai profil</button></span>
         </div>
         <p id="form-error" class="error" role="alert" hidden></p>
       </form>
@@ -90,16 +95,14 @@
               <li id="key-target"><i class="key target"></i><span id="key-target-text">Salaire prédit</span></li>
               <li id="key-before"><i class="key before"></i>Salaire prédit, vrai profil</li>
               <li id="key-real"><i class="key real"></i>Salaire réel</li>
-              <li id="key-range"><i class="key range"></i>Où tombe le vrai salaire, 9 fois sur 10</li>
+              <li id="key-range"><i class="key range"></i>Fourchette habituelle pour ce profil</li>
               <li><i class="key band"></i>Grille du poste, du Min au Max</li>
             </ul>
           </div>
         </section>
-        <p class="hint ruler-note" id="ruler-note"></p>
-        <p class="hint ruler-note" id="caution" hidden>À lire comme : « voici ce que gagnent les salariés qui ont ce profil ». Ce n’est pas l’augmentation à donner à cette personne si sa situation change. La priorité de la détection ne suit pas la simulation : elle reste celle du vrai profil.</p>
       </div>
     </section>
-    <footer id="source-note">Chargement des références du projet…</footer>
+    <footer id="source-note" hidden></footer>
   </main>
 </body>
 </html>

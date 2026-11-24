@@ -12,8 +12,6 @@ const fmt = value => value == null ? 'Indisponible' : new Intl.NumberFormat('fr-
 // Un écart s'écrit avec son signe : « +20,7 » ou « −62,77 ».
 const signe = value => (value > 0 ? '+' : value < 0 ? '−' : '') + fmt(Math.abs(value));
 const node = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; return e; };
-const SUBMIT_LABEL = 'Prédire le salaire';
-const FOOT_NOTE = 'Le sexe n’est jamais utilisé. Les fichiers d’entrée restent inchangés.';
 // Les cases du profil : tout ce qui porte un nom dans le formulaire.
 const champs = () => [...form.elements].filter(e => e.name);
 function resetResult() {
@@ -23,8 +21,6 @@ function resetResult() {
   $('empty').hidden = false;
   $('form-error').hidden = true;
   $('result-area').setAttribute('aria-busy', 'false');
-  $('submit').disabled = !meta;
-  $('submit').textContent = SUBMIT_LABEL;
 }
 // Les champs du profil, décrits par le serveur (ce que lit le modèle du salaire prédit) : une liste de
 // choix pour une catégorie, un nombre borné pour le reste. Ils sont tous obligatoires : sans l'un
@@ -73,8 +69,8 @@ function marquer() {
       : `Vrai profil : ${champ.type === 'number' ? fmt(Number(valeur)) : valeur}`;
     nombre += change;
   }
-  $('restore').hidden = !nombre;
-  $('changed-note').textContent = !nombre ? FOOT_NOTE
+  $('restore').hidden = $('profile-foot').hidden = !nombre;
+  $('changed-note').textContent = !nombre ? ''
     : `${nombre} ${nombre > 1 ? 'cases modifiées' : 'case modifiée'}, en jaune. Le vrai profil reste écrit dessous.`;
   return nombre;
 }
@@ -102,7 +98,7 @@ form.addEventListener('change', event => {
 });
 const at = (el, name, value) => { el.style.setProperty(name, value + '%'); return el; };
 // La figure : une seule ligne. La grille du poste (du Min au Max), et dessus le salaire prédit avec
-// la fourchette où le vrai salaire tombe 9 fois sur 10. Pourquoi une seule ligne : avec une ligne par
+// la fourchette où tombent 9 salariés sur 10 qui ont ce profil. Pourquoi une seule ligne : avec une ligne par
 // repère (grille, marché, collègues, proposition), la figure portait une dizaine de montants.
 // Avec un salarié, deux repères de plus : un trait pour son salaire réel et, si des cases sont
 // modifiées, un rond vide pour le salaire prédit de son vrai profil.
@@ -162,30 +158,24 @@ function renderCompare(r, modifiees) {
   $('compare').replaceChildren(...lignes.map(([nom, valeur]) => { const d = node('div', ''); d.append(node('dt', nom), node('dd', valeur)); return d; }));
   $('compare').hidden = !lignes.length;
 }
-// Le résultat : un seul grand chiffre, le salaire prédit, et sa fourchette. Sans salaire prédit, la
-// phrase dit pourquoi.
+// Le résultat : un seul grand chiffre, le salaire prédit, et dessous sa fourchette habituelle. Sans
+// salaire prédit, la phrase dit pourquoi.
 function render(data, modifiees) {
   $('empty').hidden = true;
   $('result').hidden = false;
   $('result').classList.remove('stale');
-  const {profile, band, market, peers, regression: r} = data;
+  const {profile, band, regression: r} = data;
   $('verdict').className = 'verdict' + (r.predicted == null ? ' insufficient' : '');
   $('result-profile').textContent = [`${profile.job_family} · Niveau ${profile.niveau}`,
     profile.seniority == null ? null : `${fmt(profile.seniority)} ${profile.seniority < 2 ? 'an' : 'ans'} d’ancienneté`].filter(Boolean).join(' · ');
   $('predicted-title').textContent = $('key-target-text').textContent = modifiees ? 'Salaire prédit, profil modifié' : 'Salaire prédit';
   $('predicted').textContent = r.predicted == null ? '—' : fmt(r.predicted);
-  $('predicted-note').textContent = r.predicted != null ? `9 fois sur 10, le vrai salaire tombe entre ${fmt(r.low)} et ${fmt(r.high)}.`
+  $('predicted-note').textContent = r.predicted != null ? `Fourchette habituelle pour ce profil : entre ${fmt(r.low)} et ${fmt(r.high)}.`
     : !r.available ? 'Le modèle n’a pas pu apprendre sur les fichiers chargés.'
     : r.missing.length ? `À renseigner : ${r.missing.join(', ')}.`
     : 'Pas de grille ou de marché exploitable pour ce métier et ce niveau.';
   renderCompare(r, modifiees);
   renderRuler(band, r, salarie ? salarie.salary : null, modifiees && preditVrai ? preditVrai.predicted : null);
-  // Les deux autres repères, en une phrase : la médiane du marché et celle des collègues comparables.
-  $('ruler-note').textContent = [
-    market ? `Médiane du marché : ${fmt(market.Median)}` : 'Marché : indisponible',
-    peers.available ? `Médiane des ${fmt(peers.count)} collègues comparables (${peers.scope}) : ${fmt(peers.median)}`
-      : `Collègues : pas assez de collègues comparables (${fmt(peers.count)})`].join(' · ') + '.';
-  $('caution').hidden = !salarie;
 }
 async function demander(adresse, corps, signal) {
   const response = await fetch(adresse, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(corps), signal});
@@ -196,14 +186,12 @@ async function demander(adresse, corps, signal) {
 // Demande le salaire prédit pour le profil du formulaire et l'affiche. Si le profil est exactement
 // celui du salarié cherché, son salaire prédit est gardé (preditVrai) pour les comparaisons.
 async function calculer() {
-  if (!form.reportValidity()) return;
+  if (!form.checkValidity()) return;
   revision++;
   if (controller) controller.abort();
   const requestRevision = revision, modifiees = marquer();
   controller = new AbortController();
   $('form-error').hidden = true;
-  $('submit').disabled = true;
-  $('submit').textContent = 'Calcul en cours…';
   $('result-area').setAttribute('aria-busy', 'true');
   try {
     const data = await demander('/api/analyze', Object.fromEntries(new FormData(form).entries()), controller.signal);
@@ -215,20 +203,21 @@ async function calculer() {
       $('form-error').textContent = error.message; $('form-error').hidden = false;
     }
   } finally {
-    if (requestRevision === revision) {
-      $('submit').disabled = false;
-      $('submit').textContent = SUBMIT_LABEL;
-      $('result-area').setAttribute('aria-busy', 'false');
-    }
+    if (requestRevision === revision) $('result-area').setAttribute('aria-busy', 'false');
   }
 }
-form.addEventListener('submit', event => { event.preventDefault(); calculer(); });
+// Pas de bouton pour lancer le calcul (retiré le 24/11/2026) : il part tout seul quand une case est
+// validée (voir plus haut). La touche Entrée dans une case ne doit donc pas envoyer le formulaire.
+form.addEventListener('submit', event => event.preventDefault());
 // Le bloc « Ce salarié aujourd'hui » : ce que le fichier et la détection disent de lui. Il ne bouge pas
 // pendant la simulation.
 const BADGES = {Critical: 'critical', Major: 'major', Minor: 'minor', Info: 'info', 'Outlier positif': 'outlier'};
 function renderToday(s) {
   const d = s.detection;
   $('today').hidden = false;
+  // Le nom du salarié, en simple texte au-dessus de son profil. Rien si le fichier ne le donne pas.
+  $('profile-name').textContent = s.nom || '';
+  $('profile-name').hidden = !s.nom;
   $('today-id').textContent = [s.matricule, s.profile.job_family, `Niveau ${s.profile.niveau}`, s.entite].filter(Boolean).join(' · ') + ' — ne change pas pendant la simulation';
   $('today-salary').textContent = fmt(s.salary);
   $('today-compa').textContent = s.compa == null ? '—' : fmt(s.compa);
@@ -240,6 +229,10 @@ function renderToday(s) {
     : 'Pas de résultat de la détection pour ce matricule : la relancer.';
   $('today-reco').textContent = d && d.reco ? d.reco : d ? 'Aucune' : '—';
   $('today-cost').textContent = d && d.cost != null ? `Coût : ${fmt(d.cost)} ${meta.unit}` : '';
+  // Le titre de la dernière case dépend du résultat. Un salarié « Info » ou payé au-dessus du Max ne
+  // remonte pas : la détection ne demande rien pour lui. La case dit alors seulement ce qu'elle a relevé.
+  $('today-why').textContent = d && ['Critical', 'Major', 'Minor'].includes(d.severity)
+    ? 'Pourquoi la détection le fait remonter' : 'Ce que la détection a relevé';
   // Sans raison écrite par la détection : une phrase qui dit pourquoi il n'y en a pas.
   const raisons = !d ? [] : d.reasons.length ? d.reasons
     : d.severity === 'Outlier positif' ? ['Payé au-dessus du Max de sa grille : ce n’est pas une anomalie.']
@@ -301,7 +294,7 @@ $('blank').addEventListener('click', () => {
   salarie = vrai = preditVrai = null;
   $('lookup-form').reset(); form.reset();
   if (meta) updateNiveaux();
-  $('today').hidden = true; $('lookup-error').hidden = true;
+  $('today').hidden = $('profile-name').hidden = true; $('lookup-error').hidden = true;
   marquer(); resetResult();
   $('job').focus();
 });
@@ -312,13 +305,12 @@ $('blank').addEventListener('click', () => {
     meta = await response.json();
     $('job').replaceChildren(new Option('Choisir un métier', ''));
     for (const job of Object.keys(meta.jobs)) $('job').append(new Option(job, job));
-    $('job').disabled = false; $('submit').disabled = false; $('lookup').disabled = false;
+    $('job').disabled = false; $('lookup').disabled = false;
     renderModelFields(meta.fields || []);
     for (const label of document.querySelectorAll('.unit-label')) label.textContent = meta.unit;
     $('employees-count').textContent = `${fmt(meta.employees)} salaires`;
-    $('source-note').textContent = 'Références chargées au démarrage : redémarrer l’application après modification des sources.';
   } catch (error) {
     $('form-error').textContent = error.message; $('form-error').hidden = false;
-    $('source-note').textContent = 'Références indisponibles. Vérifiez le serveur local.';
+    $('source-note').textContent = 'Références indisponibles. Vérifiez le serveur local.'; $('source-note').hidden = false;
   }
 })();
