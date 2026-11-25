@@ -152,13 +152,21 @@ def choisir_colonnes(df):
         print("Pas de buckets d'ancienneté : le fichier n'a pas de colonne Anciennete.")
 
     # 3. La performance et le niveau d'études passent en rang, pour apparaître dans la matrice.
-    # Un libellé inconnu compte comme une case vide : il prend le rang médian.
+    # Une performance inconnue compte comme une case vide : elle prend le rang médian.
+    # Un niveau d'études non déterminé, lui, reste vide : rien n'est mis à sa place (demande du 25/11/2026).
     # Si la plupart des libellés du fichier ne sont pas ceux prévus, on ne force rien : la colonne reste
     # en texte et n'est pas utilisée.
     for colonne, rangs in [('Performance_N1', RANG_PERFORMANCE), ('Niveau_Etude_Max', RANG_ETUDE)]:
         if colonne in donnees.columns and donnees[colonne].isin(list(rangs)).mean() > 0.5:
             donnees[colonne] = donnees[colonne].map(rangs)
-            donnees[colonne] = donnees[colonne].fillna(donnees[colonne].median())
+            if colonne == 'Performance_N1':
+                donnees[colonne] = donnees[colonne].fillna(donnees[colonne].median())
+            elif donnees[colonne].isna().any():
+                # Pourquoi le dire : mettre le rang médian à la place, c'était inventer une information.
+                # Pourquoi ces salariés sortent plus bas, alors que la détection du projet les garde : la régression
+                # en ligne droite ne sait pas lire une case vide, et les six modèles sont jugés sur les mêmes salariés.
+                print(f"Niveau d'études non déterminé pour {int(donnees[colonne].isna().sum())} salariés : "
+                      "rien n'est mis à la place, ils sortent plus bas avec les cases vides.")
 
     # 4. Les colonnes restées en texte (le métier, par exemple) ne sont pas utilisées :
     #    les modèles ne lisent que des chiffres.
