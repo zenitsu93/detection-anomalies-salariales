@@ -239,6 +239,10 @@ def signal_ecart_attendu(df: pd.DataFrame, rule_params: dict) -> pd.DataFrame:
                 normal[c] = habituel[c]
                 effets[c] = depart - modele.predict(normal)
         effets = pd.DataFrame(effets, index=lignes)
+        # Une information restée vide (niveau d'études non déterminé, performance inconnue) n'est pas
+        # citée. Pourquoi : la phrase écrit la valeur du salarié (« BAC+5 », « A l'objectif »), et il n'y
+        # en a pas. where garde l'effet là où la case est remplie, et met 0 ailleurs.
+        effets = effets.where(X.loc[lignes, effets.columns].notna(), 0)
     for i in fort:
         ligne = df.loc[i]
         phrase = (f"payé {pour_cent(ligne.Ecart_Attendu)} de moins que le salaire attendu pour son profil "
