@@ -268,18 +268,23 @@ COLONNES_M5 = [
 # Le modèle apprend le salaire : il reçoit en plus le Mid de la grille, en logarithme comme le salaire.
 # Pourquoi : sans lui, il ne connaît pas la grille du poste (EN_PLUS_POUR_LE_SALAIRE dans le notebook).
 LOG_MID = "Log_Mid"
-# Les deux colonnes en rang. Un libellé inconnu ou une case vide y prend le rang du milieu (la médiane),
-# comme dans le notebook.
+# Les deux colonnes en rang. Pour la performance, un libellé inconnu ou une case vide prend le rang du
+# milieu (la médiane), comme dans le notebook. Pour le niveau d'études, non : voir VIDE_ACCEPTE.
 RANGS = ("Rang_Etude_Max", "Rang_Performance")
 # Les colonnes de M5 qui décrivent le POSTE, et pas la personne (même idée que POSTE, plus haut).
 POSTE_M5 = ("Niveau", "Ratio_Grille_Marche", LOG_MID)
-# Les colonnes pour lesquelles le salaire prédit ne doit JAMAIS baisser quand elles montent, tout le reste
-# du profil restant pareil. Pourquoi : sans cette règle, le modèle recopie les hasards des petits groupes
-# de salariés. On voyait par exemple un salaire prédit plus haut avec un niveau d'études « non déterminé »
-# (lu comme le rang du milieu) qu'avec un BAC+5. Pour laisser le modèle libre sur une colonne, effacer son
-# nom ici. À savoir : si, dans les vraies données, un diplôme plus haut ne paie pas toujours plus, le
-# modèle ne le montrera plus ; il donnera au mieux le même salaire.
-CROISSANTES_M5 = ("Rang_Etude_Max",)
+# Les colonnes qui ont le droit de rester vides : rien n'est mis à leur place. Demande du 25/11/2026.
+# Pourquoi : donner le niveau du milieu à un salarié dont le niveau d'études est « non déterminé »,
+# c'est inventer une information. Le gradient boosting sait lire une case vide : il traite ces salariés
+# comme un cas à part, et prédit leur salaire sans cette information. À la place, le niveau non
+# déterminé est signalé : dans le terminal de la détection et sur la page de l'aide à la décision.
+# Ce que ça remplace : la règle du 24/11 (« le salaire prédit ne baisse jamais quand le niveau d'études
+# monte », liste CROISSANTES_M5), retirée le même jour. Elle avait été ajoutée parce qu'un « non
+# déterminé », lu comme le niveau du milieu, pouvait donner un salaire prédit plus haut qu'un BAC+5.
+# On ne compare plus un BAC+5 à un niveau inventé, et le modèle redevient libre de suivre les données.
+# À savoir : un salarié « non déterminé » peut encore avoir un salaire prédit plus haut qu'un BAC+5,
+# si c'est ce que montrent les salariés du fichier ; mais c'est écrit à côté.
+VIDE_ACCEPTE = ("Rang_Etude_Max",)
 
 
 def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
@@ -309,14 +314,11 @@ def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
     return x
 
 
-def nouveau_m5(colonnes) -> HistGradientBoostingRegressor:
-    """Un modèle M5 pas encore entraîné, pour les colonnes données. Écrit une seule fois : les modèles
-    de la validation croisée et le modèle final ont ainsi les mêmes réglages.
-    monotonic_cst : 1 pour une colonne de CROISSANTES_M5 (le salaire prédit ne baisse jamais quand elle
-    monte), 0 pour les autres (le modèle fait comme il veut).
+def nouveau_m5() -> HistGradientBoostingRegressor:
+    """Un modèle M5 pas encore entraîné. Écrit une seule fois : les modèles de la validation croisée et
+    le modèle final ont ainsi les mêmes réglages. Aucune règle ne lui est imposée : il suit les données.
     random_state=42 : le même résultat à chaque lancement."""
-    return HistGradientBoostingRegressor(
-        monotonic_cst=[1 if c in CROISSANTES_M5 else 0 for c in colonnes], random_state=42)
+    return HistGradientBoostingRegressor(random_state=42)
 
 
 def entrainer_m5(df: pd.DataFrame, final=True):
@@ -329,8 +331,6 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     - avec un gradient boosting : des centaines de petits arbres qui se corrigent l'un l'autre. Il
       suit des effets qui ne sont pas en ligne droite (une ancienneté qui compte plus dans certains
       niveaux, par exemple) ;
-    - à une différence près : le salaire prédit ne baisse jamais quand le niveau d'études monte (voir
-      CROISSANTES_M5) ;
     - avec les colonnes de COLONNES_M5 et le Mid de la grille en logarithme. Une colonne absente du
       fichier, ou vide, est laissée de côté ; une colonne en rang aussi, si la plupart de ses libellés
       ne sont pas reconnus.
@@ -346,19 +346,21 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     - centre, echelle : l'erreur du milieu et l'écart habituel de ces erreurs (voir ecart_robuste) ;
     - modele : le modèle final, qui apprend sur tous les salariés. C'est lui que l'aide à la décision
       interroge pour un profil saisi. final=False : pas de modèle final, quand seul « attendu » sert ;
-    - colonnes, medianes, X : les colonnes lues, le rang du milieu des colonnes en rang, et le tableau
+    - colonnes, medianes, X : les colonnes lues, le rang du milieu de la performance, et le tableau
       sur lequel le modèle a appris."""
     X = tableau_m5(df).replace([np.inf, -np.inf], np.nan)
     colonnes = [c for c in COLONNES_M5 if X[c].notna().mean() > (0.5 if c in RANGS else 0)]
     X = X[colonnes + [LOG_MID]]
-    # Un rang inconnu prend le rang du milieu. L'aide à la décision fera pareil pour le profil saisi.
-    medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS}
+    # Un rang de performance inconnu prend le rang du milieu ; l'aide à la décision fera pareil pour le
+    # profil saisi. Un niveau d'études inconnu, lui, reste vide (voir VIDE_ACCEPTE).
+    medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS and c not in VIDE_ACCEPTE}
     X = X.fillna(medianes)
     # Ce que le modèle apprend : le logarithme du salaire.
     salaire = pd.to_numeric(df["Fixe_Annuel_MAD"], errors="coerce")
     y = np.log(salaire.where(salaire > 0))
     # Un salarié sans grille, ou avec une case vide dans une des colonnes, n'apprend pas au modèle.
-    complets = X.notna().all(axis=1) & y.notna()
+    # Sauf pour les colonnes de VIDE_ACCEPTE : un niveau d'études non déterminé ne fait sortir personne.
+    complets = X.drop(columns=[c for c in VIDE_ACCEPTE if c in X]).notna().all(axis=1) & y.notna()
     X, y = X[complets], y[complets]
     if not colonnes or len(X) < 10 * PAQUETS:
         return None
@@ -366,14 +368,14 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     predit = pd.Series(np.nan, index=X.index)
     # random_state=42 : le même découpage à chaque lancement.
     for apprend, verifie in KFold(PAQUETS, shuffle=True, random_state=42).split(X):
-        modele = nouveau_m5(X.columns).fit(X.iloc[apprend], y.iloc[apprend])
+        modele = nouveau_m5().fit(X.iloc[apprend], y.iloc[apprend])
         predit.iloc[verifie] = modele.predict(X.iloc[verifie])
     residus = y - predit
     centre, echelle = ecart_robuste(residus)
     normaux = np.abs(residus - centre) <= SEUIL_ROBUSTE * echelle
     bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
 
-    modele = nouveau_m5(X.columns).fit(X, y) if final else None
+    modele = nouveau_m5().fit(X, y) if final else None
     return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
             "fourchette": (float(bas), float(haut)), "centre": centre, "echelle": echelle,
             "attendu": predit, "residus": residus, "X": X}

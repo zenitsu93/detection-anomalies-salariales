@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from anomaly_pretraitement import ORDRE_PERFORMANCE, ajouter_diplomes, bucket_anciennete, rang_etude
 # Le modèle du salaire prédit (M5) est écrit dans ce fichier-là : la détection et cette page lisent le même.
-from anomaly_signal_regression import LOG_MID, entrainer_m5, tableau_m5
+from anomaly_signal_regression import LOG_MID, VIDE_ACCEPTE, entrainer_m5, tableau_m5
 
 # Même unité que les CSV : aucune conversion.
 UNIT = "kMAD / an"
@@ -409,7 +409,9 @@ class DecisionEngine:
         # Le résultat de la page : le salaire que le modèle prédit pour le profil saisi, avec la grille et
         # le marché du métier + niveau choisis, et la fourchette où tombent 9 salariés sur 10 qui ont ce profil.
         # missing : les champs encore vides, que la page demande de remplir.
-        result = {"predicted": None, "low": None, "high": None, "missing": [], "available": self.regression is not None}
+        # education_unknown : le niveau d'études du profil est non déterminé ; la page l'écrit sous le résultat.
+        result = {"predicted": None, "low": None, "high": None, "missing": [], "education_unknown": False,
+                  "available": self.regression is not None}
         if self.regression is None:
             return result
         missing = ([] if profile["seniority"] is not None else ["Ancienneté"]) + [
@@ -421,12 +423,16 @@ class DecisionEngine:
                                "Anciennete": profile["seniority"], **inputs}])
         if "Niveau_Etude_Max" in ligne:
             ligne["Rang_Etude_Max"] = rang_etude(ligne["Niveau_Etude_Max"])
-        # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre ; un rang inconnu prend le rang du milieu.
+        # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre ; une performance inconnue prend le
+        # rang du milieu. Un niveau d'études non déterminé reste vide (VIDE_ACCEPTE) : rien n'est mis à sa
+        # place, le modèle prédit sans cette information, et la page le signale.
         X = tableau_m5(ligne)[self.regression["colonnes"]].fillna(self.regression["medianes"])
+        vides = [c for c in VIDE_ACCEPTE if c in X and bool(X[c].isna().iloc[0])]
+        result["education_unknown"] = "Rang_Etude_Max" in vides
         # Pas de grille pour ce métier + niveau (ou pas de marché) : une case reste vide, pas de
         # prédiction. Pourquoi le vérifier ici : le gradient boosting accepte une case vide et
         # répondrait quand même.
-        if not X.notna().all(axis=1).iloc[0]:
+        if not X.drop(columns=vides).notna().all(axis=1).iloc[0]:
             return result
         # Le modèle prédit le logarithme du salaire : on revient au salaire par l'exponentielle. La
         # fourchette se pose autour, en proportion.

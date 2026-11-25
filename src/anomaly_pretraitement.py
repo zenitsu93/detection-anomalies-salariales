@@ -175,6 +175,12 @@ def message_diplomes(df: pd.DataFrame) -> str:
         texte += f" Il manque la colonne {bilan['manquantes'][0]} dans {bilan['fichier']} : elle reste vide."
     if bilan["non_reconnus"]:
         texte += f" Niveaux non reconnus, comptés comme inconnus : {', '.join(bilan['non_reconnus'])}."
+    # Le niveau d'études non déterminé est signalé ici. Pourquoi : le modèle du salaire attendu ne met
+    # rien à sa place (VIDE_ACCEPTE, dans anomaly_signal_regression.py) ; il faut donc que ça se voie.
+    inconnus = len(df) - connus
+    if inconnus:
+        texte += (f" Niveau d'études non déterminé pour {nombre(inconnus)} salarié{'' if inconnus == 1 else 's'} : "
+                  "leur salaire attendu est calculé sans cette information, rien n'est mis à la place.")
     return texte
 
 
