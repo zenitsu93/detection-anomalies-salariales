@@ -177,7 +177,7 @@ class DecisionEngine:
                 # key : « 2 » et 2.0 désignent la même case, comme pour le métier et le niveau.
                 options = {key(v): v for v in uniques}
                 # Une case vide dans le fichier (un niveau d'études inconnu...) : la page peut aussi la
-                # choisir. Elle compte alors pour le rang du milieu, comme à l'apprentissage.
+                # choisir. Elle reste alors vide pour le modèle, comme à l'apprentissage.
                 if base[column].isna().any():
                     options["Inconnu"] = None
                 field.update(kind="choice", options=options)
@@ -410,8 +410,9 @@ class DecisionEngine:
         # le marché du métier + niveau choisis, et la fourchette où tombent 9 salariés sur 10 qui ont ce profil.
         # missing : les champs encore vides, que la page demande de remplir.
         # education_unknown : le niveau d'études du profil est non déterminé ; la page l'écrit sous le résultat.
+        # performance_unknown : pareil pour la performance N-1, quand elle est inconnue.
         result = {"predicted": None, "low": None, "high": None, "missing": [], "education_unknown": False,
-                  "available": self.regression is not None}
+                  "performance_unknown": False, "available": self.regression is not None}
         if self.regression is None:
             return result
         missing = ([] if profile["seniority"] is not None else ["Ancienneté"]) + [
@@ -423,12 +424,13 @@ class DecisionEngine:
                                "Anciennete": profile["seniority"], **inputs}])
         if "Niveau_Etude_Max" in ligne:
             ligne["Rang_Etude_Max"] = rang_etude(ligne["Niveau_Etude_Max"])
-        # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre ; une performance inconnue prend le
-        # rang du milieu. Un niveau d'études non déterminé reste vide (VIDE_ACCEPTE) : rien n'est mis à sa
-        # place, le modèle prédit sans cette information, et la page le signale.
-        X = tableau_m5(ligne)[self.regression["colonnes"]].fillna(self.regression["medianes"])
+        # Les mêmes colonnes qu'à l'apprentissage, dans le même ordre. Un niveau d'études non déterminé ou
+        # une performance inconnue restent vides (VIDE_ACCEPTE) : rien n'est mis à leur place, le modèle
+        # prédit sans cette information, et la page le signale.
+        X = tableau_m5(ligne)[self.regression["colonnes"]]
         vides = [c for c in VIDE_ACCEPTE if c in X and bool(X[c].isna().iloc[0])]
         result["education_unknown"] = "Rang_Etude_Max" in vides
+        result["performance_unknown"] = "Rang_Performance" in vides
         # Pas de grille pour ce métier + niveau (ou pas de marché) : une case reste vide, pas de
         # prédiction. Pourquoi le vérifier ici : le gradient boosting accepte une case vide et
         # répondrait quand même.

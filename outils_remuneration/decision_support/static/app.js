@@ -173,6 +173,8 @@ function render(data, modifiees) {
   $('predicted-note').textContent = r.predicted != null ? `Fourchette habituelle pour ce profil : entre ${fmt(r.low)} et ${fmt(r.high)}.`
       // Le niveau d'études non déterminé est signalé : le modèle ne met rien à sa place.
       + (r.education_unknown ? ' Niveau d’études non déterminé : le salaire est prédit sans cette information.' : '')
+      // La performance N-1 inconnue aussi, pour la même raison.
+      + (r.performance_unknown ? ' Performance N-1 inconnue : le salaire est prédit sans cette information.' : '')
     : !r.available ? 'Le modèle n’a pas pu apprendre sur les fichiers chargés.'
     : r.missing.length ? `À renseigner : ${r.missing.join(', ')}.`
     : 'Pas de grille ou de marché exploitable pour ce métier et ce niveau.';

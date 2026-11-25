@@ -33,7 +33,7 @@ from pathlib import Path
 
 import yaml
 
-from anomaly_pretraitement import message_diplomes, preparer_employes
+from anomaly_pretraitement import message_diplomes, message_performance, preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import ml_anomaly
@@ -78,6 +78,10 @@ if __name__ == "__main__":
     # Combien de salariés ont un diplôme connu ? Dit tout de suite, sous la ligne de l'étape : si les
     # colonnes du diplôme manquent dans employes.xlsx, on le voit avant d'aller lire les résultats.
     print("      " + message_diplomes(df))
+    # Pareil pour la performance N-1, mais seulement s'il y a quelque chose à dire : une performance
+    # inconnue reste vide dans le modèle du salaire attendu, il faut donc que ça se voie ici.
+    if message_performance(df):
+        print("      " + message_performance(df))
     df = lancer(2, "Groupes de collègues (cohortes)", former_cohortes, df, rule_params)
     df = lancer(3, "Règles", apply_rulebook, df, rule_params)
     methode = {"ecart_attendu": "écart au salaire attendu", "isolation_forest": "Isolation Forest"}.get(

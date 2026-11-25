@@ -268,8 +268,8 @@ COLONNES_M5 = [
 # Le modèle apprend le salaire : il reçoit en plus le Mid de la grille, en logarithme comme le salaire.
 # Pourquoi : sans lui, il ne connaît pas la grille du poste (EN_PLUS_POUR_LE_SALAIRE dans le notebook).
 LOG_MID = "Log_Mid"
-# Les deux colonnes en rang. Pour la performance, un libellé inconnu ou une case vide prend le rang du
-# milieu (la médiane), comme dans le notebook. Pour le niveau d'études, non : voir VIDE_ACCEPTE.
+# Les deux colonnes en rang. Un libellé inconnu ou une case vide n'y prend plus le rang du milieu
+# (la médiane) : la case reste vide, voir VIDE_ACCEPTE.
 RANGS = ("Rang_Etude_Max", "Rang_Performance")
 # Les colonnes de M5 qui décrivent le POSTE, et pas la personne (même idée que POSTE, plus haut).
 POSTE_M5 = ("Niveau", "Ratio_Grille_Marche", LOG_MID)
@@ -284,7 +284,10 @@ POSTE_M5 = ("Niveau", "Ratio_Grille_Marche", LOG_MID)
 # On ne compare plus un BAC+5 à un niveau inventé, et le modèle redevient libre de suivre les données.
 # À savoir : un salarié « non déterminé » peut encore avoir un salaire prédit plus haut qu'un BAC+5,
 # si c'est ce que montrent les salariés du fichier ; mais c'est écrit à côté.
-VIDE_ACCEPTE = ("Rang_Etude_Max",)
+# Même chose pour la performance N-1 (demande du 25/11/2026 aussi) : une performance inconnue (case
+# vide, ou libellé qui n'est pas un des cinq prévus) ne prend plus le rang du milieu. Elle reste vide,
+# et elle est signalée aux mêmes endroits.
+VIDE_ACCEPTE = ("Rang_Etude_Max", "Rang_Performance")
 
 
 def tableau_m5(table: pd.DataFrame) -> pd.DataFrame:
@@ -346,20 +349,18 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     - centre, echelle : l'erreur du milieu et l'écart habituel de ces erreurs (voir ecart_robuste) ;
     - modele : le modèle final, qui apprend sur tous les salariés. C'est lui que l'aide à la décision
       interroge pour un profil saisi. final=False : pas de modèle final, quand seul « attendu » sert ;
-    - colonnes, medianes, X : les colonnes lues, le rang du milieu de la performance, et le tableau
-      sur lequel le modèle a appris."""
+    - colonnes, X : les colonnes lues, et le tableau sur lequel le modèle a appris."""
     X = tableau_m5(df).replace([np.inf, -np.inf], np.nan)
     colonnes = [c for c in COLONNES_M5 if X[c].notna().mean() > (0.5 if c in RANGS else 0)]
     X = X[colonnes + [LOG_MID]]
-    # Un rang de performance inconnu prend le rang du milieu ; l'aide à la décision fera pareil pour le
-    # profil saisi. Un niveau d'études inconnu, lui, reste vide (voir VIDE_ACCEPTE).
-    medianes = {c: float(X[c].median()) for c in colonnes if c in RANGS and c not in VIDE_ACCEPTE}
-    X = X.fillna(medianes)
+    # Plus aucune case vide n'est remplie ici. Avant le 25/11/2026, un rang inconnu prenait le rang du
+    # milieu (la médiane) ; maintenant il reste vide, pour les colonnes de VIDE_ACCEPTE.
     # Ce que le modèle apprend : le logarithme du salaire.
     salaire = pd.to_numeric(df["Fixe_Annuel_MAD"], errors="coerce")
     y = np.log(salaire.where(salaire > 0))
     # Un salarié sans grille, ou avec une case vide dans une des colonnes, n'apprend pas au modèle.
-    # Sauf pour les colonnes de VIDE_ACCEPTE : un niveau d'études non déterminé ne fait sortir personne.
+    # Sauf pour les colonnes de VIDE_ACCEPTE : un niveau d'études non déterminé ou une performance
+    # inconnue ne font sortir personne.
     complets = X.drop(columns=[c for c in VIDE_ACCEPTE if c in X]).notna().all(axis=1) & y.notna()
     X, y = X[complets], y[complets]
     if not colonnes or len(X) < 10 * PAQUETS:
@@ -376,7 +377,7 @@ def entrainer_m5(df: pd.DataFrame, final=True):
     bas, haut = np.quantile(residus[normaux], [0.05, 0.95])
 
     modele = nouveau_m5().fit(X, y) if final else None
-    return {"modele": modele, "colonnes": list(X.columns), "medianes": medianes,
+    return {"modele": modele, "colonnes": list(X.columns),
             "fourchette": (float(bas), float(haut)), "centre": centre, "echelle": echelle,
             "attendu": predit, "residus": residus, "X": X}
 

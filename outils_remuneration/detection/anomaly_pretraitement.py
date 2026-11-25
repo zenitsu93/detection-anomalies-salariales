@@ -184,6 +184,29 @@ def message_diplomes(df: pd.DataFrame) -> str:
     return texte
 
 
+def message_performance(df: pd.DataFrame) -> str:
+    """Une phrase pour le terminal quand la performance N-1 de certains salariés est inconnue : case
+    vide, ou libellé qui n'est pas un des cinq de ORDRE_PERFORMANCE. Rien (« ») si elle est connue pour
+    tous. Demande du 25/11/2026, comme pour le niveau d'études (message_diplomes).
+
+    Pourquoi le dire : le modèle du salaire attendu ne met rien à la place d'une performance inconnue
+    (VIDE_ACCEPTE, dans anomaly_signal_regression.py). Avant, elle prenait le rang du milieu, sans que
+    ça se voie."""
+    def nombre(n):
+        return f"{n:,}".replace(",", " ")
+
+    inconnus = int(df["Rang_Performance"].isna().sum())
+    if not inconnus:
+        return ""
+    # Connue pour la moitié des salariés ou moins : le modèle ne lit pas du tout la colonne (même seuil
+    # que dans entrainer_m5). Le plus souvent, les libellés du fichier ne sont pas ceux prévus.
+    if inconnus >= len(df) / 2:
+        return (f"Performance N-1 inconnue pour {nombre(inconnus)} salariés sur {nombre(len(df))} : "
+                "le salaire attendu est calculé sans la performance.")
+    return (f"Performance N-1 inconnue pour {nombre(inconnus)} salarié{'' if inconnus == 1 else 's'} : "
+            "leur salaire attendu est calculé sans cette information, rien n'est mis à la place.")
+
+
 def bucket_anciennete(x: object) -> str:
     """Range l'ancienneté (en années) dans une tranche : 0-2, 3-5, 6-12, 13-20 ou >20.
     Rend « NA » (inconnue) si l'ancienneté est vide.
@@ -298,6 +321,8 @@ if __name__ == "__main__":
                            projet / "input" / "market.xlsx")
     print(df.head(10).to_string(index=False))
     print("\n" + message_diplomes(df))
+    if message_performance(df):
+        print(message_performance(df))
 
     # Le DataFrame complet, en fichier Excel (.xlsx) : il s'ouvre directement, sans souci de
     # séparateur, de virgule décimale ou d'accents.
