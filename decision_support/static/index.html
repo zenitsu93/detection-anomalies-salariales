@@ -40,7 +40,7 @@
         <datalist id="matricules"></datalist>
         <button type="submit" id="lookup" class="primary" disabled>Chercher</button>
         <span class="or">ou</span>
-        <button type="button" id="blank" class="ghost">Partir d’un profil vide</button>
+        <button type="button" id="blank" class="ghost">Nouvelle recrue (profil vide)</button>
       </form>
       <p id="lookup-error" class="error lookup-error" role="alert" hidden></p>
     </section>
@@ -50,7 +50,8 @@
         <div class="tile"><dt>Salaire réel</dt><dd><span id="today-salary"></span> <small class="unit-label"></small></dd></div>
         <div class="tile"><dt>Position dans la grille</dt><dd id="today-compa"></dd><p id="today-compa-note"></p></div>
         <div class="tile"><dt>Résultat de la détection</dt><dd><span class="badge" id="today-severity"></span></dd><p id="today-score"></p></div>
-        <div class="tile"><dt>Recommandation</dt><dd class="reco" id="today-reco"></dd><p id="today-cost"></p></div>
+        <!-- « de la détection » : pour ne pas la confondre avec le salaire proposé du bloc « Recommandation », plus bas. -->
+        <div class="tile"><dt>Recommandation de la détection</dt><dd class="reco" id="today-reco"></dd><p id="today-cost"></p></div>
         <div class="tile"><dt id="today-why">Pourquoi la détection le fait remonter</dt><dd class="reasons-box"><ul class="reasons" id="today-reasons"></ul></dd><p id="today-peers"></p></div>
       </dl>
     </section>
@@ -78,7 +79,7 @@
       <div class="panel empty-state" id="empty">
         <div class="ghost-ruler" aria-hidden="true"><i></i><i></i><b></b></div>
         <h2>Le salaire prédit pour un profil</h2>
-        <p>Tapez un matricule, ou remplissez le profil à la main. Le modèle donne le salaire prédit et sa fourchette, placés dans la grille du poste.</p>
+        <p>Tapez un matricule, ou remplissez le profil d’une nouvelle recrue. Le modèle donne le salaire prédit et sa fourchette, placés dans la grille du poste, puis le salaire à proposer.</p>
       </div>
       <div id="result" hidden>
         <section class="panel sim">
@@ -96,8 +97,26 @@
               <li id="key-before"><i class="key before"></i>Salaire prédit, vrai profil</li>
               <li id="key-real"><i class="key real"></i>Salaire réel</li>
               <li id="key-range"><i class="key range"></i>Fourchette habituelle pour ce profil</li>
+              <li id="key-proposed"><i class="key proposed"></i>Salaire proposé</li>
               <li><i class="key band"></i>Grille du poste, du Min au Max</li>
             </ul>
+          </div>
+        </section>
+        <!-- La recommandation (depuis le 26/11/2026) : le salaire à proposer pour ce profil. À gauche le
+             chiffre, sa marge et ses comparaisons ; à droite, comment il est construit, étape par étape. -->
+        <section class="panel reco" id="reco" aria-labelledby="reco-title" hidden>
+          <div class="panel-head"><h2 class="panel-title" id="reco-title">Recommandation</h2><span id="reco-kind"></span></div>
+          <div class="reco-body">
+            <div class="verdict reco-figure">
+              <h2>Salaire proposé</h2>
+              <p class="predicted"><span id="proposed"></span> <small class="unit-label"></small></p>
+              <p class="predicted-note" id="proposed-note"></p>
+              <dl class="compare" id="reco-compare"></dl>
+            </div>
+            <div class="reco-how">
+              <h3>Comment ce chiffre est construit</h3>
+              <ol class="steps" id="reco-steps"></ol>
+            </div>
           </div>
         </section>
       </div>

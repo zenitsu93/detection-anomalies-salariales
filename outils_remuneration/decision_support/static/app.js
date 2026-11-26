@@ -103,11 +103,16 @@ const at = (el, name, value) => { el.style.setProperty(name, value + '%'); retur
 // Avec un salarié, deux repères de plus : un trait pour son salaire réel et, si des cases sont
 // modifiées, un rond vide pour le salaire prédit de son vrai profil.
 // Pourquoi style.setProperty : la CSP interdit les attributs style, pas le CSSOM.
-function renderRuler(band, r, reel, avant) {
+// propose : le salaire proposé (la recommandation), dessiné par un losange quand il n'est pas au même
+// endroit que le salaire prédit. Son montant est écrit dans le bloc « Recommandation », pas ici : la
+// figure porte déjà assez de chiffres.
+function renderRuler(band, r, reel, avant, propose) {
   const ruler = $('ruler'); ruler.replaceChildren();
   $('ruler-card').hidden = !band;
   if (!band) return;
-  const values = [band.Min, band.Max, r.low, r.high, reel, avant].filter(v => v != null);
+  if (propose != null && propose === r.predicted) propose = null;
+  $('key-proposed').hidden = propose == null;
+  const values = [band.Min, band.Max, r.low, r.high, reel, avant, propose].filter(v => v != null);
   let lo = Math.min(...values), hi = Math.max(...values);
   // Un peu de marge de chaque côté, pour que la grille ne colle pas aux bords.
   const pad = (hi - lo) * .04 || 1;
@@ -126,6 +131,7 @@ function renderRuler(band, r, reel, avant) {
       value(r.low, 'ends ' + (pos(r.low) < 12 ? 'from' : 'upto')), value(r.high, 'ends ' + (pos(r.high) > 88 ? 'upto' : 'from')),
       value(r.predicted, 'top'));
   }
+  if (propose != null) track.append(at(node('span', '', 'pip proposed'), '--x', pos(propose)));
   if (reel != null) {
     // Le salaire réel s'écrit sous son trait, centré ; près d'un bord, il part vers l'intérieur.
     const x = pos(reel);
@@ -158,6 +164,50 @@ function renderCompare(r, modifiees) {
   $('compare').replaceChildren(...lignes.map(([nom, valeur]) => { const d = node('div', ''); d.append(node('dt', nom), node('dd', valeur)); return d; }));
   $('compare').hidden = !lignes.length;
 }
+// La recommandation (depuis le 26/11/2026) : le salaire à proposer pour ce profil, calculé par le
+// serveur (_recommandation dans engine.py). Il part du salaire prédit et passe par des garde-fous :
+// le Max de la grille, puis les planchers (Min de la grille, seuils de la détection, salaire actuel).
+// Ce bloc écrit le chiffre, sa marge, ses comparaisons, et les étapes qui y mènent.
+// Les phrases du plancher qui a relevé le chiffre, selon son nom.
+const PLANCHERS = {
+  min: (x) => `Relevé à ${x}, le Min de la grille.`,
+  compa: (x, s) => `Relevé à ${x} : en dessous, il serait sous ${fmt(s.compa * 100)} % du milieu de la grille, et la détection lèverait une alerte.`,
+  market: (x, s) => `Relevé à ${x} : en dessous, il serait sous ${fmt(s.market * 100)} % de la médiane du marché, et la détection lèverait une alerte.`,
+  level: (x) => `Relevé à ${x}, le plancher de son niveau.`,
+  signal: (x) => `Relevé à ${x} : en dessous, la détection le signalerait comme trop bas pour ce profil.`,
+  current: (x) => `Gardé à ${x}, son salaire actuel : on ne propose pas de baisse.`,
+};
+function renderReco(data) {
+  const reco = data.recommendation, {band, market, peers, regression: r} = data;
+  $('reco').hidden = !reco;
+  if (!reco) return;
+  const p = reco.proposed;
+  $('reco-kind').textContent = reco.current == null ? 'Nouvelle recrue, ou profil saisi à la main' : 'Salarié du fichier : on ne propose pas moins que son salaire actuel';
+  $('proposed').textContent = fmt(p);
+  $('proposed-note').textContent = reco.minimum === reco.maximum ? '' : `Marge : de ${fmt(reco.minimum)} à ${fmt(reco.maximum)}.`;
+  // Les comparaisons : avec le salaire actuel (pour un salarié), puis avec la grille, le marché et les collègues.
+  const lignes = [];
+  if (reco.current != null) {
+    const hausse = p - reco.current;
+    lignes.push(['Salaire actuel', fmt(reco.current)],
+      ['Hausse proposée', hausse > 0 ? `${signe(hausse)} (${signe(hausse / reco.current * 100)} %)` : 'Aucune']);
+  }
+  lignes.push(['Position dans la grille', `${fmt(p / band.Mid)} du milieu`]);
+  if (market) lignes.push(['Par rapport au marché', `${signe((p / market.Median - 1) * 100) || '0'} %`]);
+  if (peers.available) lignes.push([`Par rapport aux ${fmt(peers.count)} collègues comparables`, `${signe((p / peers.median - 1) * 100) || '0'} %`]);
+  $('reco-compare').replaceChildren(...lignes.map(([nom, valeur]) => { const d = node('div', ''); d.append(node('dt', nom), node('dd', valeur)); return d; }));
+  // Les étapes, dans l'ordre du calcul.
+  const etapes = [`Salaire prédit pour ce profil : ${fmt(reco.predicted)}.`];
+  if (reco.capped) etapes.push(`Ramené au Max de la grille : ${fmt(band.Max)}.`);
+  if (reco.floor) etapes.push(PLANCHERS[reco.floor.kind](fmt(reco.floor.value), reco.thresholds));
+  if (!reco.capped && !reco.floor) etapes.push('Aucun garde-fou ne le change : il est dans la grille et au-dessus des seuils de la détection.');
+  // Un salarié déjà dans la fourchette habituelle de ce profil, et qu'aucun plancher ne relève : la
+  // hausse n'est pas un rattrapage. C'est dit, pour ne pas la lire comme une anomalie à corriger.
+  if (reco.current != null && p > reco.current && reco.current >= r.low && !reco.floor) {
+    etapes.push('Son salaire actuel est déjà dans la fourchette habituelle de ce profil : la hausse l’aligne sur le salaire habituel, ce n’est pas un rattrapage.');
+  }
+  $('reco-steps').replaceChildren(...etapes.map(e => node('li', e)));
+}
 // Le résultat : un seul grand chiffre, le salaire prédit, et dessous sa fourchette habituelle. Sans
 // salaire prédit, la phrase dit pourquoi.
 function render(data, modifiees) {
@@ -179,7 +229,9 @@ function render(data, modifiees) {
     : r.missing.length ? `À renseigner : ${r.missing.join(', ')}.`
     : 'Pas de grille ou de marché exploitable pour ce métier et ce niveau.';
   renderCompare(r, modifiees);
-  renderRuler(band, r, salarie ? salarie.salary : null, modifiees && preditVrai ? preditVrai.predicted : null);
+  renderRuler(band, r, salarie ? salarie.salary : null, modifiees && preditVrai ? preditVrai.predicted : null,
+    data.recommendation ? data.recommendation.proposed : null);
+  renderReco(data);
 }
 async function demander(adresse, corps, signal) {
   const response = await fetch(adresse, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(corps), signal});
@@ -198,7 +250,10 @@ async function calculer() {
   $('form-error').hidden = true;
   $('result-area').setAttribute('aria-busy', 'true');
   try {
-    const data = await demander('/api/analyze', Object.fromEntries(new FormData(form).entries()), controller.signal);
+    // Avec un salarié cherché, son matricule part avec le profil : le serveur retrouve son salaire actuel,
+    // sous lequel la recommandation ne descend pas. Sans matricule, c'est une nouvelle recrue.
+    const profil = {...Object.fromEntries(new FormData(form).entries()), ...(salarie ? {matricule: salarie.matricule} : {})};
+    const data = await demander('/api/analyze', profil, controller.signal);
     if (requestRevision !== revision) return;
     if (salarie && !modifiees) preditVrai = data.regression;
     render(data, modifiees);
@@ -293,7 +348,8 @@ $('matricule').addEventListener('input', async event => {
 });
 // « Revenir au vrai profil » : toutes les cases reprennent les valeurs du salarié.
 $('restore').addEventListener('click', () => { remplir(vrai); marquer(); if (form.checkValidity()) calculer(); else resetResult(); });
-// « Partir d'un profil vide » : on quitte le salarié, pour simuler un profil saisi à la main.
+// « Nouvelle recrue (profil vide) » : on quitte le salarié, pour saisir un profil à la main. La
+// recommandation se fait alors sans salaire actuel.
 $('blank').addEventListener('click', () => {
   salarie = vrai = preditVrai = null;
   $('lookup-form').reset(); form.reset();

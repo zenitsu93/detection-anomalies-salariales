@@ -6,7 +6,11 @@ Depuis le 23/11/2026, le profil peut aussi être celui d'un salarié du fichier 
 Depuis le 17/11/2026, l'application ne donne plus qu'un résultat : le salaire que le modèle prédit
 pour le profil saisi, et la fourchette où tombent 9 salariés sur 10 qui ont ce profil. La grille, le marché
 et les collègues ne sont plus que des repères à côté. Pourquoi : la fourchette et la cible tirées des
-règles faisaient un deuxième résultat, à côté du salaire prédit ; la page montrait trop de chiffres."""
+règles faisaient un deuxième résultat, à côté du salaire prédit ; la page montrait trop de chiffres.
+
+Depuis le 26/11/2026, la page donne aussi un salaire PROPOSÉ (_recommandation, plus bas) : le salaire
+prédit, passé par des garde-fous tirés de la grille, du marché, de la détection et du salaire actuel.
+C'est le chiffre à proposer pour une embauche, ou pour une revalorisation après une mobilité."""
 
 import math
 from pathlib import Path
@@ -300,8 +304,80 @@ class DecisionEngine:
         inputs = self._read_inputs(payload)
         band = self._reference(self.bands, profile, ["Min", "Mid", "Max"])
         market = self._reference(self.market, profile, ["Median"])
+        regression = self._regression(profile, band, market, inputs)
+        # Avec un matricule, la page étudie un salarié du fichier : son salaire actuel compte dans la
+        # recommandation (on ne propose pas moins). Sans matricule, c'est une nouvelle recrue.
+        actuel = self._salaire_actuel(payload.get("matricule"))
         return {"profile": profile, "unit": UNIT, "band": band, "market": market,
-                "peers": self._peers(profile), "regression": self._regression(profile, band, market, inputs)}
+                "peers": self._peers(profile), "regression": regression,
+                "recommendation": self._recommandation(profile, band, market, regression, actuel)}
+
+    def _salaire_actuel(self, matricule):
+        """Le salaire d'aujourd'hui du salarié étudié, ou None si la page n'a pas donné de matricule (une
+        nouvelle recrue, un profil saisi à la main) ou si ce matricule n'est pas dans le fichier."""
+        cle = key(matricule).upper() if matricule is not None else ""
+        if not cle or "Matricule" not in self.regression_base:
+            return None
+        lignes = self.regression_base.loc[self.regression_base.Matricule.map(key).str.upper() == cle]
+        return None if lignes.empty else float(lignes.iloc[0].Fixe_Annuel_MAD)
+
+    def _recommandation(self, profile, band, market, regression, actuel):
+        """Le salaire proposé pour ce profil (depuis le 26/11/2026). None s'il n'y a pas de salaire prédit.
+
+        L'idée : on part du salaire prédit par le modèle (ce que la banque paie d'habitude à un tel
+        profil), et on le fait passer par des garde-fous, pour ne pas proposer un salaire que la
+        détection ferait remonter le lendemain :
+        1. le plafond : le Max de la grille du poste. Au-dessus, le salaire sortirait de la grille ;
+        2. les planchers. Le salaire proposé ne descend sous aucun d'eux :
+           - le Min de la grille ;
+           - le seuil de la règle « position dans la grille » (compa_ratio_low × Mid, 85 % du milieu) ;
+           - le seuil de la règle « marché » (market_low × médiane du marché, 90 %) ;
+           - le plancher du niveau (min_salary_by_niveau), s'il y en a un pour ce niveau ;
+           - le seuil du signal de l'IA : ml_signal_z écarts habituels sous le salaire prédit ;
+           - le salaire actuel, pour un salarié du fichier : on ne propose pas de baisse.
+        Les planchers passent après le plafond : si un plancher est au-dessus du Max, c'est lui qui gagne.
+        Pourquoi les seuils de la détection : c'est le lien entre les deux outils. Les règles et le
+        signal de l'IA disent à partir de quand un salaire est trop bas ; la recommandation s'en sert
+        pour ne jamais tomber dessous. Seule la règle « écart aux collègues » n'y est pas : elle demande
+        tout le groupe de collègues, pas seulement un profil.
+
+        Ce que rend le dictionnaire :
+        - proposed : le salaire proposé ;
+        - minimum, maximum : la marge autour. minimum est le plus haut des planchers ; maximum est le
+          haut de la fourchette habituelle du profil, sans dépasser le Max de la grille ;
+        - predicted : le salaire prédit, le point de départ ;
+        - capped : vrai si le Max de la grille a fait baisser le salaire prédit ;
+        - floor : le plancher qui a relevé le chiffre (son nom et son montant), ou None ;
+        - current : le salaire actuel du salarié, ou None pour une nouvelle recrue ;
+        - thresholds : les deux seuils des règles, pour que la page les écrive (85 %, 90 %)."""
+        predit = regression.get("predicted")
+        if predit is None or band is None:
+            return None
+        regles = self.rules
+        planchers = [("min", band["Min"])]
+        if regles.get("compa_ratio_low") is not None:
+            planchers.append(("compa", float(regles["compa_ratio_low"]) * band["Mid"]))
+        if market and regles.get("market_low") is not None:
+            planchers.append(("market", float(regles["market_low"]) * market["Median"]))
+        # Les niveaux du fichier de règles sont des nombres (5), ceux de la page du texte (« 5 »).
+        par_niveau = {key(n): v for n, v in (regles.get("min_salary_by_niveau") or {}).items()}
+        if profile["niveau"] in par_niveau:
+            planchers.append(("level", float(par_niveau[profile["niveau"]])))
+        # Le seuil du signal de l'IA. La détection le lève quand le salaire est ml_signal_z écarts
+        # habituels sous le salaire attendu ; centre et echelle sont ceux du modèle (entrainer_m5).
+        z = float(regles.get("ml_signal_z", 2.0))
+        planchers.append(("signal", predit * math.exp(self.regression["centre"] - z * self.regression["echelle"])))
+        if actuel is not None:
+            planchers.append(("current", actuel))
+        nom, plancher = max(planchers, key=lambda p: p[1])
+        plafonne = min(predit, band["Max"])
+        propose = max(plafonne, plancher)
+        haut = max(min(regression["high"], band["Max"]), propose)
+        return {"proposed": round(propose, 2), "minimum": round(plancher, 2), "maximum": round(haut, 2),
+                "predicted": predit, "capped": plafonne < predit,
+                "floor": {"kind": nom, "value": round(plancher, 2)} if plancher > plafonne else None,
+                "current": None if actuel is None else round(actuel, 2),
+                "thresholds": {"compa": regles.get("compa_ratio_low"), "market": regles.get("market_low")}}
 
     def matricules(self, texte, limite=8):
         """Les matricules à proposer pendant la frappe : ceux qui contiennent le texte tapé, sans tenir
