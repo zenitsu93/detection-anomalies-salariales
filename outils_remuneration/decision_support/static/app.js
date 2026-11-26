@@ -164,49 +164,51 @@ function renderCompare(r, modifiees) {
   $('compare').replaceChildren(...lignes.map(([nom, valeur]) => { const d = node('div', ''); d.append(node('dt', nom), node('dd', valeur)); return d; }));
   $('compare').hidden = !lignes.length;
 }
-// La recommandation (depuis le 26/11/2026) : le salaire à proposer pour ce profil, calculé par le
-// serveur (_recommandation dans engine.py). Il part du salaire prédit et passe par des garde-fous :
-// le Max de la grille, puis les planchers (Min de la grille, seuils de la détection, salaire actuel).
-// Ce bloc écrit le chiffre, sa marge, ses comparaisons, et les étapes qui y mènent.
-// Les phrases du plancher qui a relevé le chiffre, selon son nom.
-const PLANCHERS = {
-  min: (x) => `Relevé à ${x}, le Min de la grille.`,
-  compa: (x, s) => `Relevé à ${x} : en dessous, il serait sous ${fmt(s.compa * 100)} % du milieu de la grille, et la détection lèverait une alerte.`,
-  market: (x, s) => `Relevé à ${x} : en dessous, il serait sous ${fmt(s.market * 100)} % de la médiane du marché, et la détection lèverait une alerte.`,
-  level: (x) => `Relevé à ${x}, le plancher de son niveau.`,
-  signal: (x) => `Relevé à ${x} : en dessous, la détection le signalerait comme trop bas pour ce profil.`,
-  current: (x) => `Gardé à ${x}, son salaire actuel : on ne propose pas de baisse.`,
-};
+// Les repères pour décider (depuis le 26/11/2026). Le bloc ne décide rien : il met sous les yeux de
+// quoi décider, pour une embauche ou une revalorisation étudiée au cas par cas.
+// Le salaire proposé est calculé par le serveur (_recommandation dans engine.py). Il part du salaire
+// prédit et passe par des garde-fous : le Max de la grille, puis les planchers (Min de la grille,
+// seuils de la détection, salaire actuel). Ce bloc écrit le chiffre, sa marge, le tableau qui situe le
+// salaire actuel et le salaire proposé dans chaque repère. Pas de phrases sur la façon dont le chiffre
+// est construit : elles n'aidaient pas à décider (retirées le 26/11/2026). Le calcul est expliqué dans
+// le README de ce dossier.
 function renderReco(data) {
   const reco = data.recommendation, {band, market, peers, regression: r} = data;
   $('reco').hidden = !reco;
   if (!reco) return;
   const p = reco.proposed;
-  $('reco-kind').textContent = reco.current == null ? 'Nouvelle recrue, ou profil saisi à la main' : 'Salarié du fichier : on ne propose pas moins que son salaire actuel';
+  const c = reco.current;
+  $('reco-kind').textContent = c == null ? 'Nouvelle recrue, ou profil saisi à la main' : 'Salarié du fichier : la décision reste à prendre au cas par cas';
   $('proposed').textContent = fmt(p);
   $('proposed-note').textContent = reco.minimum === reco.maximum ? '' : `Marge : de ${fmt(reco.minimum)} à ${fmt(reco.maximum)}.`;
-  // Les comparaisons : avec le salaire actuel (pour un salarié), puis avec la grille, le marché et les collègues.
+  // Sous le chiffre, pour un salarié : son salaire actuel et l'écart avec le salaire proposé.
   const lignes = [];
-  if (reco.current != null) {
-    const hausse = p - reco.current;
-    lignes.push(['Salaire actuel', fmt(reco.current)],
-      ['Hausse proposée', hausse > 0 ? `${signe(hausse)} (${signe(hausse / reco.current * 100)} %)` : 'Aucune']);
+  if (c != null) {
+    lignes.push(['Salaire actuel', fmt(c)],
+      ['Écart avec le salaire actuel', p > c ? `${signe(p - c)} (${signe((p - c) / c * 100)} %)` : 'Aucun']);
   }
-  lignes.push(['Position dans la grille', `${fmt(p / band.Mid)} du milieu`]);
-  if (market) lignes.push(['Par rapport au marché', `${signe((p / market.Median - 1) * 100) || '0'} %`]);
-  if (peers.available) lignes.push([`Par rapport aux ${fmt(peers.count)} collègues comparables`, `${signe((p / peers.median - 1) * 100) || '0'} %`]);
   $('reco-compare').replaceChildren(...lignes.map(([nom, valeur]) => { const d = node('div', ''); d.append(node('dt', nom), node('dd', valeur)); return d; }));
-  // Les étapes, dans l'ordre du calcul.
-  const etapes = [`Salaire prédit pour ce profil : ${fmt(reco.predicted)}.`];
-  if (reco.capped) etapes.push(`Ramené au Max de la grille : ${fmt(band.Max)}.`);
-  if (reco.floor) etapes.push(PLANCHERS[reco.floor.kind](fmt(reco.floor.value), reco.thresholds));
-  if (!reco.capped && !reco.floor) etapes.push('Aucun garde-fou ne le change : il est dans la grille et au-dessus des seuils de la détection.');
-  // Un salarié déjà dans la fourchette habituelle de ce profil, et qu'aucun plancher ne relève : la
-  // hausse n'est pas un rattrapage. C'est dit, pour ne pas la lire comme une anomalie à corriger.
-  if (reco.current != null && p > reco.current && reco.current >= r.low && !reco.floor) {
-    etapes.push('Son salaire actuel est déjà dans la fourchette habituelle de ce profil : la hausse l’aligne sur le salaire habituel, ce n’est pas un rattrapage.');
-  }
-  $('reco-steps').replaceChildren(...etapes.map(e => node('li', e)));
+  $('reco-compare').hidden = !lignes.length;
+  // Le tableau des repères : une ligne par repère (grille, marché, collègues, profil), et pour chacun
+  // où se situent le salaire actuel (pour un salarié) et le salaire proposé. Avec un profil modifié
+  // (une mobilité), le salaire actuel est situé dans le NOUVEAU poste : on voit où il le placerait.
+  const montants = c == null ? [p] : [c, p];
+  const ecart = (m, ref) => `${signe((m / ref - 1) * 100)} %`;
+  const reperes = [['Grille du poste', `Min ${fmt(band.Min)} · milieu ${fmt(band.Mid)} · Max ${fmt(band.Max)}`,
+    ...montants.map(m => `${fmt(m / band.Mid)} du milieu`)]];
+  if (market) reperes.push(['Marché', `Médiane ${fmt(market.Median)}`, ...montants.map(m => ecart(m, market.Median))]);
+  reperes.push(peers.available
+    ? [`Collègues comparables (${fmt(peers.count)})`,
+      `${peers.scope[0].toUpperCase() + peers.scope.slice(1)} : de ${fmt(peers.min)} à ${fmt(peers.max)}, médiane ${fmt(peers.median)}, la moitié entre ${fmt(peers.q1)} et ${fmt(peers.q3)}`,
+      ...(c == null ? ['proposed'] : ['current', 'proposed']).map(nom => `Mieux payé que ${fmt(Math.round(peers.below[nom]))} % d’entre eux`)]
+    : ['Collègues comparables', `Moins de ${fmt(meta.minimum_peers)} collègues comparables : pas de comparaison`, ...montants.map(() => '—')]);
+  reperes.push(['Profil (modèle)', `Salaire habituel ${fmt(r.predicted)}, fourchette de ${fmt(r.low)} à ${fmt(r.high)}`,
+    ...montants.map(m => ecart(m, r.predicted))]);
+  const rangee = (cases, tag) => { const tr = document.createElement('tr'); tr.append(...cases.map(t => node(tag, t))); return tr; };
+  const tete = document.createElement('thead'), corps = document.createElement('tbody');
+  tete.append(rangee(['Repère', 'Référence', ...(c == null ? [] : [`Salaire actuel (${fmt(c)})`]), `Salaire proposé (${fmt(p)})`], 'th'));
+  corps.append(...reperes.map(l => rangee(l, 'td')));
+  $('reco-stats').replaceChildren(tete, corps);
 }
 // Le résultat : un seul grand chiffre, le salaire prédit, et dessous sa fourchette habituelle. Sans
 // salaire prédit, la phrase dit pourquoi.

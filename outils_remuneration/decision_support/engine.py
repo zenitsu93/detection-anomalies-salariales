@@ -271,7 +271,11 @@ class DecisionEngine:
             return None
         return result
 
-    def _peers(self, profile):
+    def _peers(self, profile, montants=None):
+        """Les collègues comparables du profil, et de quoi situer un salaire parmi eux.
+        montants : des salaires à situer (le salaire actuel, le salaire proposé...). Pour chacun, below
+        donne la part des collègues payés moins que lui, en % : 22 veut dire « mieux payé que 22 % d'entre
+        eux ». Ajouté le 26/11/2026, pour la fiche de repères."""
         values = {"Job_Family": profile["job_family"], "Niveau": profile["niveau"],
                   "Anciennete_Bucket": None if profile["seniority"] is None else bucket_anciennete(profile["seniority"])}
         others = self.employees
@@ -290,8 +294,13 @@ class DecisionEngine:
                 break
         if len(peers) < self.minimum_peers:
             return {"count": len(peers), "available": False, "scope": scope}
-        return {"count": len(peers), "available": True, "scope": scope,
-                "median": round(float(peers.Fixe_Annuel_MAD.median()), 2)}
+        salaires = peers.Fixe_Annuel_MAD
+        # q1 et q3 : les deux montants entre lesquels se trouve la moitié des collègues (ceux du milieu).
+        bas, q1, mediane, q3, haut = (round(float(v), 2) for v in salaires.quantile([0, 0.25, 0.5, 0.75, 1]))
+        return {"count": len(peers), "available": True, "scope": scope, "median": mediane,
+                "min": bas, "q1": q1, "q3": q3, "max": haut,
+                "below": {nom: round(float((salaires < montant).mean()) * 100, 2)
+                          for nom, montant in (montants or {}).items() if montant is not None}}
 
     def analyze(self, payload):
         if not isinstance(payload, dict):
@@ -308,9 +317,11 @@ class DecisionEngine:
         # Avec un matricule, la page étudie un salarié du fichier : son salaire actuel compte dans la
         # recommandation (on ne propose pas moins). Sans matricule, c'est une nouvelle recrue.
         actuel = self._salaire_actuel(payload.get("matricule"))
+        reco = self._recommandation(profile, band, market, regression, actuel)
+        # Le salaire actuel et le salaire proposé sont situés parmi les collègues comparables du profil.
+        peers = self._peers(profile, {"current": actuel, "proposed": reco["proposed"] if reco else None})
         return {"profile": profile, "unit": UNIT, "band": band, "market": market,
-                "peers": self._peers(profile), "regression": regression,
-                "recommendation": self._recommandation(profile, band, market, regression, actuel)}
+                "peers": peers, "regression": regression, "recommendation": reco}
 
     def _salaire_actuel(self, matricule):
         """Le salaire d'aujourd'hui du salarié étudié, ou None si la page n'a pas donné de matricule (une
@@ -346,10 +357,7 @@ class DecisionEngine:
         - minimum, maximum : la marge autour. minimum est le plus haut des planchers ; maximum est le
           haut de la fourchette habituelle du profil, sans dépasser le Max de la grille ;
         - predicted : le salaire prédit, le point de départ ;
-        - capped : vrai si le Max de la grille a fait baisser le salaire prédit ;
-        - floor : le plancher qui a relevé le chiffre (son nom et son montant), ou None ;
-        - current : le salaire actuel du salarié, ou None pour une nouvelle recrue ;
-        - thresholds : les deux seuils des règles, pour que la page les écrive (85 %, 90 %)."""
+        - current : le salaire actuel du salarié, ou None pour une nouvelle recrue."""
         predit = regression.get("predicted")
         if predit is None or band is None:
             return None
@@ -369,15 +377,12 @@ class DecisionEngine:
         planchers.append(("signal", predit * math.exp(self.regression["centre"] - z * self.regression["echelle"])))
         if actuel is not None:
             planchers.append(("current", actuel))
-        nom, plancher = max(planchers, key=lambda p: p[1])
-        plafonne = min(predit, band["Max"])
-        propose = max(plafonne, plancher)
+        # Le nom de chaque plancher ne sert qu'à lire cette liste : seul le plus haut montant compte.
+        plancher = max(montant for _, montant in planchers)
+        propose = max(min(predit, band["Max"]), plancher)
         haut = max(min(regression["high"], band["Max"]), propose)
         return {"proposed": round(propose, 2), "minimum": round(plancher, 2), "maximum": round(haut, 2),
-                "predicted": predit, "capped": plafonne < predit,
-                "floor": {"kind": nom, "value": round(plancher, 2)} if plancher > plafonne else None,
-                "current": None if actuel is None else round(actuel, 2),
-                "thresholds": {"compa": regles.get("compa_ratio_low"), "market": regles.get("market_low")}}
+                "predicted": predit, "current": None if actuel is None else round(actuel, 2)}
 
     def matricules(self, texte, limite=8):
         """Les matricules à proposer pendant la frappe : ceux qui contiennent le texte tapé, sans tenir
