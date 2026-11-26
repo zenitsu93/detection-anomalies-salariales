@@ -37,7 +37,7 @@ from anomaly_pretraitement import message_diplomes, message_performance, prepare
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
 from anomaly_signal_iforest import ml_anomaly
-from anomaly_signal_fort import apply_ml_strong_signal
+from anomaly_signal_fort import apply_ml_strong_signal, message_cases_vides
 from anomaly_score_general import aggregate_risk
 from anomaly_recommandations import recommendations
 from anomaly_ecarts_hommes_femmes import gender_gap_analysis
@@ -87,6 +87,10 @@ if __name__ == "__main__":
     methode = {"ecart_attendu": "écart au salaire attendu", "isolation_forest": "Isolation Forest"}.get(
         rule_params.get("ml_methode", "isolation_forest"), rule_params.get("ml_methode"))
     df = lancer(4, f"Score de l'IA ({methode})", ml_anomaly, df, rule_params)
+    # Avec l'ancienne IA (ml_methode: isolation_forest), les cases vides qu'elle a lues sont dites ici :
+    # elle ne met plus rien à leur place, il faut donc que ça se voie.
+    if rule_params.get("ml_methode", "isolation_forest") != "ecart_attendu" and message_cases_vides(df):
+        print("      " + message_cases_vides(df))
     df = lancer(5, "Signal fort de l'IA", apply_ml_strong_signal, df, rule_params)
     df = lancer(6, "Score général et priorité", aggregate_risk, df, rule_params)
     df = lancer(7, "Recommandations et coût d'ajustement", recommendations, df, rule_params)

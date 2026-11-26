@@ -50,6 +50,18 @@ FEATS = ["Fixe_Annuel_MAD", "CompaRatio", "MarketRatio", "Age", "Anciennete", "C
          "Hot_job"]
 
 
+def colonnes_ia(df: pd.DataFrame, feats=None) -> list:
+    """Les colonnes que l'Isolation Forest lit vraiment dans ce tableau : FEATS (ou feats, si on lui en
+    donne d'autres), moins celles qui manquent ou qui sont vides pour tout le monde.
+
+    Pourquoi une fonction à part : entrainer_ia s'en sert pour apprendre, et anomaly_signal_fort.py pour
+    dire dans le terminal quelles colonnes ont des cases vides (message_cases_vides)."""
+    feats = FEATS if feats is None else list(feats)
+    # Une colonne vide pour tout le monde (un fichier sans performance N-1, par exemple) ne dit rien au
+    # modèle : elle est laissée de côté.
+    return [f for f in feats if f in df and df[f].notna().any()]
+
+
 def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, feats=None):
     """Entraîne l'Isolation Forest sur les colonnes FEATS et rend le modèle et le tableau qu'il a lu.
 
@@ -61,13 +73,13 @@ def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, fe
     toujours FEATS) ; analyse_diplomes/diplome.py s'en sert pour essayer l'IA avec le diplôme en plus, sans
     rien changer à la détection.
     """
-    feats = FEATS if feats is None else list(feats)
-    # Une colonne vide pour tout le monde (un fichier sans performance N-1, par exemple) ne dit rien au
-    # modèle, et il ne saurait pas la lire : elle est laissée de côté.
-    feats = [f for f in feats if f in df and df[f].notna().any()]
-    # Le modèle ne sait pas traiter une case vide : on la remplace par la valeur du milieu de sa
-    # colonne (la médiane).
-    X = df[feats].fillna(df[feats].median())
+    # Une case vide reste vide : rien n'est mis à sa place. Avant le 26/11/2026, elle prenait la valeur
+    # du milieu de sa colonne (la médiane). Pourquoi ça change : c'était inventer une information, et
+    # sans que ça se voie. C'est la même règle que pour le modèle du salaire attendu depuis le 25/11
+    # (VIDE_ACCEPTE dans anomaly_signal_regression.py). L'Isolation Forest de scikit-learn sait lire une
+    # case vide telle quelle. Les cases vides sont dites dans le terminal de la détection
+    # (message_cases_vides, dans anomaly_signal_fort.py).
+    X = df[colonnes_ia(df, feats)]
 
     # Pourquoi ces deux réglages sont lus dans le fichier de règles : dans l'archive, ils étaient
     # écrits en dur (0.05 et 200), alors que tous les autres seuils se règlent sans toucher au code.
@@ -76,7 +88,16 @@ def entrainer_ia(df: pd.DataFrame, rule_params: dict, random_state: int = 42, fe
         contamination=float(rule_params.get("ml_contamination")),
         random_state=random_state,
     )
-    iso.fit(X)
+    try:
+        iso.fit(X)
+    except ValueError as erreur:
+        # Une version plus ancienne de scikit-learn refuse les cases vides, avec un message en anglais
+        # (« Input X contains NaN »). On dit quoi faire à la place. Toute autre erreur passe telle quelle.
+        if not X.isna().any().any():
+            raise
+        raise ValueError("L'Isolation Forest de cette version de scikit-learn ne sait pas lire une case vide. "
+                         "Lancer le projet avec lancer_interface.bat : il installe la version prévue "
+                         "(requirements.txt).") from erreur
     return iso, X
 
 

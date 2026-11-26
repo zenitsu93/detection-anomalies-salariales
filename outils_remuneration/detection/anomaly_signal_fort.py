@@ -40,7 +40,7 @@ import yaml
 from anomaly_pretraitement import ORDRE_PERFORMANCE, RANG_NIVEAU_ETUDE, preparer_employes
 from anomaly_cohortes import former_cohortes
 from anomaly_regles import apply_rulebook
-from anomaly_signal_iforest import entrainer_ia, ml_anomaly
+from anomaly_signal_iforest import colonnes_ia, entrainer_ia, ml_anomaly
 from anomaly_signal_regression import POSTE_M5, entrainer_m5
 
 # Les informations que regarde l'IA, telles qu'on les écrit dans l'explication : nom, facteur,
@@ -127,7 +127,24 @@ def poids_des_infos(modele, X: pd.DataFrame, lignes) -> pd.DataFrame:
         normal = X.loc[lignes].copy()
         normal[info] = habituel[info]
         baisses[info] = depart + modele.score_samples(normal)
-    return pd.DataFrame(baisses, index=lignes)
+    # Une information restée vide n'est pas citée : son poids est mis à 0. Pourquoi : l'explication écrit
+    # la valeur du salarié (« 24 ans », « A l'objectif »), et il n'y en a pas.
+    return pd.DataFrame(baisses, index=lignes).where(X.loc[lignes].notna(), 0)
+
+
+def message_cases_vides(df: pd.DataFrame, feats=None) -> str:
+    """Une phrase pour le terminal quand l'Isolation Forest lit des colonnes où il y a des cases vides.
+    Rien (« ») s'il n'y en a aucune. Ajoutée le 26/11/2026.
+
+    Pourquoi le dire : l'Isolation Forest ne met plus rien à la place d'une case vide (voir entrainer_ia).
+    Avant, elle prenait la valeur du milieu de sa colonne, sans que ça se voie."""
+    vides = df[colonnes_ia(df, feats)].isna().sum()
+    vides = vides[vides > 0]
+    if vides.empty:
+        return ""
+    # « salarié » ou « salariés » selon le nombre, et l'espace des milliers à la française.
+    detail = ", ".join(f"{nom(c)} ({n:,} salarié{'' if n == 1 else 's'})".replace(",", " ") for c, n in vides.items())
+    return f"Cases vides lues telles quelles par l'IA, rien n'est mis à la place : {detail}."
 
 
 def apply_ml_strong_signal(df: pd.DataFrame, rule_params: dict, feats=None) -> pd.DataFrame:
