@@ -29,7 +29,7 @@ Pour ouvrir une de ces pages dès que l'application est prête, ajouter `--ouvri
 
 1. Choisir le métier et le niveau (ceux du nouveau poste, pour une promotion).
 2. Remplir le profil de la personne : ancienneté, niveau d'études, âge, compétence N-1, performance N-1 et Hot job. C'est ce que lit le modèle, avec les valeurs du fichier des salariés : un choix dans une liste, ou un nombre entre le plus petit et le plus grand du fichier. Tous les champs sont obligatoires : sans l'un d'eux, le modèle ne peut pas prédire.
-3. Lire le salaire prédit, puis le bloc « Repères pour décider ».
+3. Lire le salaire prédit, puis le bloc « Conclusion : repères pour décider ».
 
 Pour une **nouvelle recrue**, cliquer sur « Nouvelle recrue (profil vide) » et remplir le profil avec ses caractéristiques. À savoir : le modèle lit la compétence et la performance de l'an dernier, qu'une recrue n'a pas. Il faut donc saisir une hypothèse (par exemple « A l'objectif »), et la garder en tête en lisant le résultat.
 
@@ -39,9 +39,11 @@ Au lieu de remplir le profil à la main, taper un **matricule** en haut de la pa
 
 - le bloc **« Ce salarié aujourd'hui »** s'affiche : son salaire réel, sa position dans la grille (salaire ÷ milieu de la grille), sa priorité dans la détection, la recommandation de la détection avec son coût, et les raisons de la détection écrites en clair. Ce bloc ne bouge pas ensuite : c'est le vrai salarié ;
 - le **profil** se remplit avec ses informations, sur une ligne ;
-- le **salaire prédit** de son profil s'affiche, avec son salaire réel à côté et sur la figure (le trait noir).
+- le bloc **« Situation actuelle »** s'affiche : le salaire prédit pour son profil du fichier, avec son salaire réel en face et sur la figure (le trait noir).
 
-Ensuite, **modifier une case** (l'ancienneté, la performance…) refait le salaire prédit. La case passe en jaune et la vraie valeur reste écrite dessous. Sous le grand chiffre, on lit le salaire prédit du vrai profil, l'effet des cases modifiées, et le salaire réel par rapport au salaire prédit. « Revenir au vrai profil » remet tout ; « Nouvelle recrue (profil vide) » quitte le salarié.
+Ensuite, **modifier une case** (l'ancienneté, la performance, le niveau…) construit la **« Situation cible »**, affichée à côté de la situation actuelle (depuis le 27/11/2026). La case passe en jaune et la valeur actuelle reste écrite dessous. Le bloc de la situation cible donne le salaire prédit pour le nouveau profil, la liste de ce qui change (« Ancienneté : 1 → 8 »), l'écart avec le salaire prédit de la situation actuelle, et le salaire réel par rapport au nouveau salaire prédit. La situation actuelle, elle, ne bouge pas. En bas de la page, la **conclusion** rappelle les deux situations et donne le salaire proposé (voir plus bas). « Revenir à la situation actuelle » remet tout ; « Nouvelle recrue (profil vide) » quitte le salarié.
+
+Pourquoi deux blocs : avant, un seul grand chiffre changeait de sens dès qu'une case était modifiée, et on ne savait plus si on lisait le salaire prédit du vrai profil ou celui du profil modifié.
 
 Trois choses à savoir pour bien lire :
 
@@ -51,7 +53,7 @@ Trois choses à savoir pour bien lire :
 
 ## Les repères pour décider (depuis le 26/11/2026)
 
-Sous le salaire prédit, le bloc **« Repères pour décider »** donne un salaire proposé et de quoi le juger. Il ne rattrape personne tout seul : on étudie une personne, on lit ses repères, et on décide. Il sert dans deux cas :
+En bas de la page, le bloc **« Conclusion : repères pour décider »** donne un salaire proposé et de quoi le juger. Il est calculé pour le profil affiché : la situation cible si des cases sont modifiées, sinon la situation actuelle. Il ne rattrape personne tout seul : on étudie une personne, on lit ses repères, et on décide. Il sert dans deux cas :
 
 - **une embauche** : on remplit le profil de la recrue, sans matricule ;
 - **une revalorisation** (mobilité, promotion, évolution de carrière) : on tape le matricule, puis on modifie les cases qui changent, par exemple le métier et le niveau du nouveau poste.

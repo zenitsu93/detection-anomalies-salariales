@@ -135,6 +135,16 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 /* À gauche, un seul grand chiffre : le salaire prédit, sa fourchette en une phrase, puis les
    comparaisons avec le vrai salarié. À droite, la figure. */
 .sim { display: grid; grid-template-columns: 400px minmax(0, 1fr); }
+/* Avec un salarié cherché : la situation actuelle et la situation cible côte à côte, de même largeur,
+   et la figure dessous, sur toute la largeur. */
+.sim.deux { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.sim.deux .ruler-card { grid-column: 1 / -1; border-top: 1px solid var(--line-soft); }
+.sim.deux #verdict { border-right: 0; }
+/* Le titre de chaque situation. Le trait de gauche est gris pour la situation actuelle, vert pour la
+   cible : c'est elle qu'on étudie. */
+.situation { margin-bottom: 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--ink); }
+.verdict.actuelle { border-left-color: var(--faint); }
+.cible-vide { margin: 0; color: var(--muted); }
 /* Pendant qu'on tape dans une case, le résultat affiché est encore celui d'avant : il pâlit. */
 .stale { opacity: .45; }
 .ruler-card { padding: 16px 20px; }
@@ -206,7 +216,7 @@ footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line);
   .brand-sub { display: none; }
   main { padding: 16px; }
   .page-head { flex-direction: column; align-items: flex-start; }
-  .today, .sim, .reco-body { grid-template-columns: 1fr; }
+  .today, .sim, .sim.deux, .reco-body { grid-template-columns: 1fr; }
   .tile, .verdict { border-right: 0; border-bottom: 1px solid var(--line-soft); }
   .predicted { font-size: 28px; }
 }
