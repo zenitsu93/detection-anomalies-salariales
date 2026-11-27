@@ -29,3 +29,7 @@ fiabilisation_diplomes/BDD_Diplomes_FINAL*.xlsx
 # Les copies datées des résultats de la détection : une trace locale, lourde (3 Mo par lancement)
 # et nominative sur les vraies données. Elles ne vont pas sur GitHub.
 output/detection/historique/
+
+# Projet diplômes : la feuille de route, le rapport et les présentations portent les chiffres réels.
+# Ils restent sur le poste.
+fiabilisation_diplomes/documents/
