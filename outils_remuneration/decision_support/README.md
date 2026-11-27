@@ -2,9 +2,7 @@
 
 Pour un métier, un niveau et un profil, l'application donne **le salaire prédit par le modèle** et la fourchette où tombent 9 salariés sur 10 qui ont ce profil, placés dans la grille du poste.
 
-Depuis le 26/11/2026, elle donne aussi des **repères pour décider** : un salaire proposé, et un tableau qui situe le salaire dans la grille, le marché, les collègues et le profil. Ils servent pour une embauche, ou pour une revalorisation après une mobilité, étudiée au cas par cas (voir « Les repères pour décider », plus bas). La page ne décide rien : elle met sous les yeux de quoi décider.
-
-Du 17/11 au 26/11/2026, le salaire prédit était son seul résultat : la fourchette et la cible tirées des règles avaient été retirées, car elles faisaient un deuxième résultat à côté du salaire prédit, et la page montrait trop de chiffres. Le salaire proposé d'aujourd'hui n'est pas ce deuxième résultat : il part du salaire prédit, et la page écrit chaque étape qui mène de l'un à l'autre. Le mode « vérifier un salaire » et le champ Matricule avaient été retirés le 09/11/2026.
+Le salaire prédit est son seul résultat. La fourchette et la cible tirées des règles ont été retirées le 17/11/2026, car elles faisaient un deuxième résultat à côté du salaire prédit, et la page montrait trop de chiffres. Du 26/11 au 27/11/2026, la page a aussi donné un salaire proposé et un tableau de repères (le bloc « Conclusion : repères pour décider ») : il a été retiré le 27/11/2026, pour la même raison. Le mode « vérifier un salaire » et le champ Matricule avaient été retirés le 09/11/2026.
 
 ![Aperçu de l'application : le salaire prédit, et sa place dans la grille du poste](static/apercu.png)
 
@@ -29,7 +27,7 @@ Pour ouvrir une de ces pages dès que l'application est prête, ajouter `--ouvri
 
 1. Choisir le métier et le niveau (ceux du nouveau poste, pour une promotion).
 2. Remplir le profil de la personne : ancienneté, niveau d'études, âge, compétence N-1, performance N-1 et Hot job. C'est ce que lit le modèle, avec les valeurs du fichier des salariés : un choix dans une liste, ou un nombre entre le plus petit et le plus grand du fichier. Tous les champs sont obligatoires : sans l'un d'eux, le modèle ne peut pas prédire.
-3. Lire le salaire prédit, puis le bloc « Conclusion : repères pour décider ».
+3. Lire le salaire prédit.
 
 Pour une **nouvelle recrue**, cliquer sur « Nouvelle recrue (profil vide) » et remplir le profil avec ses caractéristiques. À savoir : le modèle lit la compétence et la performance de l'an dernier, qu'une recrue n'a pas. Il faut donc saisir une hypothèse (par exemple « A l'objectif »), et la garder en tête en lisant le résultat.
 
@@ -50,45 +48,6 @@ Trois choses à savoir pour bien lire :
 - le salaire prédit dit **ce que gagnent les salariés qui ont ce profil**. Ce n'est pas l'augmentation à donner à cette personne si sa situation change ;
 - l'effet est donné **pour toutes les cases modifiées ensemble**, pas case par case : les effets ne s'additionnent pas ;
 - **la priorité de la détection ne suit pas la simulation**. Elle se calcule en comparant le salarié à ses collègues sur tout le fichier : elle reste celle du vrai profil. Elle est lue dans `output/detection/anomalies.xlsx` ; ce gros fichier se charge en arrière-plan, donc pendant une vingtaine de secondes après le démarrage la page dit que la priorité se charge. Le « salaire attendu » de la détection n'est pas affiché : il vient d'une autre régression et ferait un deuxième chiffre à côté du salaire prédit.
-
-## Les repères pour décider (depuis le 26/11/2026)
-
-En bas de la page, le bloc **« Conclusion : repères pour décider »** donne un salaire proposé et de quoi le juger. Il est calculé pour le profil affiché : la situation cible si des cases sont modifiées, sinon la situation actuelle. Il ne rattrape personne tout seul : on étudie une personne, on lit ses repères, et on décide. Il sert dans deux cas :
-
-- **une embauche** : on remplit le profil de la recrue, sans matricule ;
-- **une revalorisation** (mobilité, promotion, évolution de carrière) : on tape le matricule, puis on modifie les cases qui changent, par exemple le métier et le niveau du nouveau poste.
-
-Comment le salaire proposé est calculé, dans l'ordre :
-
-1. on part du **salaire prédit** : ce que la banque paie d'habitude à un tel profil ;
-2. il ne dépasse pas le **Max de la grille** du poste ;
-3. il ne descend sous aucun de ces **planchers** :
-   - le Min de la grille ;
-   - 85 % du milieu de la grille (`compa_ratio_low`), le seuil de la règle « position dans la grille » de la détection ;
-   - 90 % de la médiane du marché (`market_low`), le seuil de la règle « marché » ;
-   - le plancher du niveau (`min_salary_by_niveau`), s'il y en a un pour ce niveau ;
-   - le seuil du signal de l'IA : 2 écarts habituels sous le salaire prédit (`ml_signal_z`) ;
-   - **le salaire actuel**, pour un salarié du fichier : on ne propose jamais de baisse.
-
-C'est là que la prédiction et la détection travaillent ensemble : la prédiction donne le point de départ, et les seuils de la détection servent de garde-fous. Un salaire proposé par la page ne déclenche donc aucune de ces alertes. Seule la règle « écart aux collègues » n'en fait pas partie : elle demande tout le groupe de collègues, pas seulement un profil. L'écart aux collègues est quand même écrit à côté du chiffre.
-
-Ce que montre le bloc :
-
-- à gauche, **le salaire proposé**, puis sa **marge** : du plus haut des planchers jusqu'au haut de la fourchette habituelle du profil (sans dépasser le Max de la grille). Dessous, pour un salarié : son salaire actuel et l'écart avec le salaire proposé ;
-- à droite, le tableau **« Où se situe ce salaire »**. Une ligne par repère, et pour chacun la place du salaire actuel (pour un salarié) et celle du salaire proposé :
-  - la grille du poste (Min, milieu, Max) : le salaire en proportion du milieu ;
-  - le marché : l'écart à la médiane du marché ;
-  - les collègues comparables : leur nombre, le groupe retenu, leur salaire le plus bas et le plus haut, leur médiane, les deux montants entre lesquels se trouve la moitié d'entre eux, et « mieux payé que x % d'entre eux » ;
-  - le profil : l'écart au salaire habituel donné par le modèle, avec sa fourchette.
-
-  Pour une mobilité, le salaire actuel est situé dans le **nouveau** poste : on voit où il placerait la personne parmi ses futurs collègues ;
-- sur la figure, un **losange** marque le salaire proposé quand il n'est pas au même endroit que le salaire prédit.
-
-Trois choses à savoir :
-
-- le salaire proposé suit le salaire prédit, donc **les pratiques d'aujourd'hui**. Un salarié payé un peu sous le salaire habituel de son profil voit un salaire proposé un peu au-dessus du sien, même si rien ne cloche : la ligne « Profil » du tableau montre alors que son salaire est déjà dans la fourchette habituelle ;
-- **il n'y a pas de plafond à la hausse** : pour une mobilité vers un poste bien mieux payé, la page propose le salaire du nouveau poste, quel que soit l'écart avec le salaire actuel. La façon d'étaler une forte hausse reste à décider ;
-- la recommandation écrite dans « Ce salarié aujourd'hui » est celle **de la détection** (« Ajuster au Min de la grille »...). Elle ne regarde que la grille. Le salaire proposé, lui, regarde tout le profil.
 
 ## Lire le résultat
 
